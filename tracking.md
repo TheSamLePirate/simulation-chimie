@@ -8,7 +8,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | Phase | Intitulé | État |
 |-------|----------|------|
 | **P0** | Scaffold + CI + bootstrap WebGPU | ✅ |
-| **P1** | Cœur + L0/L1 (moteur CPU) | ⬜ |
+| **P1** | Cœur + L0/L1 (moteur CPU) | ✅ |
 | **P2** | Moteur GPU + cell-lists | ⬜ |
 | **P3** | L2 Lennard-Jones | ⬜ |
 | **P4** | L3/L4 eau & démixtion huile | ⬜ |
@@ -47,6 +47,44 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
   couverte par les tests. À ré-évaluer si des bugs d'indexation apparaissent.
 - E2E WebGPU en CI : le test P0 reste **tolérant** (accepte `unsupported`/`error`) car WebGPU headless
   sous Linux/CI est instable. Les assertions physiques E2E strictes arriveront en P6.
+
+---
+
+## P1 — Cœur physique + L0/L1 (moteur CPU) ✅
+
+**Objectif (DoD) :** cœur pur (unités, vec3, PBC, RNG, Verlet, observables) + moteur CPU + gaz
+parfait/sphères molles + rendu particules + graphes T/énergie ; tests unitaires + physiques verts.
+
+**Livré :**
+- **Cœur physique** (`src/core/`, 100 % pur, Float64) : système d'unités GROMACS (nm/ps/u/kJ·mol⁻¹/K) ;
+  boîte cubique + image minimale/wrap ; RNG mulberry32 + gaussien ; espèces (Argon, Néon) ;
+  état SoA ; **Velocity-Verlet** ; forces **L0 (gaz parfait)** et **L1 (WCA)** avec mélange
+  Lorentz-Berthelot ; bords **périodiques** & **réfléchissants** (avec mètre d'impulsion mural) ;
+  observables T, énergies, **pression viriel**, impulsion, COM ; initialisation lattice + Maxwell-Boltzmann.
+- **Moteur CPU** (`src/engine/cpu/CpuEngine.ts`) : l'oracle déterministe, niveaux commutables,
+  réglages live (pas de temps, re-thermalisation), reset.
+- **Temps réel** : `Simulation` (contrôleur playback) + `SimulationView` (rendu Three WebGPU,
+  `InstancedMesh` mis à jour depuis le buffer SoA, reconstruction au changement structurel) +
+  store **Zustand**.
+- **UI** : panneau de contrôle (lecture/pause/pas/reset, niveau, bord, espèce, sliders N/T/taille/
+  pas de temps/sous-pas), panneau d'**observables**, **graphes temps réel** (T, énergies, pression)
+  dessinés sur canvas.
+- **Tests** : **28 unitaires/golden** (force WCA vs dérivée numérique, conservation d'énergie <1 %,
+  conservation d'impulsion, **déterminisme bit-à-bit**, équipartition, **P·V=N·k·T mesurée aux parois**,
+  moteur CPU) + **2 E2E** (shell + avancement réel de la simulation sous WebGPU, zéro exception page).
+
+**Vérifications :** `lint` · `typecheck` · **28 tests** · `build` · **2 E2E** — tout vert.
+Statut moteur observé en E2E : **« WebGPU actif »** (le rendu instancié + boucle tournent réellement).
+
+**Déviations au plan :**
+- **Graphes** : composant canvas maison sans dépendance plutôt qu'uPlot/visx (plus léger, zéro dep).
+  Choix réversible si on veut des axes/zoom riches plus tard.
+- **Perf moteur CPU** : forces L1 en **O(N²)** (référence). Défaut N=256 pour rester fluide ; le slider
+  monte à 1024 mais devient lourd — résolu en **P2** (GPU + cell-lists O(N)).
+- **Température** : le slider applique un **rescale instantané** des vitesses (thermostat manuel). Les
+  vrais thermostats NVT/NPT arrivent en **P5**.
+- **Formateur** : Biome aligné sur guillemets doubles + points-virgules pour coller au formateur de
+  l'environnement (évite les allers-retours de style).
 
 ---
 

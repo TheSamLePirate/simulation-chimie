@@ -1,10 +1,13 @@
-import { useState } from 'react'
-import { CanvasHost } from '../ui/CanvasHost'
-import { EngineStatusBadge } from '../ui/EngineStatusBadge'
-import type { EngineStatus } from '../ui/engineStatus'
+import { useState } from "react";
+import { CanvasHost } from "../ui/CanvasHost";
+import { ControlPanel } from "../ui/controls/ControlPanel";
+import { EngineStatusBadge } from "../ui/EngineStatusBadge";
+import type { EngineStatus } from "../ui/engineStatus";
+import { GraphsPanel } from "../ui/graphs/GraphsPanel";
+import { ObservablesPanel } from "../ui/panels/ObservablesPanel";
 
 export function App() {
-  const [status, setStatus] = useState<EngineStatus>('initializing')
+  const [status, setStatus] = useState<EngineStatus>("initializing");
 
   return (
     <div className="app">
@@ -15,7 +18,13 @@ export function App() {
         <p className="app__subtitle">Simulateur de dynamique moléculaire — temps réel</p>
       </header>
 
+      <aside className="sidebar">
+        <ControlPanel />
+        <ObservablesPanel />
+        <GraphsPanel />
+      </aside>
+
       <EngineStatusBadge status={status} />
     </div>
-  )
+  );
 }

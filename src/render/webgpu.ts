@@ -3,7 +3,7 @@
  * A `true` result does not guarantee a usable adapter (see {@link requestAdapterOk}).
  */
 export function isWebGPUAvailable(): boolean {
-  return typeof navigator !== 'undefined' && 'gpu' in navigator
+  return typeof navigator !== "undefined" && "gpu" in navigator;
 }
 
 /**
@@ -12,11 +12,11 @@ export function isWebGPUAvailable(): boolean {
  * provide an adapter (headless environments, blocked GPUs, software fallback off).
  */
 export async function requestAdapterOk(): Promise<boolean> {
-  if (!isWebGPUAvailable()) return false
+  if (!isWebGPUAvailable()) return false;
   try {
-    const adapter = await navigator.gpu.requestAdapter()
-    return adapter !== null
+    const adapter = await navigator.gpu.requestAdapter();
+    return adapter !== null;
   } catch {
-    return false
+    return false;
   }
 }

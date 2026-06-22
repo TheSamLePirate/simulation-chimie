@@ -15,31 +15,31 @@
  */
 
 /** Boltzmann constant in kJ·mol⁻¹·K⁻¹. */
-export const BOLTZMANN_KJ_PER_MOL_K = 0.00831446261815324
+export const BOLTZMANN_KJ_PER_MOL_K = 0.00831446261815324;
 
 /** Avogadro constant in mol⁻¹. */
-export const AVOGADRO = 6.02214076e23
+export const AVOGADRO = 6.02214076e23;
 
 /** Ångström per nanometre. */
-export const ANGSTROM_PER_NM = 10
+export const ANGSTROM_PER_NM = 10;
 
 /** Zero Celsius expressed in kelvin. */
-export const KELVIN_AT_ZERO_CELSIUS = 273.15
+export const KELVIN_AT_ZERO_CELSIUS = 273.15;
 
 export function angstromToNm(angstrom: number): number {
-  return angstrom / ANGSTROM_PER_NM
+  return angstrom / ANGSTROM_PER_NM;
 }
 
 export function nmToAngstrom(nm: number): number {
-  return nm * ANGSTROM_PER_NM
+  return nm * ANGSTROM_PER_NM;
 }
 
 export function celsiusToKelvin(celsius: number): number {
-  return celsius + KELVIN_AT_ZERO_CELSIUS
+  return celsius + KELVIN_AT_ZERO_CELSIUS;
 }
 
 export function kelvinToCelsius(kelvin: number): number {
-  return kelvin - KELVIN_AT_ZERO_CELSIUS
+  return kelvin - KELVIN_AT_ZERO_CELSIUS;
 }
 
 /**
@@ -53,6 +53,14 @@ export function temperatureFromKinetic(
   kineticEnergyKjPerMol: number,
   degreesOfFreedom: number,
 ): number {
-  if (degreesOfFreedom <= 0) return 0
-  return (2 * kineticEnergyKjPerMol) / (degreesOfFreedom * BOLTZMANN_KJ_PER_MOL_K)
+  if (degreesOfFreedom <= 0) return 0;
+  return (2 * kineticEnergyKjPerMol) / (degreesOfFreedom * BOLTZMANN_KJ_PER_MOL_K);
+}
+
+/** 1 kJ·mol⁻¹·nm⁻³ expressed in bar (the internal → reportable pressure factor). */
+export const BAR_PER_KJ_PER_MOL_NM3 = 16.6053906717;
+
+/** Convert an internal pressure (kJ·mol⁻¹·nm⁻³) to bar. */
+export function pressureToBar(pressureInternal: number): number {
+  return pressureInternal * BAR_PER_KJ_PER_MOL_NM3;
 }
