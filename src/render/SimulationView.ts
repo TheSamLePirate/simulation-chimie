@@ -119,6 +119,12 @@ export class SimulationView {
     if (state.config.temperature !== prev.config.temperature) {
       this.driver.setTemperature(state.config.temperature);
     }
+    if (
+      state.config.thermostat !== prev.config.thermostat ||
+      state.config.thermostatTau !== prev.config.thermostatTau
+    ) {
+      this.driver.setThermostat(state.config.thermostat, state.config.thermostatTau);
+    }
     if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps);
   }
 

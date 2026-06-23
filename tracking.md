@@ -12,7 +12,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P2** | Moteur GPU (cell-lists reportées) | ✅ |
 | **P3** | L2 Lennard-Jones | ✅ |
 | **P4** | Démixtion huile/eau (eau atomistique/électrostatique reportées) | ✅ |
-| **P5** | L5 ensembles (thermostats/barostats) | ⬜ |
+| **P5** | L5 ensembles — thermostats NVT (barostat reporté) | ✅ |
 | **P6** | Édition + scènes + E2E complet | ⬜ |
 | **P7** | L6 gros-grain (perf) | ⬜ |
 | **P8** | Polish AAA | ⬜ |
@@ -182,6 +182,33 @@ demandé) via un modèle d'immiscibilité réel.
 - Conséquence : pas de liaisons H atomistiques ni d'ions explicites pour l'instant. À reprendre comme
   « L3/L4 atomistique » dans une phase dédiée.
 - Multi-espèces : **moteur CPU** (le mode GPU reste mono-espèce ; à étendre avec un buffer de types).
+
+---
+
+## P5 — L5 ensembles : thermostats NVT ✅
+
+**Objectif (plan) :** thermostats + barostats, transitions de phase, contrôle T/P.
+
+**Livré :**
+- **Thermostats** (`core/thermostats/`) : **Berendsen** (couplage rapide) et **CSVR/Bussi**
+  (rescale stochastique → échantillonnage canonique correct). Orthogonaux aux niveaux de force
+  (s'appliquent à L0–L2). Appliqués chaque pas dans le moteur CPU ; RNG dédié à graine (reproductible).
+- **Ensemble** sélectionnable dans l'UI : **NVE / Berendsen / CSVR**. Le slider Température devient la
+  cible du thermostat (rescale instantané en NVE, cible de bain en NVT).
+- **Scènes de transition de phase** : **Cristallisation (NVT)** (refroidissement sous la fusion ⇒ ordre)
+  et **Chauffage / gaz (NVT)**.
+- **Tests (+4, total 44)** : λ Berendsen (=1 à la cible, chauffe/refroidit du bon côté) ; **Berendsen
+  amène un système LJ vers la cible** ; **CSVR maintient T autour de la cible** en moyenne.
+
+**Vérifications :** lint · typecheck · **44 unit** · **4 e2e** (4 skip). Tout vert.
+_(Note : les tests physiques lourds peuvent timeouter sous forte charge machine — flaky d'environnement,
+verts en isolation et en CI propre.)_
+
+**Déviations au plan :**
+- **Barostat (NPT)** non implémenté : reporté (le redimensionnement de boîte + rescale de positions est
+  un ajout net ; les thermostats NVT couvrent l'essentiel du contrôle et des transitions de phase).
+- **Thermostat GPU** non implémenté (nécessite une réduction d'énergie cinétique sur GPU) : NVT en
+  **mode CPU** uniquement ; le mode GPU reste NVE.
 
 ---
 

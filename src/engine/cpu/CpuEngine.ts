@@ -8,8 +8,9 @@ import { kineticEnergy, pressure, temperature } from "../../core/observables";
 import { Rng } from "../../core/rng";
 import { SPECIES_LIBRARY } from "../../core/species";
 import { createState } from "../../core/state";
+import { berendsenLambda, csvrLambda } from "../../core/thermostats";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../../core/types";
-import { pressureToBar } from "../../core/units";
+import { BOLTZMANN_KJ_PER_MOL_K, pressureToBar } from "../../core/units";
 import type { AccuracyLevel, Observables, SimConfig, SimulationEngine } from "../types";
 
 function resolveSpecies(name: string): Species {
@@ -53,6 +54,7 @@ export class CpuEngine implements SimulationEngine {
   private last: ForceResult = { potentialEnergy: 0, virial: 0 };
   private stepCount = 0;
   private elapsed = 0;
+  private thermostatRng = new Rng(1);
 
   constructor(config: SimConfig) {
     this.config = config;
@@ -81,6 +83,7 @@ export class CpuEngine implements SimulationEngine {
     const rng = new Rng(this.config.seed);
     placeOnLattice(this.state, this.box, { jitter: 0.05, rng });
     setMaxwellBoltzmannVelocities(this.state, this.species, this.config.temperature, rng);
+    this.thermostatRng = new Rng(this.config.seed ^ 0x2c1b3c6d);
     this.last = this.force.compute(this.state, this.box, this.species);
     this.stepCount = 0;
     this.elapsed = 0;
@@ -90,9 +93,31 @@ export class CpuEngine implements SimulationEngine {
     const dt = this.config.timestep;
     for (let i = 0; i < steps; i++) {
       this.last = velocityVerletStep(this.state, this.box, this.species, this.force, dt);
+      this.applyThermostat(dt);
       this.elapsed += dt;
       this.stepCount += 1;
     }
+  }
+
+  /** Couple to the heat bath (NVT) by rescaling velocities. No-op for NVE. */
+  private applyThermostat(dt: number): void {
+    const kind = this.config.thermostat;
+    if (kind === "none") return;
+    const dof = 3 * this.state.count - 3;
+    if (dof < 1) return;
+
+    const ke = kineticEnergy(this.state, this.species);
+    let lambda: number;
+    if (kind === "berendsen") {
+      const currentT = (2 * ke) / (dof * BOLTZMANN_KJ_PER_MOL_K);
+      lambda = berendsenLambda(currentT, this.config.temperature, dt, this.config.thermostatTau);
+    } else {
+      const targetKE = 0.5 * dof * BOLTZMANN_KJ_PER_MOL_K * this.config.temperature;
+      lambda = csvrLambda(ke, targetKE, dof, dt, this.config.thermostatTau, this.thermostatRng);
+    }
+
+    const v = this.state.velocities;
+    for (let k = 0; k < v.length; k++) v[k] *= lambda;
   }
 
   observables(): Observables {
@@ -122,15 +147,24 @@ export class CpuEngine implements SimulationEngine {
     this.config = { ...this.config, timestep };
   }
 
-  /** Rescale velocities so the kinetic temperature becomes `targetK` (a manual thermostat kick). */
+  /**
+   * Set the target temperature. With NVE (no thermostat) this is an instantaneous
+   * velocity rescale; with a thermostat it just updates the bath target.
+   */
   rescaleToTemperature(targetK: number): void {
+    this.config = { ...this.config, temperature: targetK };
+    if (this.config.thermostat !== "none") return;
     const current = temperature(this.state, this.species, true);
     if (current > 0 && targetK > 0) {
       const factor = Math.sqrt(targetK / current);
       const v = this.state.velocities;
       for (let i = 0; i < v.length; i++) v[i] *= factor;
     }
-    this.config = { ...this.config, temperature: targetK };
+  }
+
+  /** Switch thermostat / coupling time in place. */
+  setThermostat(thermostat: SimConfig["thermostat"], tau: number): void {
+    this.config = { ...this.config, thermostat, thermostatTau: tau };
   }
 
   reset(patch: Partial<SimConfig> = {}): void {

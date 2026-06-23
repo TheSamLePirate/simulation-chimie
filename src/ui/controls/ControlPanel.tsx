@@ -63,6 +63,28 @@ export function ControlPanel() {
           onChange={setLevel}
         />
         <Segmented
+          label="Ensemble (thermostat)"
+          value={config.thermostat}
+          options={[
+            {
+              value: "none",
+              label: "NVE",
+              title: "Énergie constante (microcanonique)",
+            },
+            {
+              value: "berendsen",
+              label: "Berendsen",
+              title: "NVT — couplage rapide",
+            },
+            {
+              value: "csvr",
+              label: "CSVR",
+              title: "NVT — échantillonnage canonique correct",
+            },
+          ]}
+          onChange={(thermostat) => patchConfig({ thermostat })}
+        />
+        <Segmented
           label="Bord de la cellule"
           value={config.boundary}
           options={[

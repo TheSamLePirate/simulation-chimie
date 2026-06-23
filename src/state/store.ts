@@ -16,6 +16,8 @@ export const DEFAULT_CONFIG: SimConfig = {
   secondSpeciesName: null,
   fractionSecond: 0,
   crossScale: 1,
+  thermostat: "none",
+  thermostatTau: 0.5,
   engineKind: "cpu",
 };
 

@@ -62,6 +62,7 @@ export interface SimDriver {
   setLevel(level: AccuracyLevel): void;
   setTimestep(dt: number): void;
   setTemperature(t: number): void;
+  setThermostat(kind: SimConfig["thermostat"], tau: number): void;
   dispose(): void;
 }
 
@@ -122,6 +123,9 @@ class CpuDriver implements SimDriver {
   }
   setTemperature(t: number): void {
     this.engine.rescaleToTemperature(t);
+  }
+  setThermostat(kind: SimConfig["thermostat"], tau: number): void {
+    this.engine.setThermostat(kind, tau);
   }
 
   dispose(): void {
@@ -205,7 +209,10 @@ class GpuDriver implements SimDriver {
     this.engine.setTimestep(dt);
   }
   setTemperature(_t: number): void {
-    // GPU live re-thermalisation lands with the P5 thermostats; reset to apply for now.
+    // GPU live re-thermalisation is not implemented; reset to apply a new temperature.
+  }
+  setThermostat(_kind: SimConfig["thermostat"], _tau: number): void {
+    // GPU thermostat needs a kinetic-energy reduction on device; CPU engine only for now.
   }
 
   dispose(): void {

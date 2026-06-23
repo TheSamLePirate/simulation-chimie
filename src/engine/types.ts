@@ -1,3 +1,4 @@
+import type { ThermostatKind } from "../core/thermostats";
 import type { Box, SimState, Species } from "../core/types";
 
 /**
@@ -50,6 +51,10 @@ export interface SimConfig {
    * 1 = ideal mixing; < 1 weakens unlike attraction ⇒ immiscibility / demixing.
    */
   readonly crossScale: number;
+  /** Thermostat: `none` = NVE; otherwise NVT toward `temperature`. */
+  readonly thermostat: ThermostatKind;
+  /** Thermostat coupling time in ps (smaller = stronger coupling). */
+  readonly thermostatTau: number;
   /** Compute backend: CPU reference oracle or WebGPU. */
   readonly engineKind: EngineKind;
 }
