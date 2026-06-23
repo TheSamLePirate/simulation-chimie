@@ -14,7 +14,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P4** | Démixtion huile/eau (eau atomistique/électrostatique reportées) | ✅ |
 | **P5** | L5 ensembles — thermostats NVT (barostat reporté) | ✅ |
 | **P6** | Snapshots/export + sauvegarde de scènes + E2E | ✅ |
-| **P7** | L6 gros-grain (perf) | ⬜ |
+| **P7** | Perf : cell-lists O(N) CPU (gros-grain MARTINI/DPD reporté) | ✅ |
 | **P8** | Polish AAA | ⬜ |
 
 ---
@@ -240,6 +240,31 @@ verts en isolation et en CI propre.)_
   navigateur réel). Export de **données** (JSON/CSV) fourni à la place.
 - Snapshot/export d'**état** en **mode CPU** (l'état GPU nécessiterait un readback bloqué en headless).
   L'export de **config** marche dans les deux modes.
+
+---
+
+## P7 — Performance : neighbor search O(N) par cell-lists ✅
+
+**Objectif (plan) :** mode gros-grain (perf), très grand N, passe d'optimisation.
+
+**Livré :**
+- **Cell-lists (linked-cell) O(N)** pour la force Lennard-Jones (`forces/lennardJonesCell.ts`) :
+  grille de cellules ≥ cutoff, listes chaînées tête/suivant, parcours des 27 cellules voisines (PBC),
+  chaque paire comptée une fois. **Physique identique** à la référence O(N²) ; repli brute si la boîte
+  est trop petite (< 3 cellules/axe).
+- Le **moteur CPU L2** utilise désormais la cell-list ⇒ grands comptes de particules praticables en
+  temps réel (l'algorithme « best practice » du plan).
+- **Tests (+3, total 52)** : la cell-list **égale la référence O(N²)** (forces à < 1e-6, énergie/viriel)
+  pour un liquide mono-espèce, un **mélange binaire** (crossScale), et le **chemin de repli** (petite boîte).
+
+**Vérifications :** lint · typecheck · **52 unit** · **5 e2e** (4 skip). Tout vert.
+
+**Déviations au plan :**
+- **Gros-grain MARTINI/DPD** complet **reporté** : l'optimisation livrée est le **cell-list O(N)**
+  (le vrai goulot d'étranglement algorithmique), validable et exact. Les billes gros-grain Eau/Huile
+  (P4) couvrent déjà l'aspect « mésoscopique ».
+- **Cell-lists GPU** (spatial hash + atomics + prefix sum) **reportées** : le chemin GPU reste O(N²)
+  (validation headless limitée). Le cell-list CPU est l'optimisation exacte et testée de cette passe.
 
 ---
 
