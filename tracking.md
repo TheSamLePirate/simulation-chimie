@@ -440,7 +440,7 @@ uniques) ⇒ l'électrostatique y serait non physique ; cela demanderait d'abord
 
 ## Bilan
 
-**Phases P0–P16 livrées et commitées** (**66 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P16 livrées et commitées** (**64 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L5 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
