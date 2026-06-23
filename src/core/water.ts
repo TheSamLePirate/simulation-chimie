@@ -1,3 +1,4 @@
+import type { DistanceConstraints } from "./constraints";
 import { setMaxwellBoltzmannVelocities } from "./init";
 import type { Rng } from "./rng";
 import { WATER_H, WATER_O } from "./species";
@@ -23,7 +24,12 @@ export interface WaterSystem {
   readonly state: SimState;
   readonly species: readonly Species[];
   readonly topology: WaterTopology;
+  /** Rigid-body distance constraints (2× O–H + 1× H–H per molecule) for SHAKE/RATTLE. */
+  readonly constraints: DistanceConstraints;
 }
+
+/** Rigid H–H distance implied by the bond length and equilibrium angle. */
+export const WATER_HH = 2 * WATER_BOND_R0 * Math.sin(WATER_ANGLE_THETA0 / 2);
 
 /** Build a box of `molecules` SPC/Fw water molecules on a lattice with random orientation. */
 export function buildWaterSystem(
@@ -105,6 +111,10 @@ export function buildWaterSystem(
   const angleI = new Int32Array(molecules);
   const angleJ = new Int32Array(molecules);
   const angleK = new Int32Array(molecules);
+  // 3 rigid constraints per molecule: O–H1, O–H2, H1–H2.
+  const ci = new Int32Array(3 * molecules);
+  const cj = new Int32Array(3 * molecules);
+  const cd = new Float64Array(3 * molecules);
   for (let k = 0; k < molecules; k++) {
     bondI[2 * k] = 3 * k;
     bondJ[2 * k] = 3 * k + 1;
@@ -113,7 +123,22 @@ export function buildWaterSystem(
     angleI[k] = 3 * k + 1;
     angleJ[k] = 3 * k;
     angleK[k] = 3 * k + 2;
+
+    ci[3 * k] = 3 * k;
+    cj[3 * k] = 3 * k + 1;
+    cd[3 * k] = WATER_BOND_R0;
+    ci[3 * k + 1] = 3 * k;
+    cj[3 * k + 1] = 3 * k + 2;
+    cd[3 * k + 1] = WATER_BOND_R0;
+    ci[3 * k + 2] = 3 * k + 1;
+    cj[3 * k + 2] = 3 * k + 2;
+    cd[3 * k + 2] = WATER_HH;
   }
 
-  return { state, species, topology: { bondI, bondJ, angleI, angleJ, angleK } };
+  return {
+    state,
+    species,
+    topology: { bondI, bondJ, angleI, angleJ, angleK },
+    constraints: { i: ci, j: cj, d0: cd },
+  };
 }

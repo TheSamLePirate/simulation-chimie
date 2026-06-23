@@ -87,6 +87,21 @@ export const SCENES: readonly Scene[] = [
     }),
   },
   {
+    id: "water-rigid",
+    label: "Eau rigide (L5)",
+    description: "Eau rigide (contraintes SHAKE/RATTLE) — pas de temps 2 fs",
+    config: make({
+      level: "L5",
+      speciesName: "WATER_O",
+      particleCount: 150,
+      boxLength: 1.7,
+      temperature: 300,
+      timestep: 0.002,
+      thermostat: "berendsen",
+      thermostatTau: 0.2,
+    }),
+  },
+  {
     id: "nacl",
     label: "NaCl (ionique, L3)",
     description: "Électrostatique Wolf : ions opposés s'attirent et s'ordonnent",

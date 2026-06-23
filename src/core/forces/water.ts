@@ -26,6 +26,7 @@ export class WaterForce implements ForceModel {
 
   constructor(
     private readonly topology: WaterTopology,
+    private readonly rigid = false,
     private readonly alpha = 2.5,
     private readonly coulombCutoff = 0.9,
   ) {}
@@ -109,6 +110,9 @@ export class WaterForce implements ForceModel {
         }
       }
     }
+
+    // Rigid water: geometry is held by SHAKE/RATTLE constraints, not bonded forces.
+    if (this.rigid) return { potentialEnergy: pe, virial };
 
     // --- Harmonic O–H bonds ---
     const { bondI, bondJ, angleI, angleJ, angleK } = this.topology;

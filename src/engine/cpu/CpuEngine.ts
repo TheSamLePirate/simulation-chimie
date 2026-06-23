@@ -1,4 +1,6 @@
+import { applyBoundary } from "../../core/boundary";
 import { createBox, volume } from "../../core/box";
+import { type DistanceConstraints, rattle, shake } from "../../core/constraints";
 import { IonicForce } from "../../core/forces/ionic";
 import { LennardJonesCellForce } from "../../core/forces/lennardJonesCell";
 import { NoForce } from "../../core/forces/none";
@@ -32,8 +34,9 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
     case "L3":
       return new IonicForce();
     case "L4":
+    case "L5":
       // Atomistic water needs topology; it is built in CpuEngine.configure().
-      throw new Error("L4 (water) force is built in configure()");
+      throw new Error("water force is built in configure()");
   }
 }
 
@@ -63,6 +66,10 @@ export class CpuEngine implements SimulationEngine {
   private stepCount = 0;
   private elapsed = 0;
   private thermostatRng = new Rng(1);
+  // Rigid-water (L5) constraint state.
+  private constraints: DistanceConstraints | null = null;
+  private invMass = new Float64Array(0);
+  private refPositions = new Float64Array(0);
 
   constructor(config: SimConfig) {
     this.config = config;
@@ -80,12 +87,23 @@ export class CpuEngine implements SimulationEngine {
     this.box = createBox(c.boxLength, c.boundary);
 
     // L4 — atomistic water: build the molecular system (O+2H per molecule) + topology.
-    if (c.level === "L4") {
+    if (c.level === "L4" || c.level === "L5") {
+      const rigid = c.level === "L5";
       const rng = new Rng(c.seed);
       const sys = buildWaterSystem(c.particleCount, this.box, c.temperature, rng);
       this.state = sys.state;
       this.species = sys.species;
-      this.force = new WaterForce(sys.topology);
+      this.force = new WaterForce(sys.topology, rigid);
+      if (rigid) {
+        this.constraints = sys.constraints;
+        this.refPositions = new Float64Array(this.state.positions.length);
+        this.invMass = new Float64Array(this.state.count);
+        for (let a = 0; a < this.state.count; a++) {
+          this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
+        }
+      } else {
+        this.constraints = null;
+      }
       this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
       this.last = this.force.compute(this.state, this.box, this.species);
       this.stepCount = 0;
@@ -115,19 +133,52 @@ export class CpuEngine implements SimulationEngine {
   step(steps: number): void {
     const dt = this.config.timestep;
     for (let i = 0; i < steps; i++) {
-      this.last = velocityVerletStep(
-        this.state,
-        this.box,
-        this.species,
-        this.force,
-        dt,
-        this.config.gravity,
-      );
+      this.last = this.constraints
+        ? this.stepRigidConstrained(dt)
+        : velocityVerletStep(
+            this.state,
+            this.box,
+            this.species,
+            this.force,
+            dt,
+            this.config.gravity,
+          );
       this.applyThermostat(dt);
       this.applyBarostat(dt);
       this.elapsed += dt;
       this.stepCount += 1;
     }
+  }
+
+  /** Constrained velocity-Verlet (SHAKE positions + RATTLE velocities) for rigid water. */
+  private stepRigidConstrained(dt: number): ForceResult {
+    const c = this.constraints;
+    if (!c) return velocityVerletStep(this.state, this.box, this.species, this.force, dt);
+    const { positions, velocities, forces, count } = this.state;
+    const inv = this.invMass;
+    const g = this.config.gravity;
+    const halfDt = 0.5 * dt;
+
+    this.refPositions.set(positions);
+    for (let a = 0; a < count; a++) {
+      velocities[3 * a] += halfDt * forces[3 * a] * inv[a];
+      velocities[3 * a + 1] += halfDt * (forces[3 * a + 1] * inv[a] - g);
+      velocities[3 * a + 2] += halfDt * forces[3 * a + 2] * inv[a];
+      positions[3 * a] += dt * velocities[3 * a];
+      positions[3 * a + 1] += dt * velocities[3 * a + 1];
+      positions[3 * a + 2] += dt * velocities[3 * a + 2];
+    }
+    applyBoundary(this.state, this.box, this.species);
+    shake(this.state, c, this.refPositions, inv, this.box, dt);
+
+    const result = this.force.compute(this.state, this.box, this.species);
+    for (let a = 0; a < count; a++) {
+      velocities[3 * a] += halfDt * forces[3 * a] * inv[a];
+      velocities[3 * a + 1] += halfDt * (forces[3 * a + 1] * inv[a] - g);
+      velocities[3 * a + 2] += halfDt * forces[3 * a + 2] * inv[a];
+    }
+    rattle(this.state, c, inv, this.box);
+    return result;
   }
 
   /** Berendsen barostat (NPT): rescale the cell + positions toward the target pressure. */
@@ -188,8 +239,8 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // L4 (water) changes topology/atom count ⇒ full rebuild rather than a force swap.
-    if (level === "L4") {
+    // Water (L4/L5) changes topology/atom count ⇒ full rebuild rather than a force swap.
+    if (level === "L4" || level === "L5") {
       this.configure();
       return;
     }

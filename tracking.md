@@ -20,6 +20,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P10** | L4 eau atomistique (SPC/Fw : molécules, liaisons, charges) | ✅ |
 | **P11** | Barostat NPT (Berendsen) — ensemble pression constante | ✅ |
 | **P12** | Gravité (champ externe, CPU + GPU) | ✅ |
+| **P13** | Eau rigide L5 (contraintes SHAKE/RATTLE) | ✅ |
 
 ---
 
@@ -358,6 +359,21 @@ densité/pression ; les ensembles NVE/NVT/NPT sont tous disponibles.
   **CPU et GPU** (uniform `uGravity` dans les kernels d'intégration). Indépendante de la masse.
 - Config `gravity`, setters live (CPU+GPU), slider UI, **scène « Sédimentation »** (gravité + parois).
 - **Tests (+2, total 63)** : sous gravité le centre de masse **descend** ; gravité nulle ⇒ COM immobile.
+
+---
+
+## P13 — Eau rigide L5 (SHAKE/RATTLE) ✅ (Plan v2)
+
+- **Solveur de contraintes** (`core/constraints.ts`) : **SHAKE** (positions, projetées le long des liaisons
+  de référence, corrections reportées dans les vitesses) + **RATTLE** (vitesses ⊥ aux liaisons) — l'effet
+  de SETTLE pour l'eau 3-sites.
+- **Niveau L5 — eau rigide** : 3 contraintes/molécule (2× O–H + H–H), WaterForce en mode rigide
+  (non-liée seule), intégrateur contraint dans le moteur, **pas de temps 2 fs** (vs 0.5 fs flexible).
+- Scène « Eau rigide ».
+- **Tests (+1, total 64)** : distances O–H et H–H **exactement maintenues** (< 1e-4 nm) sur 2000 pas à
+  2 fs, T saine, pas de NaN.
+
+**Déviation comblée :** l'eau rigide à contraintes (SETTLE/RATTLE) demandée est livrée.
 
 ---
 

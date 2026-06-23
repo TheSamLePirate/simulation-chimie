@@ -31,6 +31,11 @@ export const ACCURACY_LEVELS = {
     label: "L4 · Eau atomistique",
     description: "Eau SPC/Fw : molécules O+2H, liaisons H, charges (CPU)",
   },
+  L5: {
+    id: "L5",
+    label: "L5 · Eau rigide",
+    description: "Eau rigide (contraintes SHAKE/RATTLE), grand pas de temps (CPU)",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;
