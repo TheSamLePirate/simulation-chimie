@@ -65,6 +65,10 @@ export interface SimConfig {
   readonly thermostat: ThermostatKind;
   /** Thermostat coupling time in ps (smaller = stronger coupling). */
   readonly thermostatTau: number;
+  /** Barostat: `none` = fixed volume; `berendsen` = NPT toward `pressureTarget`. */
+  readonly barostat: "none" | "berendsen";
+  /** Target pressure in bar (NPT). */
+  readonly pressureTarget: number;
   /** Compute backend: CPU reference oracle or WebGPU. */
   readonly engineKind: EngineKind;
 }

@@ -12,7 +12,7 @@ import { SPECIES_LIBRARY } from "../../core/species";
 import { createState } from "../../core/state";
 import { berendsenLambda, csvrLambda } from "../../core/thermostats";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../../core/types";
-import { BOLTZMANN_KJ_PER_MOL_K, pressureToBar } from "../../core/units";
+import { BAR_PER_KJ_PER_MOL_NM3, BOLTZMANN_KJ_PER_MOL_K, pressureToBar } from "../../core/units";
 import { buildWaterSystem } from "../../core/water";
 import type { AccuracyLevel, Observables, SimConfig, SimulationEngine } from "../types";
 
@@ -117,9 +117,29 @@ export class CpuEngine implements SimulationEngine {
     for (let i = 0; i < steps; i++) {
       this.last = velocityVerletStep(this.state, this.box, this.species, this.force, dt);
       this.applyThermostat(dt);
+      this.applyBarostat(dt);
       this.elapsed += dt;
       this.stepCount += 1;
     }
+  }
+
+  /** Berendsen barostat (NPT): rescale the cell + positions toward the target pressure. */
+  private applyBarostat(dt: number): void {
+    if (this.config.barostat === "none") return;
+    const ke = kineticEnergy(this.state, this.species);
+    const pInternal = pressure(ke, this.last.virial, volume(this.box));
+    const pTarget = this.config.pressureTarget / BAR_PER_KJ_PER_MOL_NM3;
+
+    const tauP = 1.0; // ps
+    const beta = 0.0005; // soft isothermal compressibility (nm³·mol·kJ⁻¹)
+    let mu = Math.cbrt(1 + (dt / tauP) * beta * (pInternal - pTarget));
+    mu = Math.min(1.0005, Math.max(0.9995, mu)); // gentle per-step clamp
+
+    const newL = this.box.lengths[0] * mu;
+    this.box = createBox(newL, this.config.boundary);
+    this.config = { ...this.config, boxLength: newL };
+    const p = this.state.positions;
+    for (let k = 0; k < p.length; k++) p[k] *= mu;
   }
 
   /** Couple to the heat bath (NVT) by rescaling velocities. No-op for NVE. */
@@ -193,6 +213,11 @@ export class CpuEngine implements SimulationEngine {
   /** Switch thermostat / coupling time in place. */
   setThermostat(thermostat: SimConfig["thermostat"], tau: number): void {
     this.config = { ...this.config, thermostat, thermostatTau: tau };
+  }
+
+  /** Switch barostat / target pressure (bar) in place. */
+  setBarostat(barostat: SimConfig["barostat"], pressureTarget: number): void {
+    this.config = { ...this.config, barostat, pressureTarget };
   }
 
   /** Overwrite the live state from a snapshot (sizes must match the config). */

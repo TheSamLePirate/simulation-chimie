@@ -128,6 +128,12 @@ export class SimulationView {
     ) {
       this.driver.setThermostat(state.config.thermostat, state.config.thermostatTau);
     }
+    if (
+      state.config.barostat !== prev.config.barostat ||
+      state.config.pressureTarget !== prev.config.pressureTarget
+    ) {
+      this.driver.setBarostat(state.config.barostat, state.config.pressureTarget);
+    }
     if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps, state.colorMode);
   }
 

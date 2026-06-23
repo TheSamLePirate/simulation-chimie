@@ -16,6 +16,8 @@ export const simConfigSchema = z.object({
   crossScale: z.number().min(0).max(2),
   thermostat: z.enum(["none", "berendsen", "csvr"]),
   thermostatTau: z.number().positive(),
+  barostat: z.enum(["none", "berendsen"]),
+  pressureTarget: z.number(),
   engineKind: z.enum(["cpu", "gpu"]),
 });
 

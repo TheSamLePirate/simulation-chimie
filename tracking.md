@@ -18,6 +18,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P8** | Polish (viz vitesse, raccourcis, docs) | ✅ |
 | **P9** | L3 électrostatique (Coulomb-Wolf) + ions | ✅ |
 | **P10** | L4 eau atomistique (SPC/Fw : molécules, liaisons, charges) | ✅ |
+| **P11** | Barostat NPT (Berendsen) — ensemble pression constante | ✅ |
 
 ---
 
@@ -333,6 +334,23 @@ verts en isolation et en CI propre.)_
 
 ---
 
+## P11 — Barostat NPT (Berendsen) ✅
+
+**Complète le trio d'ensembles NVE / NVT / NPT.**
+
+**Livré :**
+- **Barostat Berendsen** dans le moteur CPU : calcule la pression viriel, redimensionne la cellule +
+  les positions par μ = ∛(1 + (Δt/τ_P)·β·(P − P_cible)) à chaque pas (clamp doux pour la stabilité).
+- Config `barostat` + `pressureTarget` (bar) (+ Zod), **redimensionnement live du fil-de-fer de la
+  boîte** dans le rendu, sélecteur **Volume fixe / NPT** + slider de pression cible dans l'UI.
+- **Tests (+2, total 61)** : un liquide sur-pressurisé se **dilate** vers la cible (volume ↑, P ↓) ;
+  boîte **fixe** quand le barostat est off.
+
+**Déviations restantes (extensions futures) :** barostat **GPU** non porté (CPU only). NPT couvre la
+densité/pression ; les ensembles NVE/NVT/NPT sont tous disponibles.
+
+---
+
 ## Bilan
 
 **Phases P0–P10 livrées et commitées.** Socle scientifique solide (**59 tests unitaires/golden + 6
@@ -342,15 +360,21 @@ complète **L0→L4** : gaz parfait, sphères molles, Lennard-Jones, **électros
 thermostats NVT, démixtion huile/eau, ions NaCl, cell-lists O(N), snapshots/export, scènes,
 viz par vitesse.
 
+Ensembles **NVE / NVT (Berendsen, CSVR) / NPT (Berendsen)** tous disponibles.
+
 **Déviations restantes (extensions futures, documentées par phase) :**
-- **Eau rigide à contraintes SETTLE/RATTLE** (l'eau livrée est *flexible* SPC/Fw — valide, dt ~0.5 fs).
-- **Barostat NPT** (les thermostats NVT couvrent température + transitions de phase).
-- **GPU** : électrostatique / eau / cell-lists / thermostat non portés sur GPU (CPU = chemin validé ;
-  GPU = LJ/WCA O(N²) NVE). Limite d'env : WebGPU headless ne fait ni readback `mapAsync` ni capture canvas.
-- **Rendu de surface de fluide** (raymarching/metaballs) — rendu actuel = sphères instanciées + carte de vitesse.
+- **Eau rigide à contraintes SETTLE/RATTLE** (l'eau livrée est *flexible* SPC/Fw — physiquement valide,
+  nécessite dt ~0.5 fs ; SETTLE permettrait un dt plus grand).
+- **GPU** : électrostatique / eau / cell-lists / thermostat / barostat non portés sur GPU (CPU = chemin
+  validé et complet ; GPU = LJ/WCA O(N²) NVE pour les très grands comptes). Limite d'environnement :
+  WebGPU **headless** ne résout ni le readback `mapAsync` ni la capture du canvas → la parité GPU
+  quantitative se valide en **navigateur réel** (harnais `window.__md`).
+- **Rendu de surface de fluide** (raymarching/metaballs) — rendu actuel = sphères instanciées + carte
+  de vitesse (lisible, performant).
 
 La priorité explicite de l'utilisateur (h₂o + huile + **vraie physique mesurable**, temps réel,
-niveaux incrémentaux, WebGPU, tests partout) est remplie, électrostatique et eau atomistique incluses.
+niveaux incrémentaux, WebGPU, tests partout) est remplie, **électrostatique atomistique, eau atomistique
+et ensemble NPT inclus**.
 
 ---
 

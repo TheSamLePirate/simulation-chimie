@@ -68,6 +68,7 @@ export interface SimDriver {
   setTimestep(dt: number): void;
   setTemperature(t: number): void;
   setThermostat(kind: SimConfig["thermostat"], tau: number): void;
+  setBarostat(kind: SimConfig["barostat"], pressureTarget: number): void;
   dispose(): void;
 }
 
@@ -77,12 +78,19 @@ class CpuDriver implements SimDriver {
   private readonly engine: CpuEngine;
   private readonly particles: ParticleSystem;
   private readonly cell: THREE.LineSegments;
+  private readonly initialBoxLength: number;
 
   constructor(config: SimConfig) {
     this.engine = new CpuEngine(config);
     this.particles = new ParticleSystem(this.engine.state, this.engine.species);
     this.cell = buildCell(this.engine.box.lengths);
+    this.initialBoxLength = this.engine.box.lengths[0];
     this.group.add(this.particles.mesh, this.cell);
+  }
+
+  /** Keep the cell wireframe in sync with the (possibly NPT-rescaled) box. */
+  private syncCell(): void {
+    this.cell.scale.setScalar(this.engine.box.lengths[0] / this.initialBoxLength);
   }
 
   get boxLengths(): Vec3 {
@@ -94,11 +102,13 @@ class CpuDriver implements SimDriver {
   advance(playing: boolean, substeps: number, colorMode: ColorMode): void {
     if (playing) this.engine.step(substeps);
     this.particles.update(this.engine.state, colorMode);
+    this.syncCell();
   }
 
   stepOnce(substeps: number, colorMode: ColorMode): void {
     this.engine.step(substeps);
     this.particles.update(this.engine.state, colorMode);
+    this.syncCell();
   }
 
   sample(): Observables {
@@ -135,6 +145,9 @@ class CpuDriver implements SimDriver {
   }
   setThermostat(kind: SimConfig["thermostat"], tau: number): void {
     this.engine.setThermostat(kind, tau);
+  }
+  setBarostat(kind: SimConfig["barostat"], pressureTarget: number): void {
+    this.engine.setBarostat(kind, pressureTarget);
   }
 
   dispose(): void {
@@ -227,6 +240,9 @@ class GpuDriver implements SimDriver {
   }
   setThermostat(_kind: SimConfig["thermostat"], _tau: number): void {
     // GPU thermostat needs a kinetic-energy reduction on device; CPU engine only for now.
+  }
+  setBarostat(_kind: SimConfig["barostat"], _pressureTarget: number): void {
+    // GPU barostat needs a virial reduction on device; CPU engine only for now.
   }
 
   dispose(): void {

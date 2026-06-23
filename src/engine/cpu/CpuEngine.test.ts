@@ -16,6 +16,8 @@ const BASE: SimConfig = {
   crossScale: 1,
   thermostat: "none",
   thermostatTau: 0.5,
+  barostat: "none",
+  pressureTarget: 1,
   engineKind: "cpu",
 };
 

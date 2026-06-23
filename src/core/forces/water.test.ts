@@ -85,6 +85,8 @@ const WATER_CONFIG: SimConfig = {
   crossScale: 1,
   thermostat: "berendsen",
   thermostatTau: 0.2,
+  barostat: "none",
+  pressureTarget: 1,
   engineKind: "cpu",
 };
 

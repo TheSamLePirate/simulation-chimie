@@ -87,6 +87,23 @@ export function ControlPanel() {
           onChange={(thermostat) => patchConfig({ thermostat })}
         />
         <Segmented
+          label="Barostat (pression)"
+          value={config.barostat}
+          options={[
+            {
+              value: "none",
+              label: "Volume fixe",
+              title: "NVE / NVT (volume constant)",
+            },
+            {
+              value: "berendsen",
+              label: "NPT",
+              title: "Pression constante (Berendsen, CPU)",
+            },
+          ]}
+          onChange={(barostat) => patchConfig({ barostat })}
+        />
+        <Segmented
           label="Bord de la cellule"
           value={config.boundary}
           options={[
@@ -144,6 +161,16 @@ export function ControlPanel() {
           step={1}
           format={(v) => `${v.toFixed(0)} K`}
           onChange={(temperature) => patchConfig({ temperature })}
+        />
+        <Slider
+          label="Pression cible (NPT)"
+          value={config.pressureTarget}
+          min={1}
+          max={5000}
+          step={10}
+          format={(v) => `${v.toFixed(0)} bar`}
+          disabled={config.barostat === "none"}
+          onChange={(pressureTarget) => patchConfig({ pressureTarget })}
         />
         <Slider
           label="Taille de cellule"
