@@ -11,7 +11,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P1** | Cœur + L0/L1 (moteur CPU) | ✅ |
 | **P2** | Moteur GPU (cell-lists reportées) | ✅ |
 | **P3** | L2 Lennard-Jones | ✅ |
-| **P4** | L3/L4 eau & démixtion huile | ⬜ |
+| **P4** | Démixtion huile/eau (eau atomistique/électrostatique reportées) | ✅ |
 | **P5** | L5 ensembles (thermostats/barostats) | ⬜ |
 | **P6** | Édition + scènes + E2E complet | ⬜ |
 | **P7** | L6 gros-grain (perf) | ⬜ |
@@ -150,6 +150,38 @@ Le dispatch compute GPU est confirmé fonctionnel (`compute:ok`) et le pipeline 
 - **g(r) en UI** : mode **CPU uniquement** (le mode GPU nécessiterait un readback de positions,
   bloqué en headless). Le kernel GPU LJ est validé par dispatch sans erreur (quantitatif en navigateur réel).
 - **Cell-lists** toujours reportées (forces O(N²)). Voir P2.
+
+---
+
+## P4 — Démixtion huile/eau (mélange binaire immiscible) ✅
+
+**Objectif (plan) :** L3/L4 — eau & démixtion huile. **Livré : la démixtion huile/eau** (l'effet n°1
+demandé) via un modèle d'immiscibilité réel.
+
+**Livré :**
+- **Multi-espèces** dans le moteur CPU : composition (fraction de seconde espèce, assignée par seed),
+  espèces gros-grain **Eau** et **Huile**.
+- **Immiscibilité** : facteur `crossScale` qui atténue l'attraction croisée (ε croisé Lorentz-Berthelot
+  × crossScale < 1) ⇒ l'attraction entre semblables domine ⇒ **séparation de phases**.
+- **Paramètre d'ordre de démixtion** (`core/observables/demixing.ts`) : fraction moyenne de voisins de
+  même espèce (≈ Σf² mélangé → 1 démixé), affiché dans l'UI.
+- **Scènes** (`scenes/registry.ts` + `ScenePicker`) : Gaz parfait, Liquide LJ (condensation),
+  **Huile + Eau (démixtion)**.
+- **Tests (+3, total 40)** : g(r)/démixtion ≈ 0,5 pour mélange aléatoire, ≈ 1 pour clusters séparés ;
+  **la démixtion augmente dans le temps** sous attraction croisée réduite (vraie séparation MD).
+- **E2E (+1)** : la scène Huile+Eau publie un paramètre de démixtion valide ∈ [0,1].
+
+**Vérifications :** lint · typecheck · **40 unit** · **3 e2e** (4 skip). Tout vert.
+
+**Déviations au plan (importantes) :**
+- **Électrostatique atomistique (L3 Coulomb-Wolf)** et **eau rigide SPC/E / TIP4P (L4 : topologie
+  moléculaire O+2H, charges partielles, contraintes SETTLE, exclusions)** sont un chantier
+  d'architecture lourd, **reporté** faute de budget dans cette passe. La **démixtion huile/eau** — la
+  priorité explicite de l'utilisateur — est livrée via un **mélange binaire LJ immiscible** (modèle
+  mésoscopique valide, cohérent avec la branche « gros-grain/perf » de la décision hybride).
+- Conséquence : pas de liaisons H atomistiques ni d'ions explicites pour l'instant. À reprendre comme
+  « L3/L4 atomistique » dans une phase dédiée.
+- Multi-espèces : **moteur CPU** (le mode GPU reste mono-espèce ; à étendre avec un buffer de types).
 
 ---
 

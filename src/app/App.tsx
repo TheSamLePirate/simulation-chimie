@@ -5,6 +5,7 @@ import { EngineStatusBadge } from "../ui/EngineStatusBadge";
 import type { EngineStatus } from "../ui/engineStatus";
 import { GraphsPanel } from "../ui/graphs/GraphsPanel";
 import { ObservablesPanel } from "../ui/panels/ObservablesPanel";
+import { ScenePicker } from "../ui/scenes/ScenePicker";
 
 export function App() {
   const [status, setStatus] = useState<EngineStatus>("initializing");
@@ -19,6 +20,7 @@ export function App() {
       </header>
 
       <aside className="sidebar">
+        <ScenePicker />
         <ControlPanel />
         <ObservablesPanel />
         <GraphsPanel />

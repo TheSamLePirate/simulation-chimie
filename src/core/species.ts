@@ -29,4 +29,29 @@ export const NEON: Species = {
   radius: 0.14,
 };
 
-export const SPECIES_LIBRARY = { ARGON, NEON } as const;
+/**
+ * Coarse-grained "water" and "oil" beads for the immiscible-mixture (demixing) demo.
+ * Each bead lumps several heavy atoms; immiscibility is produced by reducing the
+ * cross-species attraction (see {@link SimConfig.crossScale}), not by these parameters.
+ */
+export const WATER: Species = {
+  name: "Eau",
+  mass: 18.015,
+  sigma: 0.31,
+  epsilon: 1.0,
+  charge: 0,
+  color: 0x4aa3ff,
+  radius: 0.16,
+};
+
+export const OIL: Species = {
+  name: "Huile",
+  mass: 60,
+  sigma: 0.42,
+  epsilon: 1.3,
+  charge: 0,
+  color: 0xf2b134,
+  radius: 0.22,
+};
+
+export const SPECIES_LIBRARY = { ARGON, NEON, WATER, OIL } as const;

@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { demixingOrderParameter } from "../core/observables/demixing";
 import { type RadialDistribution, radialDistribution } from "../core/observables/rdf";
 import type { Vec3 } from "../core/types";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
@@ -56,6 +57,8 @@ export interface SimDriver {
   sample(): Observables;
   /** Radial distribution g(r), or null when positions aren't CPU-readable (GPU). */
   radialDistribution(): RadialDistribution | null;
+  /** Demixing order parameter for binary mixtures, or null (single species / GPU). */
+  demixing(): number | null;
   setLevel(level: AccuracyLevel): void;
   setTimestep(dt: number): void;
   setTemperature(t: number): void;
@@ -102,6 +105,13 @@ class CpuDriver implements SimDriver {
       bins: 60,
       rMax,
     });
+  }
+
+  demixing(): number | null {
+    const species = this.engine.species;
+    if (species.length < 2) return null;
+    const cutoff = 1.5 * Math.max(...species.map((s) => s.sigma));
+    return demixingOrderParameter(this.engine.state, this.engine.box, cutoff);
   }
 
   setLevel(level: AccuracyLevel): void {
@@ -181,6 +191,10 @@ class GpuDriver implements SimDriver {
 
   radialDistribution(): RadialDistribution | null {
     // Positions are GPU-resident; g(r) would need a (headless-blocked) readback.
+    return null;
+  }
+
+  demixing(): number | null {
     return null;
   }
 

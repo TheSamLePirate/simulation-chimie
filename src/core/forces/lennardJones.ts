@@ -20,6 +20,9 @@ const CUTOFF_FACTOR = 2.5;
 export class LennardJonesForce implements ForceModel {
   readonly name = "Lennard-Jones (12-6)";
 
+  /** @param crossScale cross-species ε multiplier (< 1 ⇒ immiscibility / demixing). */
+  constructor(private readonly crossScale = 1) {}
+
   compute(state: SimState, box: Box, species: readonly Species[]): ForceResult {
     const { count, positions, forces, typeIds } = state;
     forces.fill(0);
@@ -49,7 +52,8 @@ export class LennardJonesForce implements ForceModel {
 
         const sj = species[typeIds[j]];
         const sigma = 0.5 * (si.sigma + sj.sigma);
-        const epsilon = Math.sqrt(si.epsilon * sj.epsilon);
+        const mix = typeIds[i] === typeIds[j] ? 1 : this.crossScale;
+        const epsilon = Math.sqrt(si.epsilon * sj.epsilon) * mix;
         const rc = CUTOFF_FACTOR * sigma;
         if (r2 >= rc * rc || r2 < 1e-12) continue;
 

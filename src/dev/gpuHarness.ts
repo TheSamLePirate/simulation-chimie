@@ -21,6 +21,9 @@ const TEST_CONFIG: SimConfig = {
   timestep: 0.002,
   level: "L1",
   speciesName: "ARGON",
+  secondSpeciesName: null,
+  fractionSecond: 0,
+  crossScale: 1,
   engineKind: "gpu",
 };
 

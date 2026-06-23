@@ -9,6 +9,7 @@ interface Metric {
 export function ObservablesPanel() {
   const observables = useAppStore((s) => s.observables);
   const fps = useAppStore((s) => s.fps);
+  const demixing = useAppStore((s) => s.demixing);
   const particleCount = useAppStore((s) => s.config.particleCount);
 
   const metrics: Metric[] = [
@@ -48,6 +49,11 @@ export function ObservablesPanel() {
       id: "total",
       label: "É. totale",
       value: observables ? `${observables.totalEnergy.toFixed(1)} kJ/mol` : "—",
+    },
+    {
+      id: "demix",
+      label: "Démixtion",
+      value: demixing != null ? demixing.toFixed(2) : "—",
     },
   ];
 

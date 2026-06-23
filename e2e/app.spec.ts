@@ -51,3 +51,30 @@ test("simulation advances when WebGPU is available", async ({ page }) => {
     .poll(async () => Number(await stepMetric.textContent()), { timeout: 5000 })
     .toBeGreaterThan(0);
 });
+
+test("oil/water scene reports a valid demixing order parameter", async ({ page }) => {
+  test.setTimeout(30_000);
+  await page.goto("/");
+  const status = page.getByTestId("engine-status");
+  await expect
+    .poll(async () => (await status.textContent())?.trim() ?? "", {
+      timeout: 15_000,
+    })
+    .not.toBe("Initialisation du moteur…");
+
+  // Load the binary-mixture scene (two species, CPU engine) and let it run.
+  await page.getByRole("button", { name: /Huile \+ Eau/ }).click();
+
+  // The demixing metric resolves to a number in [0, 1] — multi-species pipeline works.
+  const demix = page.getByTestId("metric-demix");
+  await expect
+    .poll(
+      async () => {
+        const text = (await demix.textContent())?.trim() ?? "";
+        return text === "—" ? Number.NaN : Number(text);
+      },
+      { timeout: 10_000 },
+    )
+    .toBeGreaterThanOrEqual(0);
+  expect(Number(await demix.textContent())).toBeLessThanOrEqual(1);
+});

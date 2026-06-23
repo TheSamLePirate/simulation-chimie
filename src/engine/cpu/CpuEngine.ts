@@ -17,15 +17,25 @@ function resolveSpecies(name: string): Species {
   return SPECIES_LIBRARY[key] ?? SPECIES_LIBRARY.ARGON;
 }
 
-function makeForceModel(level: AccuracyLevel): ForceModel {
+function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
   switch (level) {
     case "L0":
       return NoForce;
     case "L1":
       return new WcaForce();
     case "L2":
-      return new LennardJonesForce();
+      return new LennardJonesForce(crossScale);
   }
+}
+
+/** Assign particle species: type 1 to a `fraction` of particles (seeded), else type 0. */
+function buildTypeIds(count: number, fraction: number, seed: number): Uint8Array {
+  const ids = new Uint8Array(count);
+  if (fraction > 0) {
+    const rng = new Rng(seed ^ 0x5bd1e995);
+    for (let i = 0; i < count; i++) ids[i] = rng.next() < fraction ? 1 : 0;
+  }
+  return ids;
 }
 
 /**
@@ -46,10 +56,24 @@ export class CpuEngine implements SimulationEngine {
 
   constructor(config: SimConfig) {
     this.config = config;
+    // Definite-assignment via configure(); fields are set there.
     this.box = createBox(config.boxLength, config.boundary);
-    this.species = [resolveSpecies(config.speciesName)];
-    this.state = createState(config.particleCount);
-    this.force = makeForceModel(config.level);
+    this.species = [];
+    this.state = createState(0);
+    this.force = NoForce;
+    this.configure();
+  }
+
+  /** (Re)build box, species, state and force model from the current config. */
+  private configure(): void {
+    const c = this.config;
+    this.box = createBox(c.boxLength, c.boundary);
+    this.species = c.secondSpeciesName
+      ? [resolveSpecies(c.speciesName), resolveSpecies(c.secondSpeciesName)]
+      : [resolveSpecies(c.speciesName)];
+    const fraction = c.secondSpeciesName ? c.fractionSecond : 0;
+    this.state = createState(c.particleCount, buildTypeIds(c.particleCount, fraction, c.seed));
+    this.force = makeForceModel(c.level, c.crossScale);
     this.initialise();
   }
 
@@ -89,7 +113,7 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    this.force = makeForceModel(level);
+    this.force = makeForceModel(level, this.config.crossScale);
     this.last = this.force.compute(this.state, this.box, this.species);
   }
 
@@ -111,10 +135,6 @@ export class CpuEngine implements SimulationEngine {
 
   reset(patch: Partial<SimConfig> = {}): void {
     this.config = { ...this.config, ...patch };
-    this.box = createBox(this.config.boxLength, this.config.boundary);
-    this.species = [resolveSpecies(this.config.speciesName)];
-    this.state = createState(this.config.particleCount);
-    this.force = makeForceModel(this.config.level);
-    this.initialise();
+    this.configure();
   }
 }

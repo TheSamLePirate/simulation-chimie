@@ -39,8 +39,17 @@ export interface SimConfig {
   /** Integration timestep in ps. */
   readonly timestep: number;
   readonly level: AccuracyLevel;
-  /** Single-species systems in P1. */
+  /** Primary species. */
   readonly speciesName: string;
+  /** Optional second species for binary mixtures (null ⇒ single species). */
+  readonly secondSpeciesName: string | null;
+  /** Fraction of particles assigned to the second species (0…1). */
+  readonly fractionSecond: number;
+  /**
+   * Cross-species attraction multiplier applied to the mixed ε (Lorentz-Berthelot).
+   * 1 = ideal mixing; < 1 weakens unlike attraction ⇒ immiscibility / demixing.
+   */
+  readonly crossScale: number;
   /** Compute backend: CPU reference oracle or WebGPU. */
   readonly engineKind: EngineKind;
 }

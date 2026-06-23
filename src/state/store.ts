@@ -13,6 +13,9 @@ export const DEFAULT_CONFIG: SimConfig = {
   timestep: 0.005,
   level: "L1",
   speciesName: "ARGON",
+  secondSpeciesName: null,
+  fractionSecond: 0,
+  crossScale: 1,
   engineKind: "cpu",
 };
 
@@ -22,6 +25,7 @@ export interface AppState {
   substeps: number;
   observables: Observables | null;
   rdf: RadialDistribution | null;
+  demixing: number | null;
   fps: number;
   /** Bumped to request a single manual step / a reset (consumed by the renderer). */
   stepNonce: number;
@@ -36,7 +40,7 @@ export interface AppState {
   requestStep: () => void;
   requestReset: () => void;
   publishSample: (observables: Observables, fps: number) => void;
-  publishRdf: (rdf: RadialDistribution | null) => void;
+  publishAnalysis: (rdf: RadialDistribution | null, demixing: number | null) => void;
 }
 
 export const appStore = createStore<AppState>((set, get) => ({
@@ -45,6 +49,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   substeps: 5,
   observables: null,
   rdf: null,
+  demixing: null,
   fps: 0,
   stepNonce: 0,
   resetNonce: 0,
@@ -58,7 +63,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   requestStep: () => set({ stepNonce: get().stepNonce + 1 }),
   requestReset: () => set({ resetNonce: get().resetNonce + 1 }),
   publishSample: (observables, fps) => set({ observables, fps }),
-  publishRdf: (rdf) => set({ rdf }),
+  publishAnalysis: (rdf, demixing) => set({ rdf, demixing }),
 }));
 
 /** React hook bound to the vanilla store. */
