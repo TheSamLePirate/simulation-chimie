@@ -1,4 +1,5 @@
 import { createBox, volume } from "../../core/box";
+import { IonicForce } from "../../core/forces/ionic";
 import { LennardJonesCellForce } from "../../core/forces/lennardJonesCell";
 import { NoForce } from "../../core/forces/none";
 import { WcaForce } from "../../core/forces/wca";
@@ -26,6 +27,8 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
       return new WcaForce();
     case "L2":
       return new LennardJonesCellForce(crossScale);
+    case "L3":
+      return new IonicForce();
   }
 }
 

@@ -219,7 +219,8 @@ export class GpuEngine {
 
   /** Set the cutoff uniform for the active level (WCA: 2^(1/6)σ, LJ: 2.5σ). */
   private updateCutoff(): void {
-    const factor = this.config.level === "L2" ? 2.5 : TWO_POW_1_6;
+    // GPU has no Coulomb kernel; L3 runs the LJ part only (2.5σ cutoff).
+    const factor = this.config.level === "L2" || this.config.level === "L3" ? 2.5 : TWO_POW_1_6;
     const rc = factor * this.species.sigma;
     this.uRc2.value = rc * rc;
   }
@@ -229,7 +230,9 @@ export class GpuEngine {
   }
 
   private activeForceKernel(): Kernel {
-    return this.config.level === "L2" ? this.kForcesLJ : this.kForcesWCA;
+    return this.config.level === "L2" || this.config.level === "L3"
+      ? this.kForcesLJ
+      : this.kForcesWCA;
   }
 
   /** Bind the renderer. Call {@link warmup} once before stepping. */

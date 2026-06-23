@@ -21,6 +21,11 @@ export const ACCURACY_LEVELS = {
     label: "L2 · Lennard-Jones",
     description: "Van der Waals : cohésion + condensation",
   },
+  L3: {
+    id: "L3",
+    label: "L3 · Électrostatique",
+    description: "LJ + Coulomb (Wolf DSF) : ions, charges partielles",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

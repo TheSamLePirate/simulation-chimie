@@ -54,4 +54,32 @@ export const OIL: Species = {
   radius: 0.22,
 };
 
-export const SPECIES_LIBRARY = { ARGON, NEON, WATER, OIL } as const;
+/** Monatomic ions for the electrostatics (L3) demo: Na⁺ and Cl⁻ (Joung-Cheatham-like). */
+export const SODIUM: Species = {
+  name: "Na⁺",
+  mass: 22.99,
+  sigma: 0.251,
+  epsilon: 0.544,
+  charge: 1,
+  color: 0xa066ff,
+  radius: 0.13,
+};
+
+export const CHLORIDE: Species = {
+  name: "Cl⁻",
+  mass: 35.45,
+  sigma: 0.448,
+  epsilon: 0.42,
+  charge: -1,
+  color: 0x49d17a,
+  radius: 0.22,
+};
+
+export const SPECIES_LIBRARY = {
+  ARGON,
+  NEON,
+  WATER,
+  OIL,
+  SODIUM,
+  CHLORIDE,
+} as const;

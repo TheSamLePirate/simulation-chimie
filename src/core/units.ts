@@ -60,6 +60,9 @@ export function temperatureFromKinetic(
 /** 1 kJ·mol⁻¹·nm⁻³ expressed in bar (the internal → reportable pressure factor). */
 export const BAR_PER_KJ_PER_MOL_NM3 = 16.6053906717;
 
+/** Coulomb constant 1/(4πε₀) in kJ·mol⁻¹·nm·e⁻² (GROMACS convention). */
+export const COULOMB_CONSTANT = 138.935458;
+
 /** Convert an internal pressure (kJ·mol⁻¹·nm⁻³) to bar. */
 export function pressureToBar(pressureInternal: number): number {
   return pressureInternal * BAR_PER_KJ_PER_MOL_NM3;

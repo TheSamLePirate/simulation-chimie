@@ -16,6 +16,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P6** | Snapshots/export + sauvegarde de scènes + E2E | ✅ |
 | **P7** | Perf : cell-lists O(N) CPU (gros-grain MARTINI/DPD reporté) | ✅ |
 | **P8** | Polish (viz vitesse, raccourcis, docs) | ✅ |
+| **P9** | L3 électrostatique (Coulomb-Wolf) + ions | ✅ |
 
 ---
 
@@ -287,6 +288,24 @@ verts en isolation et en CI propre.)_
   chantier graphique distinct.
 - La **carte de vitesse** est en **mode CPU** (le GPU garde la couleur par espèce ; un `colorNode`
   lisant le buffer de vitesses serait l'évolution GPU).
+
+---
+
+## P9 — L3 électrostatique atomistique (Coulomb-Wolf) ✅
+
+**Comble une déviation P4.** Vraie électrostatique, sans FFT, adaptée au navigateur.
+
+**Livré :**
+- **`erfc`** (approximation Numerical Recipes) + constante de Coulomb (138.935 kJ·mol⁻¹·nm·e⁻²).
+- **`IonicForce` (L3)** : Lennard-Jones + **Coulomb Wolf damped-shifted-force (DSF)** dans une passe ;
+  force ET énergie continues au cutoff Coulomb ; charges depuis la table d'espèces.
+- **Ions Na⁺ / Cl⁻**, niveau **L3** (registre + moteur CPU + schéma Zod), **scène NaCl ionique** (NVT)
+  où les ions opposés s'attirent et s'ordonnent.
+- **Tests (+4, total 56)** : Coulomb vs dérivée numérique, attraction/répulsion, continuité au cutoff,
+  pas de Coulomb si partenaire neutre.
+
+**Déviations restantes :** électrostatique **GPU** non implémentée (L3 sur GPU = LJ seul, sans Coulomb,
+documenté) ; eau **rigide atomistique SPC/E** (topologie moléculaire) = prochaine étape (P10).
 
 ---
 
