@@ -20,6 +20,7 @@ function pushCapped(array: number[], value: number): void {
 /** Rolling real-time charts of the key observables. */
 export function GraphsPanel() {
   const observables = useAppStore((s) => s.observables);
+  const rdf = useAppStore((s) => s.rdf);
   const historyRef = useRef<History>({
     temperature: [],
     kinetic: [],
@@ -71,6 +72,14 @@ export function GraphsPanel() {
         includeZero
         format={(v) => `${v.toFixed(0)} bar`}
       />
+      {rdf && rdf.g.length > 0 && (
+        <TimeSeriesChart
+          title="g(r) — structure (× r croissant)"
+          series={[{ color: "#e879f9", values: rdf.g }]}
+          includeZero
+          format={(v) => v.toFixed(2)}
+        />
+      )}
     </section>
   );
 }

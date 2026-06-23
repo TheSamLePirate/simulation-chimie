@@ -7,6 +7,7 @@ import {
   instanceIndex,
   Loop,
   round,
+  sqrt,
   uniform,
   vec2,
   vec3,
@@ -78,7 +79,8 @@ export class GpuEngine {
 
   private readonly kZeroForces: Kernel;
   private readonly kIntegrateA: Kernel;
-  private readonly kForces: Kernel;
+  private readonly kForcesWCA: Kernel;
+  private readonly kForcesLJ: Kernel;
   private readonly kIntegrateB: Kernel;
 
   private renderer: THREE.WebGPURenderer | null = null;
@@ -124,7 +126,7 @@ export class GpuEngine {
       });
     }, n);
 
-    this.kForces = kernel(() => {
+    this.kForcesWCA = kernel(() => {
       const idx = instanceIndex;
       const pi = this.positions.element(idx).toVar();
       const fi = vec3(0).toVar();
@@ -156,6 +158,47 @@ export class GpuEngine {
       this.energyVirial.element(idx).assign(vec2(peSum, virSum));
     }, n);
 
+    // L2 — full Lennard-Jones with shifted-force truncation at r_c = √uRc2.
+    this.kForcesLJ = kernel(() => {
+      const idx = instanceIndex;
+      const pi = this.positions.element(idx).toVar();
+      const fi = vec3(0).toVar();
+      const peSum = float(0).toVar();
+      const virSum = float(0).toVar();
+
+      const rc = sqrt(this.uRc2).toVar();
+      const c2 = this.uSigma2.div(this.uRc2);
+      const c6 = c2.mul(c2).mul(c2);
+      const c12 = c6.mul(c6);
+      const fAtRc = float(24).mul(this.uEpsilon).mul(c12.mul(2).sub(c6)).div(rc);
+      const vAtRc = float(4).mul(this.uEpsilon).mul(c12.sub(c6));
+
+      Loop(n, ({ i: j }) => {
+        const d = pi.sub(this.positions.element(j)).toVar();
+        If(this.uPeriodic.greaterThan(0.5), () => {
+          d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
+        });
+        const r2 = d.dot(d).toVar();
+        If(r2.greaterThan(float(1e-12)), () => {
+          If(r2.lessThan(this.uRc2), () => {
+            const r = sqrt(r2);
+            const inv2 = this.uSigma2.div(r2);
+            const inv6 = inv2.mul(inv2).mul(inv2);
+            const inv12 = inv6.mul(inv6);
+            const fRadial = float(24).mul(this.uEpsilon).mul(inv12.mul(2).sub(inv6)).div(r);
+            const fOverR = fRadial.sub(fAtRc).div(r);
+            const v = float(4).mul(this.uEpsilon).mul(inv12.sub(inv6));
+            fi.addAssign(d.mul(fOverR));
+            peSum.addAssign(v.sub(vAtRc).add(r.sub(rc).mul(fAtRc)).mul(0.5));
+            virSum.addAssign(fOverR.mul(r2).mul(0.5));
+          });
+        });
+      });
+
+      this.forces.element(idx).assign(fi);
+      this.energyVirial.element(idx).assign(vec2(peSum, virSum));
+    }, n);
+
     this.kIntegrateB = kernel(() => {
       const v = this.velocities.element(instanceIndex);
       v.addAssign(this.forces.element(instanceIndex).mul(this.uInvMass).mul(this.uHalfDt));
@@ -170,13 +213,23 @@ export class GpuEngine {
     this.uBox.value.set(config.boxLength, config.boxLength, config.boxLength);
     this.uSigma2.value = species.sigma * species.sigma;
     this.uEpsilon.value = species.epsilon;
-    const rc = TWO_POW_1_6 * species.sigma;
-    this.uRc2.value = rc * rc;
+    this.updateCutoff();
     this.uPeriodic.value = config.boundary === "periodic" ? 1 : 0;
+  }
+
+  /** Set the cutoff uniform for the active level (WCA: 2^(1/6)σ, LJ: 2.5σ). */
+  private updateCutoff(): void {
+    const factor = this.config.level === "L2" ? 2.5 : TWO_POW_1_6;
+    const rc = factor * this.species.sigma;
+    this.uRc2.value = rc * rc;
   }
 
   private get forcesEnabled(): boolean {
     return this.config.level !== "L0";
+  }
+
+  private activeForceKernel(): Kernel {
+    return this.config.level === "L2" ? this.kForcesLJ : this.kForcesWCA;
   }
 
   /** Bind the renderer. Call {@link warmup} once before stepping. */
@@ -188,12 +241,12 @@ export class GpuEngine {
   async warmup(): Promise<void> {
     const renderer = this.renderer;
     if (!renderer) return;
-    await renderer.computeAsync(this.forcesEnabled ? this.kForces : this.kZeroForces);
+    await renderer.computeAsync(this.forcesEnabled ? this.activeForceKernel() : this.kZeroForces);
   }
 
   private stepNodes(): Kernel[] {
     return this.forcesEnabled
-      ? [this.kIntegrateA, this.kForces, this.kIntegrateB]
+      ? [this.kIntegrateA, this.activeForceKernel(), this.kIntegrateB]
       : [this.kIntegrateA, this.kIntegrateB];
   }
 
@@ -301,7 +354,10 @@ export class GpuEngine {
 
   setLevel(level: AccuracyLevel): void {
     (this.config as { level: AccuracyLevel }).level = level;
-    void this.renderer?.computeAsync(this.forcesEnabled ? this.kForces : this.kZeroForces);
+    this.updateCutoff();
+    void this.renderer?.computeAsync(
+      this.forcesEnabled ? this.activeForceKernel() : this.kZeroForces,
+    );
   }
 
   setTimestep(dt: number): void {

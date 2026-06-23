@@ -1,4 +1,5 @@
 import { createBox, volume } from "../../core/box";
+import { LennardJonesForce } from "../../core/forces/lennardJones";
 import { NoForce } from "../../core/forces/none";
 import { WcaForce } from "../../core/forces/wca";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
@@ -17,7 +18,14 @@ function resolveSpecies(name: string): Species {
 }
 
 function makeForceModel(level: AccuracyLevel): ForceModel {
-  return level === "L0" ? NoForce : new WcaForce();
+  switch (level) {
+    case "L0":
+      return NoForce;
+    case "L1":
+      return new WcaForce();
+    case "L2":
+      return new LennardJonesForce();
+  }
 }
 
 /**

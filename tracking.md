@@ -10,7 +10,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P0** | Scaffold + CI + bootstrap WebGPU | ✅ |
 | **P1** | Cœur + L0/L1 (moteur CPU) | ✅ |
 | **P2** | Moteur GPU (cell-lists reportées) | ✅ |
-| **P3** | L2 Lennard-Jones | ⬜ |
+| **P3** | L2 Lennard-Jones | ✅ |
 | **P4** | L3/L4 eau & démixtion huile | ⬜ |
 | **P5** | L5 ensembles (thermostats/barostats) | ⬜ |
 | **P6** | Édition + scènes + E2E complet | ⬜ |
@@ -124,6 +124,32 @@ Le dispatch compute GPU est confirmé fonctionnel (`compute:ok`) et le pipeline 
 - **CPU = moteur par défaut** (validé partout). Le GPU est **opt-in** (rendu GPU-résident, gros comptes).
 - **Température live en GPU** : re-thermalisation non encore portée sur GPU (no-op ; `Réinitialiser`
   applique). Arrive avec les thermostats en **P5**.
+
+---
+
+## P3 — L2 Lennard-Jones ✅
+
+**Objectif (DoD) :** LJ complet (van der Waals), condensation, pression viriel, g(r).
+
+**Livré :**
+- **Force Lennard-Jones 12-6** (`core/forces/lennardJones.ts`) en **force-décalée** (force ET énergie
+  continues à r_c = 2.5σ ⇒ bonne conservation NVE), mélange Lorentz-Berthelot. Ajoute la **cohésion**
+  manquante à WCA : condensation gaz→liquide, puits de potentiel.
+- **g(r)** (`core/observables/rdf.ts`) : fonction de distribution radiale, normalisée par le volume de
+  coquille exact.
+- **Niveau L2** câblé dans le registre, le moteur **CPU** et le **kernel GPU** (nouveau `kForcesLJ`
+  force-décalée, sélection de cutoff WCA/LJ par niveau).
+- **UI** : L2 dans le sélecteur ; **graphe g(r) temps réel** (mode CPU) montrant le pic de structure.
+- **Tests (+9, total 37)** : LJ vs dérivée numérique, attraction/répulsion, continuité au cutoff,
+  puits négatif ; g(r) ≈ 1 pour gaz idéal + pic pour configuration agrégée ; **conservation NVE LJ**
+  (<2 %), **cohésion** (PE < 0 à densité liquide).
+
+**Vérifications :** lint · typecheck · **37 unit** · **3 e2e** (4 skip). Tout vert.
+
+**Déviations au plan :**
+- **g(r) en UI** : mode **CPU uniquement** (le mode GPU nécessiterait un readback de positions,
+  bloqué en headless). Le kernel GPU LJ est validé par dispatch sans erreur (quantitatif en navigateur réel).
+- **Cell-lists** toujours reportées (forces O(N²)). Voir P2.
 
 ---
 

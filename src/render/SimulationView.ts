@@ -5,6 +5,7 @@ import { type AppState, appStore } from "../state/store";
 import { createDriver, type SimDriver } from "./drivers";
 
 const SAMPLE_INTERVAL_MS = 100;
+const RDF_INTERVAL_MS = 500;
 
 /** Config keys whose change requires a full driver rebuild. */
 const STRUCTURAL_KEYS: ReadonlyArray<keyof SimConfig> = [
@@ -46,6 +47,7 @@ export class SimulationView {
   private fpsWindowStart = 0;
   private framesInWindow = 0;
   private lastSampleAt = 0;
+  private lastRdfAt = 0;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -183,6 +185,11 @@ export class SimulationView {
     if (this.driver && now - this.lastSampleAt >= SAMPLE_INTERVAL_MS) {
       this.lastSampleAt = now;
       appStore.getState().publishSample(this.driver.sample(), this.fps);
+    }
+
+    if (this.driver && now - this.lastRdfAt >= RDF_INTERVAL_MS) {
+      this.lastRdfAt = now;
+      appStore.getState().publishRdf(this.driver.radialDistribution());
     }
   }
 

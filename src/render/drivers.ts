@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { type RadialDistribution, radialDistribution } from "../core/observables/rdf";
 import type { Vec3 } from "../core/types";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
@@ -53,6 +54,8 @@ export interface SimDriver {
   stepOnce(substeps: number): void;
   /** Latest measurements (synchronous; GPU energies update via background readback). */
   sample(): Observables;
+  /** Radial distribution g(r), or null when positions aren't CPU-readable (GPU). */
+  radialDistribution(): RadialDistribution | null;
   setLevel(level: AccuracyLevel): void;
   setTimestep(dt: number): void;
   setTemperature(t: number): void;
@@ -91,6 +94,14 @@ class CpuDriver implements SimDriver {
 
   sample(): Observables {
     return this.engine.observables();
+  }
+
+  radialDistribution(): RadialDistribution {
+    const rMax = 0.5 * this.engine.box.lengths[0];
+    return radialDistribution(this.engine.state, this.engine.box, {
+      bins: 60,
+      rMax,
+    });
   }
 
   setLevel(level: AccuracyLevel): void {
@@ -166,6 +177,11 @@ class GpuDriver implements SimDriver {
       step: this.engine.steps,
       time: this.engine.elapsedPs,
     };
+  }
+
+  radialDistribution(): RadialDistribution | null {
+    // Positions are GPU-resident; g(r) would need a (headless-blocked) readback.
+    return null;
   }
 
   setLevel(level: AccuracyLevel): void {

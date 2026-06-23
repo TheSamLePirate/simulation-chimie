@@ -15,6 +15,11 @@ export const ACCURACY_LEVELS = {
     label: "L1 · Sphères molles",
     description: "Répulsion WCA à courte portée",
   },
+  L2: {
+    id: "L2",
+    label: "L2 · Lennard-Jones",
+    description: "Van der Waals : cohésion + condensation",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

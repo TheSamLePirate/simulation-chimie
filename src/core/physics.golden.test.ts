@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
  * These are the scientific acceptance criteria for the L0/L1 levels.
  */
 import { createBox, volume } from "./box";
+import { LennardJonesForce } from "./forces/lennardJones";
 import { NoForce } from "./forces/none";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "./init";
 import { velocityVerletStep } from "./integrators/velocityVerlet";
@@ -66,4 +67,37 @@ describe("ideal gas law (measured via wall collisions)", () => {
 
     expect(measuredP / idealP).toBeCloseTo(1, 1); // within ~10 %
   }, 20_000); // heavy: 40k steps × 500 particles
+});
+
+describe("Lennard-Jones (L2) — cohesion & conservation", () => {
+  const force = new LennardJonesForce();
+
+  function makeLiquid(seed: number) {
+    const box = createBox(2.6, "periodic"); // ~liquid density for argon
+    const state = createState(256);
+    placeOnLattice(state, box, { jitter: 0.05, rng: new Rng(seed) });
+    setMaxwellBoltzmannVelocities(state, SPECIES, 90, new Rng(seed + 1));
+    return { state, box };
+  }
+
+  it("conserves total energy under NVE", () => {
+    const { state, box } = makeLiquid(3);
+    let res = force.compute(state, box, SPECIES);
+    const e0 = kineticEnergy(state, SPECIES) + res.potentialEnergy;
+    let min = e0;
+    let max = e0;
+    for (let s = 0; s < 1500; s++) {
+      res = velocityVerletStep(state, box, SPECIES, force, 0.002);
+      const e = kineticEnergy(state, SPECIES) + res.potentialEnergy;
+      min = Math.min(min, e);
+      max = Math.max(max, e);
+    }
+    expect((max - min) / Math.abs(e0)).toBeLessThan(0.02);
+  }, 20_000);
+
+  it("shows cohesion: negative potential energy at liquid density", () => {
+    const { state, box } = makeLiquid(4);
+    const res = force.compute(state, box, SPECIES);
+    expect(res.potentialEnergy).toBeLessThan(0);
+  });
 });
