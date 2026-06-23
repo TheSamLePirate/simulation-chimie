@@ -69,6 +69,7 @@ export interface SimDriver {
   setTemperature(t: number): void;
   setThermostat(kind: SimConfig["thermostat"], tau: number): void;
   setBarostat(kind: SimConfig["barostat"], pressureTarget: number): void;
+  setGravity(gravity: number): void;
   dispose(): void;
 }
 
@@ -148,6 +149,9 @@ class CpuDriver implements SimDriver {
   }
   setBarostat(kind: SimConfig["barostat"], pressureTarget: number): void {
     this.engine.setBarostat(kind, pressureTarget);
+  }
+  setGravity(gravity: number): void {
+    this.engine.setGravity(gravity);
   }
 
   dispose(): void {
@@ -243,6 +247,9 @@ class GpuDriver implements SimDriver {
   }
   setBarostat(_kind: SimConfig["barostat"], _pressureTarget: number): void {
     // GPU barostat needs a virial reduction on device; CPU engine only for now.
+  }
+  setGravity(gravity: number): void {
+    this.engine.setGravity(gravity);
   }
 
   dispose(): void {

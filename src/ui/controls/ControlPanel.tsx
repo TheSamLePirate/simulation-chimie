@@ -173,6 +173,15 @@ export function ControlPanel() {
           onChange={(pressureTarget) => patchConfig({ pressureTarget })}
         />
         <Slider
+          label="Gravité"
+          value={config.gravity}
+          min={0}
+          max={0.3}
+          step={0.005}
+          format={(v) => (v === 0 ? "off" : v.toFixed(3))}
+          onChange={(gravity) => patchConfig({ gravity })}
+        />
+        <Slider
           label="Taille de cellule"
           value={config.boxLength}
           min={2}

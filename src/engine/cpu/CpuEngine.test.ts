@@ -18,6 +18,7 @@ const BASE: SimConfig = {
   thermostatTau: 0.5,
   barostat: "none",
   pressureTarget: 1,
+  gravity: 0,
   engineKind: "cpu",
 };
 

@@ -19,6 +19,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P9** | L3 électrostatique (Coulomb-Wolf) + ions | ✅ |
 | **P10** | L4 eau atomistique (SPC/Fw : molécules, liaisons, charges) | ✅ |
 | **P11** | Barostat NPT (Berendsen) — ensemble pression constante | ✅ |
+| **P12** | Gravité (champ externe, CPU + GPU) | ✅ |
 
 ---
 
@@ -348,6 +349,15 @@ verts en isolation et en CI propre.)_
 
 **Déviations restantes (extensions futures) :** barostat **GPU** non porté (CPU only). NPT couvre la
 densité/pression ; les ensembles NVE/NVT/NPT sont tous disponibles.
+
+---
+
+## P12 — Gravité ✅ (Plan v2)
+
+- Accélération uniforme −y (réglable, exagérée vs g réel pour la visibilité) dans le Velocity-Verlet,
+  **CPU et GPU** (uniform `uGravity` dans les kernels d'intégration). Indépendante de la masse.
+- Config `gravity`, setters live (CPU+GPU), slider UI, **scène « Sédimentation »** (gravité + parois).
+- **Tests (+2, total 63)** : sous gravité le centre de masse **descend** ; gravité nulle ⇒ COM immobile.
 
 ---
 

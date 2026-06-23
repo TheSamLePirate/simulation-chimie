@@ -87,6 +87,7 @@ const WATER_CONFIG: SimConfig = {
   thermostatTau: 0.2,
   barostat: "none",
   pressureTarget: 1,
+  gravity: 0,
   engineKind: "cpu",
 };
 

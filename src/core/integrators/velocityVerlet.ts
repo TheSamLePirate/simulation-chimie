@@ -17,6 +17,7 @@ export interface StepResult extends ForceResult {
  *   v(t+Δt)  = v(t+½Δt) + ½·a(t+Δt)·Δt
  *
  * @param dt timestep in ps.
+ * @param gravity downward acceleration in nm·ps⁻² applied to −y (0 = none).
  */
 export function velocityVerletStep(
   state: SimState,
@@ -24,18 +25,20 @@ export function velocityVerletStep(
   species: readonly Species[],
   force: ForceModel,
   dt: number,
+  gravity = 0,
 ): StepResult {
   const { count, positions, velocities, forces, typeIds } = state;
   const halfDt = 0.5 * dt;
 
-  // First half-kick + drift.
+  // First half-kick + drift. Gravity adds a uniform −y acceleration (mass-independent).
   for (let i = 0; i < count; i++) {
     const invMass = 1 / species[typeIds[i]].mass;
-    for (let c = 0; c < 3; c++) {
-      const idx = 3 * i + c;
-      velocities[idx] += halfDt * forces[idx] * invMass;
-      positions[idx] += dt * velocities[idx];
-    }
+    velocities[3 * i] += halfDt * forces[3 * i] * invMass;
+    velocities[3 * i + 1] += halfDt * (forces[3 * i + 1] * invMass - gravity);
+    velocities[3 * i + 2] += halfDt * forces[3 * i + 2] * invMass;
+    positions[3 * i] += dt * velocities[3 * i];
+    positions[3 * i + 1] += dt * velocities[3 * i + 1];
+    positions[3 * i + 2] += dt * velocities[3 * i + 2];
   }
 
   const wallImpulse = applyBoundary(state, box, species);
@@ -46,10 +49,9 @@ export function velocityVerletStep(
   // Second half-kick.
   for (let i = 0; i < count; i++) {
     const invMass = 1 / species[typeIds[i]].mass;
-    for (let c = 0; c < 3; c++) {
-      const idx = 3 * i + c;
-      velocities[idx] += halfDt * forces[idx] * invMass;
-    }
+    velocities[3 * i] += halfDt * forces[3 * i] * invMass;
+    velocities[3 * i + 1] += halfDt * (forces[3 * i + 1] * invMass - gravity);
+    velocities[3 * i + 2] += halfDt * forces[3 * i + 2] * invMass;
   }
 
   return { ...result, wallImpulse };

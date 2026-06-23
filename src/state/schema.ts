@@ -18,6 +18,7 @@ export const simConfigSchema = z.object({
   thermostatTau: z.number().positive(),
   barostat: z.enum(["none", "berendsen"]),
   pressureTarget: z.number(),
+  gravity: z.number(),
   engineKind: z.enum(["cpu", "gpu"]),
 });
 

@@ -76,6 +76,7 @@ export class GpuEngine {
   private readonly uEpsilon = uniform(0);
   private readonly uRc2 = uniform(0);
   private readonly uPeriodic = uniform(1);
+  private readonly uGravity = uniform(0);
 
   private readonly kZeroForces: Kernel;
   private readonly kIntegrateA: Kernel;
@@ -119,7 +120,12 @@ export class GpuEngine {
       const p = this.positions.element(instanceIndex);
       const v = this.velocities.element(instanceIndex);
       const f = this.forces.element(instanceIndex);
-      v.addAssign(f.mul(this.uInvMass).mul(this.uHalfDt));
+      v.addAssign(
+        f
+          .mul(this.uInvMass)
+          .sub(vec3(0, this.uGravity, 0))
+          .mul(this.uHalfDt),
+      );
       p.addAssign(v.mul(this.uDt));
       If(this.uPeriodic.greaterThan(0.5), () => {
         p.assign(p.sub(this.uBox.mul(roundVec(p.div(this.uBox)))));
@@ -201,7 +207,13 @@ export class GpuEngine {
 
     this.kIntegrateB = kernel(() => {
       const v = this.velocities.element(instanceIndex);
-      v.addAssign(this.forces.element(instanceIndex).mul(this.uInvMass).mul(this.uHalfDt));
+      const f = this.forces.element(instanceIndex);
+      v.addAssign(
+        f
+          .mul(this.uInvMass)
+          .sub(vec3(0, this.uGravity, 0))
+          .mul(this.uHalfDt),
+      );
     }, n);
   }
 
@@ -215,6 +227,13 @@ export class GpuEngine {
     this.uEpsilon.value = species.epsilon;
     this.updateCutoff();
     this.uPeriodic.value = config.boundary === "periodic" ? 1 : 0;
+    this.uGravity.value = config.gravity;
+  }
+
+  /** Update gravity (nm·ps⁻², downward) live. */
+  setGravity(gravity: number): void {
+    (this.config as { gravity: number }).gravity = gravity;
+    this.uGravity.value = gravity;
   }
 
   /** Set the cutoff uniform for the active level (WCA: 2^(1/6)σ, LJ: 2.5σ). */

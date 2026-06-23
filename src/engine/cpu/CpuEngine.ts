@@ -115,7 +115,14 @@ export class CpuEngine implements SimulationEngine {
   step(steps: number): void {
     const dt = this.config.timestep;
     for (let i = 0; i < steps; i++) {
-      this.last = velocityVerletStep(this.state, this.box, this.species, this.force, dt);
+      this.last = velocityVerletStep(
+        this.state,
+        this.box,
+        this.species,
+        this.force,
+        dt,
+        this.config.gravity,
+      );
       this.applyThermostat(dt);
       this.applyBarostat(dt);
       this.elapsed += dt;
@@ -218,6 +225,11 @@ export class CpuEngine implements SimulationEngine {
   /** Switch barostat / target pressure (bar) in place. */
   setBarostat(barostat: SimConfig["barostat"], pressureTarget: number): void {
     this.config = { ...this.config, barostat, pressureTarget };
+  }
+
+  /** Update gravity (nm·ps⁻², downward) live. */
+  setGravity(gravity: number): void {
+    this.config = { ...this.config, gravity };
   }
 
   /** Overwrite the live state from a snapshot (sizes must match the config). */

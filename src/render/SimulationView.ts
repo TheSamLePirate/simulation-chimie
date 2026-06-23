@@ -134,6 +134,9 @@ export class SimulationView {
     ) {
       this.driver.setBarostat(state.config.barostat, state.config.pressureTarget);
     }
+    if (state.config.gravity !== prev.config.gravity) {
+      this.driver.setGravity(state.config.gravity);
+    }
     if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps, state.colorMode);
   }
 

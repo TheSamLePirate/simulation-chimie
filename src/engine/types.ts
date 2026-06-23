@@ -69,6 +69,8 @@ export interface SimConfig {
   readonly barostat: "none" | "berendsen";
   /** Target pressure in bar (NPT). */
   readonly pressureTarget: number;
+  /** Downward gravitational acceleration in nm·ps⁻² (0 = off; exaggerated vs real g for visibility). */
+  readonly gravity: number;
   /** Compute backend: CPU reference oracle or WebGPU. */
   readonly engineKind: EngineKind;
 }

@@ -18,6 +18,7 @@ const BASE: SimConfig = {
   thermostatTau: 0.3,
   barostat: "berendsen",
   pressureTarget: 50, // bar — well below the initial pressure
+  gravity: 0,
   engineKind: "cpu",
 };
 

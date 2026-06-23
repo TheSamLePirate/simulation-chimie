@@ -105,6 +105,21 @@ export const SCENES: readonly Scene[] = [
     }),
   },
   {
+    id: "sediment",
+    label: "Sédimentation (gravité)",
+    description: "Gravité + parois : les particules tombent et s'accumulent au fond",
+    config: make({
+      level: "L2",
+      speciesName: "ARGON",
+      particleCount: 400,
+      boxLength: 5,
+      boundary: "reflective",
+      temperature: 120,
+      timestep: 0.005,
+      gravity: 0.12,
+    }),
+  },
+  {
     id: "boil",
     label: "Chauffage / gaz (NVT)",
     description: "Thermostat chaud ⇒ le liquide s'évapore en gaz",
