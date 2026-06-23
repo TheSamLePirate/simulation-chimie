@@ -16,9 +16,10 @@ export function ControlPanel() {
 
   const patchConfig = useAppStore((s) => s.patchConfig);
   const setLevel = useAppStore((s) => s.setLevel);
+  const setEngineKind = useAppStore((s) => s.setEngineKind);
   const togglePlay = useAppStore((s) => s.togglePlay);
-  const stepOnce = useAppStore((s) => s.stepOnce);
-  const reset = useAppStore((s) => s.reset);
+  const requestStep = useAppStore((s) => s.requestStep);
+  const requestReset = useAppStore((s) => s.requestReset);
   const setSubsteps = useAppStore((s) => s.setSubsteps);
 
   return (
@@ -29,15 +30,32 @@ export function ControlPanel() {
         <button type="button" className="btn btn--primary" onClick={togglePlay}>
           {playing ? "⏸ Pause" : "▶ Lecture"}
         </button>
-        <button type="button" className="btn" onClick={stepOnce} disabled={playing}>
+        <button type="button" className="btn" onClick={requestStep} disabled={playing}>
           ⏭ Pas
         </button>
-        <button type="button" className="btn" onClick={reset}>
+        <button type="button" className="btn" onClick={requestReset}>
           ↺ Réinitialiser
         </button>
       </div>
 
       <Field>
+        <Segmented
+          label="Moteur de calcul"
+          value={config.engineKind}
+          options={[
+            {
+              value: "cpu",
+              label: "CPU",
+              title: "Moteur de référence (Float64, déterministe)",
+            },
+            {
+              value: "gpu",
+              label: "GPU",
+              title: "WebGPU compute (rendu GPU-résident)",
+            },
+          ]}
+          onChange={(engineKind) => setEngineKind(engineKind)}
+        />
         <Segmented
           label="Niveau de physique"
           value={config.level}
@@ -56,7 +74,7 @@ export function ControlPanel() {
             {
               value: "reflective",
               label: "Parois",
-              title: "Parois réfléchissantes",
+              title: "Parois réfléchissantes (CPU)",
             },
           ]}
           onChange={(boundary) => patchConfig({ boundary })}
@@ -77,7 +95,7 @@ export function ControlPanel() {
           label="Particules"
           value={config.particleCount}
           min={32}
-          max={1024}
+          max={config.engineKind === "gpu" ? 20000 : 1024}
           step={1}
           onChange={(particleCount) => patchConfig({ particleCount })}
         />

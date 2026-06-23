@@ -19,6 +19,9 @@ export const ACCURACY_LEVELS = {
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;
 
+/** Which compute backend runs the simulation. */
+export type EngineKind = "cpu" | "gpu";
+
 /** Fully describes a reproducible simulation. Serialisable (drives engine + defines a scene). */
 export interface SimConfig {
   readonly seed: number;
@@ -33,6 +36,8 @@ export interface SimConfig {
   readonly level: AccuracyLevel;
   /** Single-species systems in P1. */
   readonly speciesName: string;
+  /** Compute backend: CPU reference oracle or WebGPU. */
+  readonly engineKind: EngineKind;
 }
 
 /** Instantaneous, display-ready measurements of the system. */

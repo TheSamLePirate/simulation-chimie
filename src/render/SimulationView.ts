@@ -1,33 +1,45 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import * as THREE from "three/webgpu";
-import type { Observables } from "../engine/types";
-import type { Simulation } from "../sim/Simulation";
-import { ParticleSystem } from "./ParticleSystem";
-
-/** Invoked (throttled) with the latest measurements and frame rate for the HUD. */
-export type SampleListener = (observables: Observables, fps: number) => void;
+import type { SimConfig } from "../engine/types";
+import { type AppState, appStore } from "../state/store";
+import { createDriver, type SimDriver } from "./drivers";
 
 const SAMPLE_INTERVAL_MS = 100;
 
+/** Config keys whose change requires a full driver rebuild. */
+const STRUCTURAL_KEYS: ReadonlyArray<keyof SimConfig> = [
+  "particleCount",
+  "boxLength",
+  "boundary",
+  "seed",
+  "speciesName",
+  "engineKind",
+];
+
+interface AppliedState {
+  config: SimConfig;
+  stepNonce: number;
+  resetNonce: number;
+}
+
 /**
- * Imperative Three.js view: owns the WebGPU renderer and drives the simulation in the
- * render loop. Free of React so the hot path never re-renders the component tree.
- * Rebuilds its visuals when the simulation topology changes (particle count / box).
+ * Imperative Three.js view. Owns the WebGPU renderer and the active simulation driver
+ * (CPU or GPU), runs the render loop, and bridges the React store imperatively so the
+ * hot path never re-renders the component tree. Rebuilds the driver when the topology
+ * or backend changes.
  */
 export class SimulationView {
   private readonly container: HTMLElement;
-  private readonly simulation: Simulation;
-  private readonly onSample: SampleListener | undefined;
-
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGPURenderer | null = null;
   private controls: OrbitControls | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private unsubscribeStructural: (() => void) | null = null;
+  private unsubscribe: (() => void) | null = null;
 
-  private cell: THREE.LineSegments | null = null;
-  private particles: ParticleSystem | null = null;
+  private driver: SimDriver | null = null;
+  private applied: AppliedState;
+  private rebuildToken = 0;
   private disposed = false;
 
   fps = 0;
@@ -35,10 +47,13 @@ export class SimulationView {
   private framesInWindow = 0;
   private lastSampleAt = 0;
 
-  constructor(container: HTMLElement, simulation: Simulation, onSample?: SampleListener) {
+  constructor(container: HTMLElement) {
     this.container = container;
-    this.simulation = simulation;
-    this.onSample = onSample;
+    this.applied = {
+      config: appStore.getState().config,
+      stepNonce: appStore.getState().stepNonce,
+      resetNonce: appStore.getState().resetNonce,
+    };
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
@@ -61,13 +76,17 @@ export class SimulationView {
     await renderer.init();
     if (this.disposed) return;
 
+    // Expose the live renderer for the GPU validation harness (window.__md).
+    (window as unknown as { __mdRenderer?: THREE.WebGPURenderer }).__mdRenderer = renderer;
+
     this.controls = new OrbitControls(this.camera, renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
 
-    this.buildVisuals();
-    this.unsubscribeStructural = this.simulation.onStructuralChange(() => this.buildVisuals());
+    await this.rebuildDriver();
+    if (this.disposed) return;
 
+    this.unsubscribe = appStore.subscribe((state) => this.onStoreChange(state));
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.container);
 
@@ -75,37 +94,51 @@ export class SimulationView {
     renderer.setAnimationLoop(() => this.tick());
   }
 
-  /** (Re)build the cell wireframe + particle instances for the current topology. */
-  private buildVisuals(): void {
-    if (this.cell) {
-      this.scene.remove(this.cell);
-      this.cell.geometry.dispose();
-      (this.cell.material as THREE.Material).dispose();
-      this.cell = null;
+  private onStoreChange(state: AppState): void {
+    if (!this.driver) return;
+    const prev = this.applied;
+    const structural = STRUCTURAL_KEYS.some((k) => state.config[k] !== prev.config[k]);
+    const rebuild = structural || state.resetNonce !== prev.resetNonce;
+
+    this.applied = {
+      config: state.config,
+      stepNonce: state.stepNonce,
+      resetNonce: state.resetNonce,
+    };
+
+    if (rebuild) {
+      void this.rebuildDriver();
+      return;
     }
-    if (this.particles) {
-      this.scene.remove(this.particles.mesh);
-      this.particles.dispose();
-      this.particles = null;
+    if (state.config.level !== prev.config.level) this.driver.setLevel(state.config.level);
+    if (state.config.timestep !== prev.config.timestep) {
+      this.driver.setTimestep(state.config.timestep);
+    }
+    if (state.config.temperature !== prev.config.temperature) {
+      this.driver.setTemperature(state.config.temperature);
+    }
+    if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps);
+  }
+
+  private async rebuildDriver(): Promise<void> {
+    const renderer = this.renderer;
+    if (!renderer) return;
+    const token = ++this.rebuildToken;
+
+    const driver = createDriver(appStore.getState().config, renderer);
+    await driver.ready();
+    if (this.disposed || token !== this.rebuildToken) {
+      driver.dispose();
+      return;
     }
 
-    const [lx, ly, lz] = this.simulation.box.lengths;
-    const boxGeometry = new THREE.BoxGeometry(lx, ly, lz);
-    this.cell = new THREE.LineSegments(
-      new THREE.EdgesGeometry(boxGeometry),
-      new THREE.LineBasicMaterial({
-        color: 0x3b82f6,
-        transparent: true,
-        opacity: 0.6,
-      }),
-    );
-    boxGeometry.dispose();
-    this.scene.add(this.cell);
-
-    this.particles = new ParticleSystem(this.simulation.state, this.simulation.species);
-    this.scene.add(this.particles.mesh);
-
-    this.frameCamera(Math.max(lx, ly, lz));
+    if (this.driver) {
+      this.scene.remove(this.driver.group);
+      this.driver.dispose();
+    }
+    this.driver = driver;
+    this.scene.add(driver.group);
+    this.frameCamera(Math.max(...driver.boxLengths));
   }
 
   private frameCamera(extent: number): void {
@@ -129,29 +162,27 @@ export class SimulationView {
   }
 
   private tick(): void {
-    const { renderer, controls } = this;
+    const renderer = this.renderer;
     if (!renderer) return;
 
-    this.simulation.advance();
-    this.particles?.update(this.simulation.state);
+    const state = appStore.getState();
+    this.driver?.advance(state.playing, state.substeps);
 
-    controls?.update();
+    this.controls?.update();
     renderer.render(this.scene, this.camera);
 
-    // Frame-rate tracking.
     this.framesInWindow += 1;
     const now = performance.now();
-    const elapsed = now - this.fpsWindowStart;
-    if (elapsed >= 500) {
-      this.fps = (this.framesInWindow * 1000) / elapsed;
+    const windowElapsed = now - this.fpsWindowStart;
+    if (windowElapsed >= 500) {
+      this.fps = (this.framesInWindow * 1000) / windowElapsed;
       this.framesInWindow = 0;
       this.fpsWindowStart = now;
     }
 
-    // Throttled observable sampling for the HUD.
-    if (this.onSample && now - this.lastSampleAt >= SAMPLE_INTERVAL_MS) {
+    if (this.driver && now - this.lastSampleAt >= SAMPLE_INTERVAL_MS) {
       this.lastSampleAt = now;
-      this.onSample(this.simulation.observables(), this.fps);
+      appStore.getState().publishSample(this.driver.sample(), this.fps);
     }
   }
 
@@ -159,15 +190,14 @@ export class SimulationView {
     if (this.disposed) return;
     this.disposed = true;
 
-    this.unsubscribeStructural?.();
+    this.unsubscribe?.();
     this.resizeObserver?.disconnect();
     this.controls?.dispose();
-
-    if (this.cell) {
-      this.cell.geometry.dispose();
-      (this.cell.material as THREE.Material).dispose();
+    if (this.driver) {
+      this.scene.remove(this.driver.group);
+      this.driver.dispose();
+      this.driver = null;
     }
-    this.particles?.dispose();
 
     const renderer = this.renderer;
     if (renderer) {

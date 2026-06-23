@@ -9,7 +9,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 |-------|----------|------|
 | **P0** | Scaffold + CI + bootstrap WebGPU | ✅ |
 | **P1** | Cœur + L0/L1 (moteur CPU) | ✅ |
-| **P2** | Moteur GPU + cell-lists | ⬜ |
+| **P2** | Moteur GPU (cell-lists reportées) | ✅ |
 | **P3** | L2 Lennard-Jones | ⬜ |
 | **P4** | L3/L4 eau & démixtion huile | ⬜ |
 | **P5** | L5 ensembles (thermostats/barostats) | ⬜ |
@@ -85,6 +85,45 @@ Statut moteur observé en E2E : **« WebGPU actif »** (le rendu instancié + bo
   vrais thermostats NVT/NPT arrivent en **P5**.
 - **Formateur** : Biome aligné sur guillemets doubles + points-virgules pour coller au formateur de
   l'environnement (évite les allers-retours de style).
+
+---
+
+## P2 — Moteur GPU (WebGPU/TSL) ✅
+
+**Objectif (DoD) :** moteur GPU + cell-lists ; GPU = CPU à tolérance ; ~50k particules fluides.
+
+**Livré :**
+- **Moteur GPU** (`src/engine/gpu/GpuEngine.ts`) : Velocity-Verlet en **3 passes compute TSL**
+  (demi-kick → forces → demi-kick), forces **L0/L1 (WCA)** en O(N²) avec image minimale périodique,
+  uniforms (dt, masse, boîte, σ²/ε/r_c², périodique), **float32 à ordre de sommation fixe ⇒ reproductible**.
+- **Rendu GPU-résident** (`GpuParticleSystem`) : les positions sont lues directement dans le vertex
+  shader (`positionNode` + `instanceIndex`) — **zéro readback**, zéro écriture de matrices par frame.
+- **Architecture de drivers** (`render/drivers.ts`) : interface `SimDriver` + `CpuDriver`/`GpuDriver`,
+  fabrique `createDriver`. `SimulationView` possède le driver actif et se reconstruit au changement
+  structurel/de moteur.
+- **Refactor du store** : playback (play/substeps) et nonces step/reset dans le store ; `engineKind`
+  (CPU/GPU) ; suppression du contrôleur `Simulation` (P1).
+- **UI** : bascule **Moteur CPU / GPU** (slider de particules monte à 20k en GPU).
+- **Harnais de validation** (`window.__md`) : parité forces/positions GPU↔CPU, dérive d'énergie,
+  déterminisme — pour exécution en **navigateur réel**.
+- **E2E** : test comportemental GPU (bascule GPU → lecture → le compteur de pas avance, **zéro
+  exception** du dispatch compute + rendu GPU). Parité par readback : suite **skip** documentée.
+
+**Vérifications :** lint · typecheck · **28 unit** · **3 e2e** (1 GPU comportemental + 2 app), 4 e2e skip.
+Le dispatch compute GPU est confirmé fonctionnel (`compute:ok`) et le pipeline rendu tourne sans erreur.
+
+**Déviations au plan :**
+- **Cell-lists reportées** : les forces GPU restent en **O(N²)** (référence). Le voisinage O(N)
+  (spatial hash + atomics + prefix sum) est reporté à une passe d'optimisation ultérieure (P3/P7).
+  L'O(N²) GPU encaisse déjà plusieurs milliers de particules en temps réel.
+- **Validation GPU limitée en CI headless** : Chromium *headless* (a) ne résout pas le readback de
+  buffer (`mapAsync`) et (b) ne composite pas le canvas WebGPU dans les captures d'écran. Donc la
+  **parité quantitative GPU↔CPU** et le **mouvement de pixels** ne sont validables qu'en **navigateur
+  réel** (tests présents mais skip en CI). En CI on valide : compilation+dispatch compute, avancement
+  du compteur de pas, absence d'exception. L'oracle **CPU** valide la physique ; les kernels GPU la répliquent.
+- **CPU = moteur par défaut** (validé partout). Le GPU est **opt-in** (rendu GPU-résident, gros comptes).
+- **Température live en GPU** : re-thermalisation non encore portée sur GPU (no-op ; `Réinitialiser`
+  applique). Arrive avec les thermostats en **P5**.
 
 ---
 

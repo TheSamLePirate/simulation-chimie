@@ -11,6 +11,7 @@ const BASE: SimConfig = {
   timestep: 0.002,
   level: "L1",
   speciesName: "ARGON",
+  engineKind: "cpu",
 };
 
 describe("CpuEngine", () => {

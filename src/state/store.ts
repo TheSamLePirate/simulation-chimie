@@ -1,9 +1,8 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type { AccuracyLevel, Observables, SimConfig } from "../engine/types";
-import { Simulation } from "../sim/Simulation";
+import type { AccuracyLevel, EngineKind, Observables, SimConfig } from "../engine/types";
 
-/** Default opening scene: a modest argon soft-sphere gas that runs smoothly on the CPU engine. */
+/** Default opening scene: a modest argon soft-sphere gas on the CPU reference engine. */
 export const DEFAULT_CONFIG: SimConfig = {
   seed: 1234,
   particleCount: 256,
@@ -13,10 +12,8 @@ export const DEFAULT_CONFIG: SimConfig = {
   timestep: 0.005,
   level: "L1",
   speciesName: "ARGON",
+  engineKind: "cpu",
 };
-
-/** The single, React-independent simulation controller. */
-export const simulation = new Simulation(DEFAULT_CONFIG);
 
 export interface AppState {
   config: SimConfig;
@@ -24,60 +21,38 @@ export interface AppState {
   substeps: number;
   observables: Observables | null;
   fps: number;
+  /** Bumped to request a single manual step / a reset (consumed by the renderer). */
+  stepNonce: number;
+  resetNonce: number;
 
   patchConfig: (patch: Partial<SimConfig>) => void;
   setLevel: (level: AccuracyLevel) => void;
+  setEngineKind: (engineKind: EngineKind) => void;
   togglePlay: () => void;
   setPlaying: (playing: boolean) => void;
   setSubsteps: (substeps: number) => void;
-  stepOnce: () => void;
-  reset: () => void;
+  requestStep: () => void;
+  requestReset: () => void;
   publishSample: (observables: Observables, fps: number) => void;
 }
 
 export const appStore = createStore<AppState>((set, get) => ({
-  config: { ...simulation.config },
-  playing: simulation.playing,
-  substeps: simulation.substeps,
-  observables: simulation.observables(),
+  config: DEFAULT_CONFIG,
+  playing: false,
+  substeps: 5,
+  observables: null,
   fps: 0,
+  stepNonce: 0,
+  resetNonce: 0,
 
-  patchConfig: (patch) => {
-    simulation.patch(patch);
-    set({
-      config: { ...simulation.config },
-      observables: simulation.observables(),
-    });
-  },
-
-  setLevel: (level) => get().patchConfig({ level }),
-
-  togglePlay: () => {
-    const playing = !get().playing;
-    simulation.playing = playing;
-    set({ playing });
-  },
-
-  setPlaying: (playing) => {
-    simulation.playing = playing;
-    set({ playing });
-  },
-
-  setSubsteps: (substeps) => {
-    simulation.substeps = substeps;
-    set({ substeps });
-  },
-
-  stepOnce: () => {
-    simulation.stepFrame();
-    set({ observables: simulation.observables() });
-  },
-
-  reset: () => {
-    simulation.reset();
-    set({ observables: simulation.observables() });
-  },
-
+  patchConfig: (patch) => set({ config: { ...get().config, ...patch } }),
+  setLevel: (level) => set({ config: { ...get().config, level } }),
+  setEngineKind: (engineKind) => set({ config: { ...get().config, engineKind } }),
+  togglePlay: () => set({ playing: !get().playing }),
+  setPlaying: (playing) => set({ playing }),
+  setSubsteps: (substeps) => set({ substeps }),
+  requestStep: () => set({ stepNonce: get().stepNonce + 1 }),
+  requestReset: () => set({ resetNonce: get().resetNonce + 1 }),
   publishSample: (observables, fps) => set({ observables, fps }),
 }));
 

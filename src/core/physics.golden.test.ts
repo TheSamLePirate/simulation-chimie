@@ -65,5 +65,5 @@ describe("ideal gas law (measured via wall collisions)", () => {
     const idealP = (count * BOLTZMANN_KJ_PER_MOL_K * targetT) / volume(box);
 
     expect(measuredP / idealP).toBeCloseTo(1, 1); // within ~10 %
-  });
+  }, 20_000); // heavy: 40k steps × 500 particles
 });

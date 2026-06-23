@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { SimulationView } from "../render/SimulationView";
 import { isWebGPUAvailable } from "../render/webgpu";
-import { appStore, simulation } from "../state/store";
 import type { EngineStatus } from "./engineStatus";
 
 interface CanvasHostProps {
@@ -9,9 +8,9 @@ interface CanvasHostProps {
 }
 
 /**
- * Mounts the imperative {@link SimulationView} into a DOM container, wires it to the
- * shared simulation + store, and reports engine lifecycle. Tolerant of React
- * StrictMode's double-mount: a view created during a cancelled mount is disposed.
+ * Mounts the imperative {@link SimulationView} into a DOM container and reports engine
+ * lifecycle. Tolerant of React StrictMode's double-mount: a view created during a
+ * cancelled mount is disposed.
  */
 export function CanvasHost({ onStatus }: CanvasHostProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,9 +28,7 @@ export function CanvasHost({ onStatus }: CanvasHostProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    const view = new SimulationView(container, simulation, (observables, fps) =>
-      appStore.getState().publishSample(observables, fps),
-    );
+    const view = new SimulationView(container);
     let cancelled = false;
     report("initializing");
 
