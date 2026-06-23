@@ -3,6 +3,7 @@ import { CanvasHost } from "../ui/CanvasHost";
 import { ControlPanel } from "../ui/controls/ControlPanel";
 import { EngineStatusBadge } from "../ui/EngineStatusBadge";
 import type { EngineStatus } from "../ui/engineStatus";
+import { Exporter } from "../ui/export/Exporter";
 import { GraphsPanel } from "../ui/graphs/GraphsPanel";
 import { ObservablesPanel } from "../ui/panels/ObservablesPanel";
 import { ScenePicker } from "../ui/scenes/ScenePicker";
@@ -24,6 +25,7 @@ export function App() {
         <ControlPanel />
         <ObservablesPanel />
         <GraphsPanel />
+        <Exporter />
       </aside>
 
       <EngineStatusBadge status={status} />

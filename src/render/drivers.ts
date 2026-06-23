@@ -5,6 +5,8 @@ import type { Vec3 } from "../core/types";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
 import type { AccuracyLevel, Observables, SimConfig } from "../engine/types";
+import type { Snapshot } from "../state/schema";
+import { captureSnapshot } from "../state/snapshot";
 import { GpuParticleSystem } from "./GpuParticleSystem";
 import { ParticleSystem } from "./ParticleSystem";
 
@@ -59,6 +61,8 @@ export interface SimDriver {
   radialDistribution(): RadialDistribution | null;
   /** Demixing order parameter for binary mixtures, or null (single species / GPU). */
   demixing(): number | null;
+  /** Capture a restorable state snapshot, or null when state isn't CPU-readable (GPU). */
+  snapshot(): Snapshot | null;
   setLevel(level: AccuracyLevel): void;
   setTimestep(dt: number): void;
   setTemperature(t: number): void;
@@ -113,6 +117,10 @@ class CpuDriver implements SimDriver {
     if (species.length < 2) return null;
     const cutoff = 1.5 * Math.max(...species.map((s) => s.sigma));
     return demixingOrderParameter(this.engine.state, this.engine.box, cutoff);
+  }
+
+  snapshot(): Snapshot {
+    return captureSnapshot(this.engine);
   }
 
   setLevel(level: AccuracyLevel): void {
@@ -199,6 +207,11 @@ class GpuDriver implements SimDriver {
   }
 
   demixing(): number | null {
+    return null;
+  }
+
+  snapshot(): Snapshot | null {
+    // GPU state lives on the device; capturing it needs a (headless-blocked) readback.
     return null;
   }
 

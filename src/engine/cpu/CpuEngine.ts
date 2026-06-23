@@ -167,6 +167,22 @@ export class CpuEngine implements SimulationEngine {
     this.config = { ...this.config, thermostat, thermostatTau: tau };
   }
 
+  /** Overwrite the live state from a snapshot (sizes must match the config). */
+  loadState(
+    positions: ArrayLike<number>,
+    velocities: ArrayLike<number>,
+    typeIds: ArrayLike<number>,
+    step: number,
+    time: number,
+  ): void {
+    this.state.positions.set(positions);
+    this.state.velocities.set(velocities);
+    this.state.typeIds.set(typeIds);
+    this.stepCount = step;
+    this.elapsed = time;
+    this.last = this.force.compute(this.state, this.box, this.species);
+  }
+
   reset(patch: Partial<SimConfig> = {}): void {
     this.config = { ...this.config, ...patch };
     this.configure();

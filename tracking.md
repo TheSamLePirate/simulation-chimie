@@ -13,7 +13,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P3** | L2 Lennard-Jones | ✅ |
 | **P4** | Démixtion huile/eau (eau atomistique/électrostatique reportées) | ✅ |
 | **P5** | L5 ensembles — thermostats NVT (barostat reporté) | ✅ |
-| **P6** | Édition + scènes + E2E complet | ⬜ |
+| **P6** | Snapshots/export + sauvegarde de scènes + E2E | ✅ |
 | **P7** | L6 gros-grain (perf) | ⬜ |
 | **P8** | Polish AAA | ⬜ |
 
@@ -209,6 +209,37 @@ verts en isolation et en CI propre.)_
   un ajout net ; les thermostats NVT couvrent l'essentiel du contrôle et des transitions de phase).
 - **Thermostat GPU** non implémenté (nécessite une réduction d'énergie cinétique sur GPU) : NVT en
   **mode CPU** uniquement ; le mode GPU reste NVE.
+
+---
+
+## P6 — Snapshots, export, sauvegarde de scènes + E2E ✅
+
+**Objectif (plan) :** mode édition, scènes, snapshots/export, suite E2E (variables, états, snapshot).
+
+**Livré :**
+- **Schéma Zod** (`state/schema.ts`) pour `SimConfig` et `Snapshot` : validation à l'import.
+- **Snapshot d'état complet** (`state/snapshot.ts`) : config + positions/vitesses/types sérialisés ;
+  `captureSnapshot`/`restoreSnapshot` + `CpuEngine.loadState`. **Round-trip via JSON** restauré à
+  l'identique (reproductibilité bit-à-bit après restauration).
+- **Export / import** (`ui/export/`) : **config JSON** (= sauvegarde/chargement de scène, l'« édition »
+  pratique, Zod-validée), **snapshot JSON** (état complet), **g(r) CSV**. Référence au driver actif pour
+  lire l'état de façon synchrone.
+- **Robustesse tests** : `testTimeout` global 30 s (les tests physiques O(N²) parallèles ne timeoutent
+  plus sous charge).
+- **Tests (+5, total 49)** : round-trip snapshot (restaurer → continuer = identique) ; schéma Zod
+  accepte le valide, rejette enum/plage/champs manquants.
+- **E2E (+1, total 5)** : l'export de config déclenche bien un téléchargement `scene-config.json`.
+
+**Vérifications :** lint · typecheck · **49 unit** · **5 e2e** (4 skip). Tout vert.
+
+**Déviations au plan :**
+- **Éditeur 3D interactif** (placer/peindre molécules, dessiner des régions) **reporté** : l'édition est
+  faite par **config de scène** (sliders + espèces + composition + export/import JSON), qui round-trippe
+  une scène complète. L'éditeur de placement à la souris est une surcouche future.
+- **Export PNG** non inclus (la capture du canvas WebGPU est peu fiable en headless ; à faire en
+  navigateur réel). Export de **données** (JSON/CSV) fourni à la place.
+- Snapshot/export d'**état** en **mode CPU** (l'état GPU nécessiterait un readback bloqué en headless).
+  L'export de **config** marche dans les deux modes.
 
 ---
 

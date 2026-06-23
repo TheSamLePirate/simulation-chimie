@@ -52,6 +52,15 @@ test("simulation advances when WebGPU is available", async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
+test("config export downloads a JSON scene file", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("engine-status")).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Config/ }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("scene-config.json");
+});
+
 test("oil/water scene reports a valid demixing order parameter", async ({ page }) => {
   test.setTimeout(30_000);
   await page.goto("/");

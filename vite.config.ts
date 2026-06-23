@@ -13,6 +13,8 @@ export default defineConfig({
     globals: true,
     environment: "happy-dom",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Heavy O(N²) physics/golden tests run in parallel files; give headroom under load.
+    testTimeout: 30_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

@@ -2,6 +2,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import * as THREE from "three/webgpu";
 import type { SimConfig } from "../engine/types";
 import { type AppState, appStore } from "../state/store";
+import { setActiveDriver } from "./activeDriver";
 import { createDriver, type SimDriver } from "./drivers";
 
 const SAMPLE_INTERVAL_MS = 100;
@@ -145,6 +146,7 @@ export class SimulationView {
       this.driver.dispose();
     }
     this.driver = driver;
+    setActiveDriver(driver);
     this.scene.add(driver.group);
     this.frameCamera(Math.max(...driver.boxLengths));
   }
@@ -206,6 +208,7 @@ export class SimulationView {
     this.unsubscribe?.();
     this.resizeObserver?.disconnect();
     this.controls?.dispose();
+    setActiveDriver(null);
     if (this.driver) {
       this.scene.remove(this.driver.group);
       this.driver.dispose();
