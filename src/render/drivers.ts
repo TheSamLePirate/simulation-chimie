@@ -242,8 +242,9 @@ class GpuDriver implements SimDriver {
   setTemperature(_t: number): void {
     // GPU live re-thermalisation is not implemented; reset to apply a new temperature.
   }
-  setThermostat(_kind: SimConfig["thermostat"], _tau: number): void {
-    // GPU thermostat needs a kinetic-energy reduction on device; CPU engine only for now.
+  setThermostat(kind: SimConfig["thermostat"], tau: number): void {
+    // GPU Berendsen: λ is recomputed from the readback KE in engine.observables().
+    this.engine.setThermostat(kind, tau);
   }
   setBarostat(_kind: SimConfig["barostat"], _pressureTarget: number): void {
     // GPU barostat needs a virial reduction on device; CPU engine only for now.

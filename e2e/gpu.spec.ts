@@ -29,6 +29,9 @@ test("GPU backend dispatches compute and advances without errors", async ({ page
 
   // Switch the compute backend to GPU (rebuilds the driver + GPU-resident mesh).
   await page.getByRole("button", { name: "GPU", exact: true }).click();
+  // Exercise the LJ cell-list kernel (atomic spatial-hash bins) + the GPU thermostat kernel.
+  await page.getByRole("button", { name: "L2", exact: true }).click();
+  await page.getByRole("button", { name: "Berendsen", exact: true }).click();
   await page.getByRole("button", { name: /Lecture/ }).click();
 
   // The step counter advances — the GPU compute pipeline is dispatched each frame.

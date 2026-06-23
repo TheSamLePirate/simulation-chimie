@@ -22,6 +22,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P12** | Gravité (champ externe, CPU + GPU) | ✅ |
 | **P13** | Eau rigide L5 (contraintes SHAKE/RATTLE) | ✅ |
 | **P14** | Polish visuel (éclairage hémisphérique + tone mapping ACES) | ✅ |
+| **P15** | GPU cell-lists O(N) (spatial hash + atomics) + thermostat GPU | ✅ |
 
 ---
 
@@ -393,6 +394,29 @@ densité/pression ; les ensembles NVE/NVT/NPT sont tous disponibles.
   pouvoir vérifier leur exactitude introduirait un risque de régression — contraire à « parfait ». Le
   chemin GPU actuel (LJ/WCA O(N²) + gravité + périodique, rendu GPU-résident) reste l'accélérateur grand-N ;
   la parité quantitative se valide en **navigateur réel** via `window.__md`.
+
+---
+
+## P15 — GPU cell-lists O(N) + thermostat GPU ✅ (Plan v2)
+
+**Comble la déviation « portage GPU » (recherche de voisins O(N) + NVT sur GPU).**
+
+**Livré (TSL compute) :**
+- **Cell-lists GPU** par hachage spatial à **bins de capacité fixe + atomiques** (sans prefix-sum) :
+  `kClearCells` (`atomicStore`), `kBinParticles` (`atomicAdd` → slot dans le bin), `kForcesCellWCA/LJ`
+  (parcours des 27 cellules voisines avec image minimale, `atomicLoad` du compteur). Grille dimensionnée
+  pour le cutoff le plus fin ; bascule auto sur le brute O(N²) si < 3 cellules/axe.
+- **Thermostat Berendsen GPU** : `kThermostat` scale les vitesses par λ (uniforme), λ recalculé depuis la
+  KE du readback dans `observables()` (actif en navigateur réel ; no-op inoffensif en headless).
+- Câblé : `forcePassNodes()` choisit cell-list vs brute ; `stepNodes()` ajoute le thermostat ; setLevel/
+  setGravity/setThermostat live.
+
+**Validation :** typecheck strict + **E2E headless qui dispatche réellement** les kernels cell-list (WCA
+*et* LJ) + thermostat sans erreur de compilation WGSL / atomics. La **parité numérique GPU↔CPU** se vérifie
+en **navigateur réel** (`window.__md`) — le readback `mapAsync` ne résout pas en headless.
+
+**Hors-scope assumé :** Coulomb/eau **sur GPU** restent non portés car le GPU est **mono-espèce** (charge/σ/ε
+uniques) ⇒ l'électrostatique y serait non physique ; cela demanderait d'abord un GPU multi-espèces.
 
 ---
 

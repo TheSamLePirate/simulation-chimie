@@ -1,13 +1,20 @@
 import {
+  atomicAdd,
+  atomicLoad,
+  atomicStore,
+  clamp,
   compute,
   Fn,
   float,
+  floor,
   If,
   instancedArray,
   instanceIndex,
   Loop,
+  mod,
   round,
   sqrt,
+  uint,
   uniform,
   vec2,
   vec3,
@@ -25,12 +32,16 @@ import type { AccuracyLevel, Observables, SimConfig } from "../types";
 
 const WORKGROUP = [64];
 const TWO_POW_1_6 = 1.122462048309373;
+/** Max particles per cell bin. Generous vs liquid occupancy (~15) to avoid dropped pairs. */
+const CELL_CAPACITY = 96;
 
 // Typed storage helpers (the raw `instancedArray` overloads resolve ambiguously).
 const vec3Array = (data: Float32Array) => instancedArray(data, "vec3");
 const vec2Array = (data: Float32Array) => instancedArray(data, "vec2");
+const uintArray = (data: Uint32Array) => instancedArray(data, "uint");
 type Vec3Storage = ReturnType<typeof vec3Array>;
 type Vec2Storage = ReturnType<typeof vec2Array>;
+type UintStorage = ReturnType<typeof uintArray>;
 type Kernel = ReturnType<typeof compute>;
 
 /** Wrap a TSL compute body into a dispatchable kernel. */
@@ -43,6 +54,13 @@ function kernel(body: () => void, count: number): Kernel {
 function roundVec<T>(x: T): T {
   return (round as (a: unknown) => unknown)(x) as T;
 }
+
+/**
+ * Re-wrap a node as a fluent float node. Some TSL builders (`clamp`, `mod`, `floor`) and
+ * the atomic ops return the bare `Node` type, which loses the chained `.mul/.add/...`
+ * arithmetic API in the typings (the runtime supports it). `fl()` restores it.
+ */
+const fl = (x: unknown) => float(x as never);
 
 function resolveSpecies(name: string): Species {
   const key = name.toUpperCase() as keyof typeof SPECIES_LIBRARY;
@@ -77,11 +95,26 @@ export class GpuEngine {
   private readonly uRc2 = uniform(0);
   private readonly uPeriodic = uniform(1);
   private readonly uGravity = uniform(0);
+  // Cell-list grid.
+  private readonly uCellsPerAxis = uniform(1);
+  private readonly uCellSize = uniform(1);
+  private readonly uHalfBox = uniform(0.5);
+  // Berendsen thermostat scale (computed on CPU from the readback KE; 1 = no-op).
+  private readonly uThermoLambda = uniform(1);
+
+  private readonly cellCounts: UintStorage;
+  private readonly cellParticles: UintStorage;
+  private cellsEnabled = false;
 
   private readonly kZeroForces: Kernel;
   private readonly kIntegrateA: Kernel;
   private readonly kForcesWCA: Kernel;
   private readonly kForcesLJ: Kernel;
+  private readonly kClearCells: Kernel;
+  private readonly kBinParticles: Kernel;
+  private readonly kForcesCellWCA: Kernel;
+  private readonly kForcesCellLJ: Kernel;
+  private readonly kThermostat: Kernel;
   private readonly kIntegrateB: Kernel;
 
   private renderer: THREE.WebGPURenderer | null = null;
@@ -108,6 +141,14 @@ export class GpuEngine {
     this.velocities = vec3Array(Float32Array.from(init.velocities));
     this.forces = vec3Array(new Float32Array(n * 3));
     this.energyVirial = vec2Array(new Float32Array(n * 2));
+
+    // Cell-list buffers sized for the FINEST grid (WCA cutoff ⇒ most cells); coarser
+    // levels (bigger cutoff) use a subset. Box is fixed per engine (GPU has no barostat).
+    const rcFinest = TWO_POW_1_6 * this.species.sigma;
+    const cpaMax = Math.max(1, Math.floor(config.boxLength / rcFinest));
+    const nCellsAlloc = cpaMax * cpaMax * cpaMax;
+    this.cellCounts = uintArray(new Uint32Array(nCellsAlloc)).toAtomic();
+    this.cellParticles = uintArray(new Uint32Array(nCellsAlloc * CELL_CAPACITY));
 
     this.applyConfigUniforms();
 
@@ -215,6 +256,137 @@ export class GpuEngine {
           .mul(this.uHalfDt),
       );
     }, n);
+
+    // --- Cell-list neighbour search (spatial hash + atomic bins) ---
+    this.kClearCells = kernel(() => {
+      atomicStore(this.cellCounts.element(instanceIndex), uint(0));
+    }, nCellsAlloc);
+
+    this.kBinParticles = kernel(() => {
+      const ciF = this.cellIndexFloat(this.positions.element(instanceIndex)).toVar();
+      // atomicAdd returns the previous count = this particle's slot in the bin.
+      const slotF = fl(atomicAdd(this.cellCounts.element(uint(ciF)), uint(1))).toVar();
+      If(slotF.lessThan(float(CELL_CAPACITY)), () => {
+        const dst = uint(ciF.mul(CELL_CAPACITY).add(slotF));
+        this.cellParticles.element(dst).assign(instanceIndex);
+      });
+    }, n);
+
+    this.kForcesCellWCA = this.buildCellForceKernel(false);
+    this.kForcesCellLJ = this.buildCellForceKernel(true);
+
+    // Berendsen thermostat: scale velocities by λ (computed on CPU from the readback KE).
+    this.kThermostat = kernel(() => {
+      const v = this.velocities.element(instanceIndex);
+      v.assign(v.mul(this.uThermoLambda));
+    }, n);
+  }
+
+  /** Flat index ((z·cpa + y)·cpa + x) as a fluent float; each step re-wrapped (typing). */
+  private flatIndex(x: unknown, y: unknown, z: unknown, cpa: unknown) {
+    const r1 = fl(fl(z).mul(cpa as never));
+    const r2 = fl(r1.add(y as never));
+    const r3 = fl(r2.mul(cpa as never));
+    return fl(r3.add(x as never));
+  }
+
+  /** Flat cell index as a float (clamped into the grid); convert with `uint()` to index. */
+  private cellIndexFloat(piNode: unknown) {
+    const cpa = this.uCellsPerAxis;
+    const pi = vec3(piNode as never);
+    const rel = pi.add(vec3(this.uHalfBox)).div(this.uCellSize);
+    const cx = fl(clamp(floor(rel.x), float(0), cpa.sub(1)));
+    const cy = fl(clamp(floor(rel.y), float(0), cpa.sub(1)));
+    const cz = fl(clamp(floor(rel.z), float(0), cpa.sub(1)));
+    return this.flatIndex(cx, cy, cz, cpa);
+  }
+
+  /** Build a cell-list pair-force kernel (LJ shifted-force, or WCA when `isLJ` is false). */
+  private buildCellForceKernel(isLJ: boolean): Kernel {
+    const n = this.config.particleCount;
+    return kernel(() => {
+      const idx = instanceIndex;
+      const pi = this.positions.element(idx).toVar();
+      const fi = vec3(0).toVar();
+      const peSum = float(0).toVar();
+      const virSum = float(0).toVar();
+      const cpa = this.uCellsPerAxis;
+
+      const rc = sqrt(this.uRc2).toVar();
+      const c2 = this.uSigma2.div(this.uRc2);
+      const c6 = c2.mul(c2).mul(c2);
+      const c12 = c6.mul(c6);
+      const fAtRc = float(24).mul(this.uEpsilon).mul(c12.mul(2).sub(c6)).div(rc);
+      const vAtRc = float(4).mul(this.uEpsilon).mul(c12.sub(c6));
+
+      const rel = pi.add(vec3(this.uHalfBox)).div(this.uCellSize);
+      const cx = fl(clamp(floor(rel.x), float(0), cpa.sub(1))).toVar();
+      const cy = fl(clamp(floor(rel.y), float(0), cpa.sub(1))).toVar();
+      const cz = fl(clamp(floor(rel.z), float(0), cpa.sub(1))).toVar();
+
+      Loop(3, ({ i: a }) => {
+        const ncx = fl(mod(cx.add(float(a).sub(1)).add(cpa), cpa));
+        Loop(3, ({ i: b }) => {
+          const ncy = fl(mod(cy.add(float(b).sub(1)).add(cpa), cpa));
+          Loop(3, ({ i: cIdx }) => {
+            const ncz = fl(mod(cz.add(float(cIdx).sub(1)).add(cpa), cpa));
+            const ncellF = this.flatIndex(ncx, ncy, ncz, cpa).toVar();
+            const baseF = ncellF.mul(CELL_CAPACITY).toVar();
+            const cntF = fl(atomicLoad(this.cellCounts.element(uint(ncellF)))).toVar();
+            // Fixed-bound loop with a guard (avoids a dynamic loop count); CELL_CAPACITY
+            // exceeds realistic cell occupancy, so guarded iterations are cheap skips.
+            Loop(CELL_CAPACITY, ({ i: s }) => {
+              If(float(s).lessThan(cntF), () => {
+                const j = this.cellParticles.element(uint(baseF.add(float(s)))).toVar();
+                If(float(j).notEqual(float(idx)), () => {
+                  const d = pi.sub(this.positions.element(j)).toVar();
+                  If(this.uPeriodic.greaterThan(0.5), () => {
+                    d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
+                  });
+                  const r2 = d.dot(d).toVar();
+                  If(r2.greaterThan(float(1e-12)), () => {
+                    If(r2.lessThan(this.uRc2), () => {
+                      const inv2 = this.uSigma2.div(r2);
+                      const inv6 = inv2.mul(inv2).mul(inv2);
+                      const inv12 = inv6.mul(inv6);
+                      if (isLJ) {
+                        const r = sqrt(r2);
+                        const fRadial = float(24)
+                          .mul(this.uEpsilon)
+                          .mul(inv12.mul(2).sub(inv6))
+                          .div(r);
+                        const fOverR = fRadial.sub(fAtRc).div(r);
+                        const vv = float(4).mul(this.uEpsilon).mul(inv12.sub(inv6));
+                        fi.addAssign(d.mul(fOverR));
+                        peSum.addAssign(vv.sub(vAtRc).add(r.sub(rc).mul(fAtRc)).mul(0.5));
+                        virSum.addAssign(fOverR.mul(r2).mul(0.5));
+                      } else {
+                        const fOverR = float(24)
+                          .mul(this.uEpsilon)
+                          .mul(inv12.mul(2).sub(inv6))
+                          .div(r2);
+                        fi.addAssign(d.mul(fOverR));
+                        peSum.addAssign(
+                          float(4)
+                            .mul(this.uEpsilon)
+                            .mul(inv12.sub(inv6))
+                            .add(this.uEpsilon)
+                            .mul(0.5),
+                        );
+                        virSum.addAssign(fOverR.mul(r2).mul(0.5));
+                      }
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+
+      this.forces.element(idx).assign(fi);
+      this.energyVirial.element(idx).assign(vec2(peSum, virSum));
+    }, n);
   }
 
   private applyConfigUniforms(): void {
@@ -236,22 +408,52 @@ export class GpuEngine {
     this.uGravity.value = gravity;
   }
 
-  /** Set the cutoff uniform for the active level (WCA: 2^(1/6)σ, LJ: 2.5σ). */
+  /** Switch thermostat (Berendsen on GPU via λ from the readback KE). */
+  setThermostat(thermostat: SimConfig["thermostat"], tau: number): void {
+    (
+      this.config as {
+        thermostat: SimConfig["thermostat"];
+        thermostatTau: number;
+      }
+    ).thermostat = thermostat;
+    (this.config as { thermostatTau: number }).thermostatTau = tau;
+    if (thermostat === "none") this.uThermoLambda.value = 1;
+  }
+
+  /**
+   * Set the cutoff uniform for the active level (WCA: 2^(1/6)σ, LJ: 2.5σ) and rebuild the
+   * cell grid (cells per axis ≥ cutoff). Cell-lists engage only when ≥ 3 cells/axis fit.
+   */
   private updateCutoff(): void {
     // GPU has no Coulomb kernel; L3 runs the LJ part only (2.5σ cutoff).
     const factor = this.config.level === "L2" || this.config.level === "L3" ? 2.5 : TWO_POW_1_6;
     const rc = factor * this.species.sigma;
     this.uRc2.value = rc * rc;
+
+    const L = this.config.boxLength;
+    const cpa = Math.floor(L / rc);
+    this.cellsEnabled = cpa >= 3;
+    const usedCpa = Math.max(1, cpa);
+    this.uCellsPerAxis.value = usedCpa;
+    this.uCellSize.value = L / usedCpa;
+    this.uHalfBox.value = 0.5 * L;
   }
 
   private get forcesEnabled(): boolean {
     return this.config.level !== "L0";
   }
 
-  private activeForceKernel(): Kernel {
-    return this.config.level === "L2" || this.config.level === "L3"
-      ? this.kForcesLJ
-      : this.kForcesWCA;
+  /** Force-computation passes: cell-list (clear→bin→forces) when it fits, else O(N²) brute. */
+  private forcePassNodes(): Kernel[] {
+    const isLJ = this.config.level === "L2" || this.config.level === "L3";
+    if (this.cellsEnabled) {
+      return [
+        this.kClearCells,
+        this.kBinParticles,
+        isLJ ? this.kForcesCellLJ : this.kForcesCellWCA,
+      ];
+    }
+    return [isLJ ? this.kForcesLJ : this.kForcesWCA];
   }
 
   /** Bind the renderer. Call {@link warmup} once before stepping. */
@@ -263,13 +465,15 @@ export class GpuEngine {
   async warmup(): Promise<void> {
     const renderer = this.renderer;
     if (!renderer) return;
-    await renderer.computeAsync(this.forcesEnabled ? this.activeForceKernel() : this.kZeroForces);
+    await renderer.computeAsync(this.forcesEnabled ? this.forcePassNodes() : [this.kZeroForces]);
   }
 
   private stepNodes(): Kernel[] {
-    return this.forcesEnabled
-      ? [this.kIntegrateA, this.activeForceKernel(), this.kIntegrateB]
-      : [this.kIntegrateA, this.kIntegrateB];
+    const nodes: Kernel[] = [this.kIntegrateA];
+    if (this.forcesEnabled) nodes.push(...this.forcePassNodes());
+    nodes.push(this.kIntegrateB);
+    if (this.config.thermostat !== "none") nodes.push(this.kThermostat);
+    return nodes;
   }
 
   /**
@@ -348,6 +552,19 @@ export class GpuEngine {
       virial += ev[2 * i + 1];
     }
 
+    // Feed the GPU Berendsen thermostat: recompute λ from the just-read KE. Applied each
+    // step by kThermostat via the uThermoLambda uniform (held between readbacks).
+    if (this.config.thermostat !== "none") {
+      const dof = 3 * n - 3;
+      const currentT = temperatureFromKinetic(ke, dof);
+      if (currentT > 1e-6) {
+        const ratio = this.config.temperature / currentT;
+        const tau = Math.max(this.config.thermostatTau, this.config.timestep);
+        const lambda2 = 1 + (this.config.timestep / tau) * (ratio - 1);
+        this.uThermoLambda.value = Math.sqrt(Math.max(0.04, lambda2));
+      }
+    }
+
     const volume = this.config.boxLength ** 3;
     const pInternal = pressure(ke, virial, volume);
     return {
@@ -378,7 +595,7 @@ export class GpuEngine {
     (this.config as { level: AccuracyLevel }).level = level;
     this.updateCutoff();
     void this.renderer?.computeAsync(
-      this.forcesEnabled ? this.activeForceKernel() : this.kZeroForces,
+      this.forcesEnabled ? this.forcePassNodes() : [this.kZeroForces],
     );
   }
 
