@@ -26,6 +26,11 @@ export const ACCURACY_LEVELS = {
     label: "L3 · Électrostatique",
     description: "LJ + Coulomb (Wolf DSF) : ions, charges partielles",
   },
+  L4: {
+    id: "L4",
+    label: "L4 · Eau atomistique",
+    description: "Eau SPC/Fw : molécules O+2H, liaisons H, charges (CPU)",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

@@ -47,6 +47,12 @@ export interface SimState {
   readonly forces: Float64Array;
   /** Species index per particle. Length `count`. */
   readonly typeIds: Uint8Array;
+  /**
+   * Molecule index per particle (length `count`). Atoms sharing an id belong to the
+   * same molecule and are excluded from non-bonded interactions. Defaults to a unique
+   * id per atom (monatomic ⇒ no exclusions).
+   */
+  readonly moleculeId: Int32Array;
 }
 
 /** Result of a force-model evaluation over the whole system. */

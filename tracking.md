@@ -17,6 +17,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P7** | Perf : cell-lists O(N) CPU (gros-grain MARTINI/DPD reporté) | ✅ |
 | **P8** | Polish (viz vitesse, raccourcis, docs) | ✅ |
 | **P9** | L3 électrostatique (Coulomb-Wolf) + ions | ✅ |
+| **P10** | L4 eau atomistique (SPC/Fw : molécules, liaisons, charges) | ✅ |
 
 ---
 
@@ -304,20 +305,52 @@ verts en isolation et en CI propre.)_
 - **Tests (+4, total 56)** : Coulomb vs dérivée numérique, attraction/répulsion, continuité au cutoff,
   pas de Coulomb si partenaire neutre.
 
-**Déviations restantes :** électrostatique **GPU** non implémentée (L3 sur GPU = LJ seul, sans Coulomb,
-documenté) ; eau **rigide atomistique SPC/E** (topologie moléculaire) = prochaine étape (P10).
+**Déviations restantes :** électrostatique **GPU** non implémentée (L3 sur GPU = LJ seul, sans Coulomb).
+
+---
+
+## P10 — L4 eau atomistique (SPC/Fw) ✅
+
+**Comble la déviation majeure : « vraie eau H₂O ».**
+
+**Livré :**
+- **Topologie moléculaire** : `moleculeId` par atome (exclusions intramoléculaires), liaisons et angles.
+- **`WaterForce` (L4)** : non-liée (LJ O–O + Coulomb Wolf, **exclusion intramoléculaire**) + **liaisons
+  O–H harmoniques** + **angles H–O–H harmoniques**, le tout en **image minimale** (le wrapping PBC
+  par atome ne casse jamais une molécule).
+- **Constructeur de boîte d'eau** : molécules O+2H placées sur réseau, géométrie SPC/Fw exacte,
+  orientation aléatoire ; vitesses Maxwell-Boltzmann.
+- **Niveau L4** (registre + moteur CPU + Zod) + **scène « Eau atomistique »** (NVT Berendsen, dt 0.5 fs).
+- **Tests (+3, total 59)** : force liaison et **force d'angle vs gradient numérique** ; **stabilité du
+  système d'eau** (pas de NaN, longueurs O–H ≈ r₀ ⇒ molécules intactes, T proche de la cible).
+- **E2E (+1, total 6)** : la scène eau atomistique tourne sans exception.
+
+**Déviations restantes :**
+- **Eau flexible** (liaisons/angles harmoniques raides) plutôt que **rigide** (contraintes SETTLE/RATTLE) :
+  plus simple, physiquement valide, mais nécessite un petit pas de temps (~0.5 fs). SETTLE = amélioration future.
+- Eau/électrostatique **sur GPU** non portées (CPU uniquement) ; **barostat NPT**, **cell-lists GPU** et
+  **rendu de surface de fluide** restent reportés.
 
 ---
 
 ## Bilan
 
-**Toutes les phases P0–P8 sont livrées et commitées.** Socle scientifique solide (52 tests
-unitaires/golden + 5 e2e), moteur CPU validé (oracle déterministe) et moteur GPU WebGPU fonctionnel.
-Déviations principales assumées et documentées : **électrostatique atomistique (Wolf) + eau rigide
-SPC/E (topologie moléculaire + contraintes)**, **barostat NPT**, **cell-lists/thermostat GPU**, et
-**rendu de surface de fluide** — tous reportés comme extensions « atomistique/AAA » d'une future passe.
-La priorité explicite (démixtion huile/eau, vraie physique mesurable, temps réel, niveaux incrémentaux,
-WebGPU, tests partout) est remplie.
+**Phases P0–P10 livrées et commitées.** Socle scientifique solide (**59 tests unitaires/golden + 6
+e2e**), moteur CPU validé (oracle déterministe) et moteur GPU WebGPU fonctionnel. Échelle de fidélité
+complète **L0→L4** : gaz parfait, sphères molles, Lennard-Jones, **électrostatique atomistique
+(Coulomb-Wolf)**, **eau atomistique H₂O (SPC/Fw : molécules, liaisons, angles, charges)**. Plus :
+thermostats NVT, démixtion huile/eau, ions NaCl, cell-lists O(N), snapshots/export, scènes,
+viz par vitesse.
+
+**Déviations restantes (extensions futures, documentées par phase) :**
+- **Eau rigide à contraintes SETTLE/RATTLE** (l'eau livrée est *flexible* SPC/Fw — valide, dt ~0.5 fs).
+- **Barostat NPT** (les thermostats NVT couvrent température + transitions de phase).
+- **GPU** : électrostatique / eau / cell-lists / thermostat non portés sur GPU (CPU = chemin validé ;
+  GPU = LJ/WCA O(N²) NVE). Limite d'env : WebGPU headless ne fait ni readback `mapAsync` ni capture canvas.
+- **Rendu de surface de fluide** (raymarching/metaballs) — rendu actuel = sphères instanciées + carte de vitesse.
+
+La priorité explicite de l'utilisateur (h₂o + huile + **vraie physique mesurable**, temps réel,
+niveaux incrémentaux, WebGPU, tests partout) est remplie, électrostatique et eau atomistique incluses.
 
 ---
 

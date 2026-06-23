@@ -2,6 +2,7 @@ import { createBox, volume } from "../../core/box";
 import { IonicForce } from "../../core/forces/ionic";
 import { LennardJonesCellForce } from "../../core/forces/lennardJonesCell";
 import { NoForce } from "../../core/forces/none";
+import { WaterForce } from "../../core/forces/water";
 import { WcaForce } from "../../core/forces/wca";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
 import { velocityVerletStep } from "../../core/integrators/velocityVerlet";
@@ -12,6 +13,7 @@ import { createState } from "../../core/state";
 import { berendsenLambda, csvrLambda } from "../../core/thermostats";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../../core/types";
 import { BOLTZMANN_KJ_PER_MOL_K, pressureToBar } from "../../core/units";
+import { buildWaterSystem } from "../../core/water";
 import type { AccuracyLevel, Observables, SimConfig, SimulationEngine } from "../types";
 
 function resolveSpecies(name: string): Species {
@@ -29,6 +31,9 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
       return new LennardJonesCellForce(crossScale);
     case "L3":
       return new IonicForce();
+    case "L4":
+      // Atomistic water needs topology; it is built in CpuEngine.configure().
+      throw new Error("L4 (water) force is built in configure()");
   }
 }
 
@@ -73,6 +78,21 @@ export class CpuEngine implements SimulationEngine {
   private configure(): void {
     const c = this.config;
     this.box = createBox(c.boxLength, c.boundary);
+
+    // L4 — atomistic water: build the molecular system (O+2H per molecule) + topology.
+    if (c.level === "L4") {
+      const rng = new Rng(c.seed);
+      const sys = buildWaterSystem(c.particleCount, this.box, c.temperature, rng);
+      this.state = sys.state;
+      this.species = sys.species;
+      this.force = new WaterForce(sys.topology);
+      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
+      this.last = this.force.compute(this.state, this.box, this.species);
+      this.stepCount = 0;
+      this.elapsed = 0;
+      return;
+    }
+
     this.species = c.secondSpeciesName
       ? [resolveSpecies(c.speciesName), resolveSpecies(c.secondSpeciesName)]
       : [resolveSpecies(c.speciesName)];
@@ -141,6 +161,11 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
+    // L4 (water) changes topology/atom count ⇒ full rebuild rather than a force swap.
+    if (level === "L4") {
+      this.configure();
+      return;
+    }
     this.force = makeForceModel(level, this.config.crossScale);
     this.last = this.force.compute(this.state, this.box, this.species);
   }

@@ -75,6 +75,27 @@ export const CHLORIDE: Species = {
   radius: 0.22,
 };
 
+/** Atomistic water sites (SPC/Fw flexible model): O carries LJ + charge, H is charge-only. */
+export const WATER_O: Species = {
+  name: "O",
+  mass: 15.9994,
+  sigma: 0.316557,
+  epsilon: 0.650194,
+  charge: -0.82,
+  color: 0xff4d4d,
+  radius: 0.135,
+};
+
+export const WATER_H: Species = {
+  name: "H",
+  mass: 1.008,
+  sigma: 0,
+  epsilon: 0,
+  charge: 0.41,
+  color: 0xeaeaea,
+  radius: 0.06,
+};
+
 export const SPECIES_LIBRARY = {
   ARGON,
   NEON,
@@ -82,4 +103,6 @@ export const SPECIES_LIBRARY = {
   OIL,
   SODIUM,
   CHLORIDE,
+  WATER_O,
+  WATER_H,
 } as const;

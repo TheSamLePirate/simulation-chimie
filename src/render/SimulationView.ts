@@ -15,7 +15,10 @@ const STRUCTURAL_KEYS: ReadonlyArray<keyof SimConfig> = [
   "boundary",
   "seed",
   "speciesName",
+  "secondSpeciesName",
   "engineKind",
+  // Level is structural: L4 (water) changes atom count + topology, so rebuild on any change.
+  "level",
 ];
 
 interface AppliedState {
@@ -113,7 +116,6 @@ export class SimulationView {
       void this.rebuildDriver();
       return;
     }
-    if (state.config.level !== prev.config.level) this.driver.setLevel(state.config.level);
     if (state.config.timestep !== prev.config.timestep) {
       this.driver.setTimestep(state.config.timestep);
     }

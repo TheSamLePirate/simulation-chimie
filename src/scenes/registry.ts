@@ -72,6 +72,21 @@ export const SCENES: readonly Scene[] = [
     }),
   },
   {
+    id: "water",
+    label: "Eau atomistique (SPC/Fw)",
+    description: "Vraie eau H₂O : molécules O+2H, liaisons H, charges (CPU, L4)",
+    config: make({
+      level: "L4",
+      speciesName: "WATER_O",
+      particleCount: 125, // molecules (×3 atoms)
+      boxLength: 1.6,
+      temperature: 300,
+      timestep: 0.0005,
+      thermostat: "berendsen",
+      thermostatTau: 0.2,
+    }),
+  },
+  {
     id: "nacl",
     label: "NaCl (ionique, L3)",
     description: "Électrostatique Wolf : ions opposés s'attirent et s'ordonnent",
