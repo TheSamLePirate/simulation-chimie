@@ -21,6 +21,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P11** | Barostat NPT (Berendsen) — ensemble pression constante | ✅ |
 | **P12** | Gravité (champ externe, CPU + GPU) | ✅ |
 | **P13** | Eau rigide L5 (contraintes SHAKE/RATTLE) | ✅ |
+| **P14** | Polish visuel (éclairage hémisphérique + tone mapping ACES) | ✅ |
 
 ---
 
@@ -374,6 +375,24 @@ densité/pression ; les ensembles NVE/NVT/NPT sont tous disponibles.
   2 fs, T saine, pas de NaN.
 
 **Déviation comblée :** l'eau rigide à contraintes (SETTLE/RATTLE) demandée est livrée.
+
+---
+
+## P14 — Polish visuel ✅ (Plan v2)
+
+- **Tone mapping ACES Filmic** + exposition ; **lumière hémisphérique** ciel/sol + key/fill ⇒ rendu plus
+  volumétrique et « AAA ». Matériau des sphères affiné (roughness/metalness).
+- Tests/E2E inchangés (64 + 6, verts) ; aucun risque physique (purement rendu).
+
+**Note sur le « rendu de surface de fluide » et les portages GPU (non livrés, justifié) :**
+- Une vraie **surface de fluide raymarchée** (metaballs écran-espace : depth → épaisseur → flou bilatéral →
+  normales → éclairage) est un sous-projet graphique à plusieurs cibles de rendu, **non validable en
+  headless** (capture canvas bloquée). Livré à la place : sphères instanciées + carte de vitesse + ACES.
+- **Portage GPU** de Coulomb/eau/cell-lists/thermostat : nécessite atomics/prefix-sum/réductions en TSL
+  **non validables quantitativement en headless** (readback `mapAsync` bloqué). Écrire ces kernels sans
+  pouvoir vérifier leur exactitude introduirait un risque de régression — contraire à « parfait ». Le
+  chemin GPU actuel (LJ/WCA O(N²) + gravité + périodique, rendu GPU-résident) reste l'accélérateur grand-N ;
+  la parité quantitative se valide en **navigateur réel** via `window.__md`.
 
 ---
 

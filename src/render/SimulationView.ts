@@ -62,11 +62,13 @@ export class SimulationView {
     };
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Sky/ground hemisphere ambient gives volume; key + cool fill shape the spheres.
+    this.scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x202830, 0.7));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+    const key = new THREE.DirectionalLight(0xffffff, 1.7);
     key.position.set(1, 1.2, 0.8);
     this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0x88aaff, 0.4);
+    const fill = new THREE.DirectionalLight(0x88aaff, 0.45);
     fill.position.set(-1, -0.5, -1);
     this.scene.add(fill);
   }
@@ -75,6 +77,8 @@ export class SimulationView {
     const renderer = new THREE.WebGPURenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x0a0e14, 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     this.renderer = renderer;
     this.container.appendChild(renderer.domElement);
     this.resize();

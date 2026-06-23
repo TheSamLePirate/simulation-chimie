@@ -21,8 +21,8 @@ export class ParticleSystem {
     this.species = species;
     const geometry = new THREE.IcosahedronGeometry(1, 3);
     const material = new THREE.MeshStandardNodeMaterial({
-      roughness: 0.45,
-      metalness: 0.05,
+      roughness: 0.32,
+      metalness: 0.0,
     });
     this.mesh = new THREE.InstancedMesh(geometry, material, state.count);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
