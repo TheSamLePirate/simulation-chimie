@@ -15,6 +15,8 @@ export function ControlPanel() {
   const substeps = useAppStore((s) => s.substeps);
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
+  const renderStyle = useAppStore((s) => s.renderStyle);
+  const setRenderStyle = useAppStore((s) => s.setRenderStyle);
 
   const patchConfig = useAppStore((s) => s.patchConfig);
   const setLevel = useAppStore((s) => s.setLevel);
@@ -141,6 +143,23 @@ export function ControlPanel() {
             },
           ]}
           onChange={setColorMode}
+        />
+        <Segmented
+          label="Style de rendu"
+          value={renderStyle}
+          options={[
+            {
+              value: "spheres",
+              label: "Sphères",
+              title: "Sphères instanciées",
+            },
+            {
+              value: "fluid",
+              label: "Fluide",
+              title: "Surface de fluide écran-espace (metaballs, CPU)",
+            },
+          ]}
+          onChange={setRenderStyle}
         />
       </Field>
 

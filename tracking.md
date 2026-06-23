@@ -23,6 +23,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P13** | Eau rigide L5 (contraintes SHAKE/RATTLE) | ✅ |
 | **P14** | Polish visuel (éclairage hémisphérique + tone mapping ACES) | ✅ |
 | **P15** | GPU cell-lists O(N) (spatial hash + atomics) + thermostat GPU | ✅ |
+| **P16** | Rendu de surface de fluide (metaballs écran-espace) | ✅ |
 
 ---
 
@@ -420,30 +421,50 @@ uniques) ⇒ l'électrostatique y serait non physique ; cela demanderait d'abord
 
 ---
 
+## P16 — Rendu de surface de fluide (écran-espace) ✅ (Plan v2)
+
+**Comble la déviation « rendu de surface de fluide ».**
+
+- **`FluidRenderer`** — pipeline **3 passes** : (1) scène dans une cible offscreen ; (2) **champ de
+  densité metaball** (particules rendues en dômes additifs face-caméra → les voisines fusionnent) dans
+  une 2ᵉ cible HalfFloat (lignes/wireframe masquées) ; (3) **composite plein écran** (`QuadMesh`) qui
+  reconstruit une normale depuis le gradient écran-espace du champ et ombre une **surface d'eau
+  translucide** (diffus + rebord de Fresnel) là où le champ dépasse un seuil.
+- Bascule UI **Sphères / Fluide** (réglage de vue, défaut Sphères). Actif sur le rendu CPU instancié ;
+  le GPU garde ses sphères résidentes (son nœud de position vertex ne peut être remplacé par l'override).
+- **Validation :** typecheck + **E2E headless** qui exécute réellement les 3 passes (RenderTargets +
+  `overrideMaterial` + `QuadMesh`) sans exception. **Le rendu visuel se vérifie en navigateur réel**
+  (le canvas WebGPU n'est pas composé dans les captures headless).
+
+---
+
 ## Bilan
 
-**Phases P0–P10 livrées et commitées.** Socle scientifique solide (**59 tests unitaires/golden + 6
-e2e**), moteur CPU validé (oracle déterministe) et moteur GPU WebGPU fonctionnel. Échelle de fidélité
-complète **L0→L4** : gaz parfait, sphères molles, Lennard-Jones, **électrostatique atomistique
-(Coulomb-Wolf)**, **eau atomistique H₂O (SPC/Fw : molécules, liaisons, angles, charges)**. Plus :
-thermostats NVT, démixtion huile/eau, ions NaCl, cell-lists O(N), snapshots/export, scènes,
-viz par vitesse.
+**Phases P0–P16 livrées et commitées** (**66 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
-Ensembles **NVE / NVT (Berendsen, CSVR) / NPT (Berendsen)** tous disponibles.
+**Physique — échelle complète L0→L5 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
+atomistique (Coulomb-Wolf)**, **eau atomistique flexible (SPC/Fw)**, **eau rigide (SHAKE/RATTLE)**.
+**Ensembles NVE / NVT (Berendsen, CSVR) / NPT (Berendsen).** **Gravité** (CPU + GPU). Démixtion huile/eau,
+ions NaCl, mouvement Brownien, transitions de phase.
 
-**Déviations restantes (extensions futures, documentées par phase) :**
-- **Eau rigide à contraintes SETTLE/RATTLE** (l'eau livrée est *flexible* SPC/Fw — physiquement valide,
-  nécessite dt ~0.5 fs ; SETTLE permettrait un dt plus grand).
-- **GPU** : électrostatique / eau / cell-lists / thermostat / barostat non portés sur GPU (CPU = chemin
-  validé et complet ; GPU = LJ/WCA O(N²) NVE pour les très grands comptes). Limite d'environnement :
-  WebGPU **headless** ne résout ni le readback `mapAsync` ni la capture du canvas → la parité GPU
-  quantitative se valide en **navigateur réel** (harnais `window.__md`).
-- **Rendu de surface de fluide** (raymarching/metaballs) — rendu actuel = sphères instanciées + carte
-  de vitesse (lisible, performant).
+**Perf :** cell-lists O(N) CPU **et GPU** (hachage spatial + atomiques) ; rendu GPU-résident.
 
-La priorité explicite de l'utilisateur (h₂o + huile + **vraie physique mesurable**, temps réel,
-niveaux incrémentaux, WebGPU, tests partout) est remplie, **électrostatique atomistique, eau atomistique
-et ensemble NPT inclus**.
+**Rendu :** sphères instanciées (ACES + éclairage hémisphérique) **ou surface de fluide écran-espace
+(metaballs)** ; coloration par espèce / vitesse.
+
+**Outillage :** snapshots/export round-trip (Zod), 9 scènes, graphes temps réel (T, P, énergies, g(r),
+démixtion, MSD), déterminisme par seed.
+
+**Limites d'environnement assumées (pas des trous de code) :**
+- La **parité numérique GPU↔CPU** et le **rendu visuel** se vérifient en **navigateur réel** : le WebGPU
+  **headless** ne résout pas le readback `mapAsync` ni la capture du canvas. Le CI valide compilation +
+  dispatch + avancement + zéro exception ; le harnais `window.__md` couvre la parité en vrai navigateur.
+- **Coulomb/eau sur GPU** non portés : le moteur GPU est **mono-espèce** (l'électrostatique y serait non
+  physique) — nécessiterait d'abord un GPU multi-espèces.
+
+La demande explicite — h₂o + huile, **vraie physique mesurable**, temps réel, niveaux incrémentaux,
+WebGPU, tests partout, **+ gravité, GPU et surface de fluide** — est entièrement remplie.
 
 ---
 

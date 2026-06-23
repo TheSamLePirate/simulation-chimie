@@ -61,6 +61,24 @@ test("config export downloads a JSON scene file", async ({ page }) => {
   expect(download.suggestedFilename()).toBe("scene-config.json");
 });
 
+test("fluid render mode runs the screen-space passes without errors", async ({ page }) => {
+  test.setTimeout(30_000);
+  const pageErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  await page.goto("/");
+  await expect(page.getByTestId("engine-status")).toBeVisible();
+
+  await page.getByRole("button", { name: "Fluide", exact: true }).click();
+  await page.getByRole("button", { name: /Lecture/ }).click();
+  const fluidStep = page.getByTestId("metric-step");
+  await expect
+    .poll(async () => Number(await fluidStep.textContent()), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(0);
+  expect(pageErrors, pageErrors.join("\n")).toEqual([]);
+});
+
 test("atomistic water scene (L4) runs without errors", async ({ page }) => {
   test.setTimeout(30_000);
   const pageErrors: string[] = [];

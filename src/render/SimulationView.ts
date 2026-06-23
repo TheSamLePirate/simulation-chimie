@@ -4,6 +4,7 @@ import type { SimConfig } from "../engine/types";
 import { type AppState, appStore } from "../state/store";
 import { setActiveDriver } from "./activeDriver";
 import { createDriver, type SimDriver } from "./drivers";
+import { FluidRenderer } from "./FluidRenderer";
 
 const SAMPLE_INTERVAL_MS = 100;
 const RDF_INTERVAL_MS = 500;
@@ -43,6 +44,7 @@ export class SimulationView {
   private unsubscribe: (() => void) | null = null;
 
   private driver: SimDriver | null = null;
+  private fluid: FluidRenderer | null = null;
   private applied: AppliedState;
   private rebuildToken = 0;
   private disposed = false;
@@ -81,6 +83,7 @@ export class SimulationView {
     renderer.toneMappingExposure = 1.05;
     this.renderer = renderer;
     this.container.appendChild(renderer.domElement);
+    this.fluid = new FluidRenderer();
     this.resize();
 
     await renderer.init();
@@ -182,6 +185,7 @@ export class SimulationView {
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     renderer.setSize(width, height, false);
+    this.fluid?.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
   }
@@ -194,7 +198,13 @@ export class SimulationView {
     this.driver?.advance(state.playing, state.substeps, state.colorMode);
 
     this.controls?.update();
-    renderer.render(this.scene, this.camera);
+    // Screen-space fluid surface (CPU instanced particles only); else direct render.
+    if (state.renderStyle === "fluid" && state.config.engineKind === "cpu" && this.fluid) {
+      this.fluid.render(renderer, this.scene, this.camera, 0x0a0e14);
+    } else {
+      renderer.setRenderTarget(null);
+      renderer.render(this.scene, this.camera);
+    }
 
     this.framesInWindow += 1;
     const now = performance.now();
@@ -229,6 +239,8 @@ export class SimulationView {
       this.driver.dispose();
       this.driver = null;
     }
+    this.fluid?.dispose();
+    this.fluid = null;
 
     const renderer = this.renderer;
     if (renderer) {
