@@ -7,6 +7,7 @@ import { GpuEngine } from "../engine/gpu/GpuEngine";
 import type { AccuracyLevel, Observables, SimConfig } from "../engine/types";
 import type { Snapshot } from "../state/schema";
 import { captureSnapshot } from "../state/snapshot";
+import type { ColorMode } from "../state/store";
 import { GpuParticleSystem } from "./GpuParticleSystem";
 import { ParticleSystem } from "./ParticleSystem";
 
@@ -52,9 +53,9 @@ export interface SimDriver {
   /** Async warm-up (GPU initial forces); resolves immediately for CPU. */
   ready(): Promise<void>;
   /** Advance one frame: steps the engine if `playing`, then syncs visuals. */
-  advance(playing: boolean, substeps: number): void;
+  advance(playing: boolean, substeps: number, colorMode: ColorMode): void;
   /** Advance one frame's worth of steps unconditionally (manual stepping). */
-  stepOnce(substeps: number): void;
+  stepOnce(substeps: number, colorMode: ColorMode): void;
   /** Latest measurements (synchronous; GPU energies update via background readback). */
   sample(): Observables;
   /** Radial distribution g(r), or null when positions aren't CPU-readable (GPU). */
@@ -90,14 +91,14 @@ class CpuDriver implements SimDriver {
 
   async ready(): Promise<void> {}
 
-  advance(playing: boolean, substeps: number): void {
+  advance(playing: boolean, substeps: number, colorMode: ColorMode): void {
     if (playing) this.engine.step(substeps);
-    this.particles.update(this.engine.state);
+    this.particles.update(this.engine.state, colorMode);
   }
 
-  stepOnce(substeps: number): void {
+  stepOnce(substeps: number, colorMode: ColorMode): void {
     this.engine.step(substeps);
-    this.particles.update(this.engine.state);
+    this.particles.update(this.engine.state, colorMode);
   }
 
   sample(): Observables {
@@ -172,11 +173,11 @@ class GpuDriver implements SimDriver {
     await this.engine.warmup();
   }
 
-  advance(playing: boolean, substeps: number): void {
+  advance(playing: boolean, substeps: number, _colorMode: ColorMode): void {
     if (playing) this.engine.step(substeps);
   }
 
-  stepOnce(substeps: number): void {
+  stepOnce(substeps: number, _colorMode: ColorMode): void {
     this.engine.step(substeps);
   }
 

@@ -13,6 +13,8 @@ export function ControlPanel() {
   const config = useAppStore((s) => s.config);
   const playing = useAppStore((s) => s.playing);
   const substeps = useAppStore((s) => s.substeps);
+  const colorMode = useAppStore((s) => s.colorMode);
+  const setColorMode = useAppStore((s) => s.setColorMode);
 
   const patchConfig = useAppStore((s) => s.patchConfig);
   const setLevel = useAppStore((s) => s.setLevel);
@@ -110,6 +112,19 @@ export function ControlPanel() {
           ]}
           onChange={(speciesName) => patchConfig({ speciesName })}
         />
+        <Segmented
+          label="Couleur des particules"
+          value={colorMode}
+          options={[
+            { value: "species", label: "Espèce", title: "Couleur par espèce" },
+            {
+              value: "speed",
+              label: "Vitesse",
+              title: "Carte de vitesse (bleu lent → rouge rapide)",
+            },
+          ]}
+          onChange={setColorMode}
+        />
       </Field>
 
       <Field>
@@ -117,7 +132,7 @@ export function ControlPanel() {
           label="Particules"
           value={config.particleCount}
           min={32}
-          max={config.engineKind === "gpu" ? 20000 : 1024}
+          max={config.engineKind === "gpu" ? 20000 : 4000}
           step={1}
           onChange={(particleCount) => patchConfig({ particleCount })}
         />

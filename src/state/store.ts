@@ -3,6 +3,9 @@ import { createStore } from "zustand/vanilla";
 import type { RadialDistribution } from "../core/observables/rdf";
 import type { AccuracyLevel, EngineKind, Observables, SimConfig } from "../engine/types";
 
+/** Particle colouring mode (view-only, not part of the physics config). */
+export type ColorMode = "species" | "speed";
+
 /** Default opening scene: a modest argon soft-sphere gas on the CPU reference engine. */
 export const DEFAULT_CONFIG: SimConfig = {
   seed: 1234,
@@ -29,6 +32,7 @@ export interface AppState {
   rdf: RadialDistribution | null;
   demixing: number | null;
   fps: number;
+  colorMode: ColorMode;
   /** Bumped to request a single manual step / a reset (consumed by the renderer). */
   stepNonce: number;
   resetNonce: number;
@@ -43,6 +47,7 @@ export interface AppState {
   requestReset: () => void;
   publishSample: (observables: Observables, fps: number) => void;
   publishAnalysis: (rdf: RadialDistribution | null, demixing: number | null) => void;
+  setColorMode: (colorMode: ColorMode) => void;
 }
 
 export const appStore = createStore<AppState>((set, get) => ({
@@ -53,6 +58,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   rdf: null,
   demixing: null,
   fps: 0,
+  colorMode: "species",
   stepNonce: 0,
   resetNonce: 0,
 
@@ -66,6 +72,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   requestReset: () => set({ resetNonce: get().resetNonce + 1 }),
   publishSample: (observables, fps) => set({ observables, fps }),
   publishAnalysis: (rdf, demixing) => set({ rdf, demixing }),
+  setColorMode: (colorMode) => set({ colorMode }),
 }));
 
 /** React hook bound to the vanilla store. */

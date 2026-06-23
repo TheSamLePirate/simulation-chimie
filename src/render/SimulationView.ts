@@ -126,7 +126,7 @@ export class SimulationView {
     ) {
       this.driver.setThermostat(state.config.thermostat, state.config.thermostatTau);
     }
-    if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps);
+    if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps, state.colorMode);
   }
 
   private async rebuildDriver(): Promise<void> {
@@ -176,7 +176,7 @@ export class SimulationView {
     if (!renderer) return;
 
     const state = appStore.getState();
-    this.driver?.advance(state.playing, state.substeps);
+    this.driver?.advance(state.playing, state.substeps, state.colorMode);
 
     this.controls?.update();
     renderer.render(this.scene, this.camera);

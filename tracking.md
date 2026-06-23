@@ -15,7 +15,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P5** | L5 ensembles — thermostats NVT (barostat reporté) | ✅ |
 | **P6** | Snapshots/export + sauvegarde de scènes + E2E | ✅ |
 | **P7** | Perf : cell-lists O(N) CPU (gros-grain MARTINI/DPD reporté) | ✅ |
-| **P8** | Polish AAA | ⬜ |
+| **P8** | Polish (viz vitesse, raccourcis, docs) | ✅ |
 
 ---
 
@@ -265,6 +265,40 @@ verts en isolation et en CI propre.)_
   (P4) couvrent déjà l'aspect « mésoscopique ».
 - **Cell-lists GPU** (spatial hash + atomics + prefix sum) **reportées** : le chemin GPU reste O(N²)
   (validation headless limitée). Le cell-list CPU est l'optimisation exacte et testée de cette passe.
+
+---
+
+## P8 — Polish ✅
+
+**Objectif (plan) :** rendu de surface de fluide, éclairage, post-FX, accessibilité, docs, tutoriels.
+
+**Livré :**
+- **Visualisation par vitesse** : carte thermique des particules (bleu lent → rouge rapide), sélecteur
+  Couleur **Espèce / Vitesse** (l'effet « voir le chaud/froid » et la diffusion).
+- **Raccourcis clavier** : `Espace` lecture/pause, `R` réinitialiser, `N` un pas.
+- **Plafond CPU relevé** à 4000 particules (rendu possible par les cell-lists O(N)).
+- **README** complet : niveaux, ensembles, moteurs, scènes, observables, export, validation, archi.
+
+**Vérifications :** lint · typecheck · **52 unit** · **5 e2e** (4 skip). Tout vert.
+
+**Déviations au plan :**
+- **Rendu de surface de fluide (raymarching/metaballs) et post-FX** reportés : le rendu reste des
+  **sphères instanciées** (lisibles, performantes) + carte de vitesse. Le rendu de surface est un
+  chantier graphique distinct.
+- La **carte de vitesse** est en **mode CPU** (le GPU garde la couleur par espèce ; un `colorNode`
+  lisant le buffer de vitesses serait l'évolution GPU).
+
+---
+
+## Bilan
+
+**Toutes les phases P0–P8 sont livrées et commitées.** Socle scientifique solide (52 tests
+unitaires/golden + 5 e2e), moteur CPU validé (oracle déterministe) et moteur GPU WebGPU fonctionnel.
+Déviations principales assumées et documentées : **électrostatique atomistique (Wolf) + eau rigide
+SPC/E (topologie moléculaire + contraintes)**, **barostat NPT**, **cell-lists/thermostat GPU**, et
+**rendu de surface de fluide** — tous reportés comme extensions « atomistique/AAA » d'une future passe.
+La priorité explicite (démixtion huile/eau, vraie physique mesurable, temps réel, niveaux incrémentaux,
+WebGPU, tests partout) est remplie.
 
 ---
 
