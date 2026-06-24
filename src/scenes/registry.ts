@@ -139,6 +139,22 @@ export const SCENES: readonly Scene[] = [
     }),
   },
   {
+    id: "dissolution",
+    label: "Dissolution d'un cristal de sel",
+    description: "Cristal de NaCl plongé dans l'eau : les ions se solvatent et se dissolvent",
+    config: make({
+      level: "L8",
+      speciesName: "WATER_O",
+      secondSpeciesName: "SODIUM",
+      particleCount: 27, // crystal side ≈ ∛27 = 3 (→ 26 ions after neutralising)
+      boxLength: 2.0, // small water shell ⇒ fewer atoms ⇒ real-time
+      temperature: 370, // warm ⇒ dissolves faster
+      timestep: 0.002,
+      thermostat: "berendsen",
+      thermostatTau: 0.3,
+    }),
+  },
+  {
     id: "sediment",
     label: "Sédimentation (gravité)",
     description: "Gravité + parois : les particules tombent et s'accumulent au fond",

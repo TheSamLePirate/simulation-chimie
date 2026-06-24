@@ -46,6 +46,11 @@ export const ACCURACY_LEVELS = {
     label: "L7 · Tension de surface",
     description: "Gouttelette d'eau dans le vide : la cohésion forme une sphère (CPU)",
   },
+  L8: {
+    id: "L8",
+    label: "L8 · Dissolution",
+    description: "Cristal de sel (NaCl) dans l'eau : les ions se solvatent et se dissolvent (CPU)",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

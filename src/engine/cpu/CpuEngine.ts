@@ -1,6 +1,7 @@
 import { applyBoundary } from "../../core/boundary";
 import { createBox, createBoxXYZ, volume } from "../../core/box";
 import { type DistanceConstraints, rattle, shake } from "../../core/constraints";
+import { buildSaltWaterSystem } from "../../core/dissolution";
 import { IonicForce } from "../../core/forces/ionic";
 import { LennardJonesCellForce } from "../../core/forces/lennardJonesCell";
 import { MolecularForce } from "../../core/forces/molecular";
@@ -39,6 +40,7 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
     case "L5":
     case "L6":
     case "L7":
+    case "L8":
       // Molecular systems need topology; they are built in CpuEngine.configure().
       throw new Error("molecular force is built in configure()");
   }
@@ -146,6 +148,29 @@ export class CpuEngine implements SimulationEngine {
       const nWater = Math.max(0, c.particleCount - nOil);
       const rng = new Rng(c.seed);
       const sys = buildOilWaterSystem(nWater, nOil, this.box, c.temperature, rng);
+      this.state = sys.state;
+      this.species = sys.species;
+      this.force = new MolecularForce(sys.bonds, sys.angles);
+      this.bonds = sys.renderBonds;
+      this.constraints = sys.constraints;
+      this.refPositions = new Float64Array(this.state.positions.length);
+      this.invMass = new Float64Array(this.state.count);
+      for (let a = 0; a < this.state.count; a++) {
+        this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
+      }
+      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
+      this.last = this.force.compute(this.state, this.box, this.species);
+      this.stepCount = 0;
+      this.elapsed = 0;
+      return;
+    }
+
+    // L8 — dissolution: a NaCl crystal in SPC water; the water solvates the surface ions.
+    // particleCount encodes the crystal side (≈ ∛count); the box determines the water count.
+    if (c.level === "L8") {
+      const crystalSide = Math.max(2, Math.round(Math.cbrt(c.particleCount)));
+      const rng = new Rng(c.seed);
+      const sys = buildSaltWaterSystem(this.box, c.temperature, rng, crystalSide);
       this.state = sys.state;
       this.species = sys.species;
       this.force = new MolecularForce(sys.bonds, sys.angles);
@@ -298,8 +323,8 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // Molecular levels (L4–L7) change topology/atom count ⇒ full rebuild, not a swap.
-    if (level === "L4" || level === "L5" || level === "L6" || level === "L7") {
+    // Molecular levels (L4–L8) change topology/atom count ⇒ full rebuild, not a swap.
+    if (level === "L4" || level === "L5" || level === "L6" || level === "L7" || level === "L8") {
       this.configure();
       return;
     }
