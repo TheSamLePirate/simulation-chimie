@@ -106,10 +106,13 @@ race-free, no atomics). Both periodic and **reflective** walls (reflective is in
 `gpuSupportsConfig()` blocks only L6 (reflective tall box + mixed rigid/flexible + gravity ⇒
 transients the lag-prone async GPU thermostat over-corrects) and NPT (no GPU barostat) — those fall
 back to CPU. The GPU builds molecular systems via the shared **`engine/buildSystem.ts`**
-(deterministic, matches the CPU oracle atom-for-atom — there's a lock-step test). The GPU
-**cell-list is disabled** (binning correct, traversal force kernel buggy); the GPU uses the proven
-**brute O(N²)** kernel — parallel, good for a few thousand atoms (verified ~900 water molecules /
-2700 atoms at ~95 FPS). The O(N) cell-list (a sorted-particle rewrite) is the future path to 10k+.
+(deterministic, matches the CPU oracle atom-for-atom — there's a lock-step test). Neighbour search
+is an **O(N) sorted-particle cell list** (counting sort: clear → count → exclusive prefix-sum →
+scatter into a sorted array → 27-cell traversal with a dynamic per-cell loop — no fixed capacity, so
+no phantom pairs), with an exclusion-aware variant for molecular nonbonded; it engages for periodic
+systems with ≥3 cells/axis and falls back to brute O(N²) otherwise (tiny boxes, reflective walls).
+Verified: monatomic **16k atoms @ ~87 FPS**, molecular water **12k atoms (4000 molecules) @ 120
+FPS** — vs the CPU's hundreds.
 
 ---
 
@@ -148,5 +151,5 @@ back to CPU. The GPU builds molecular systems via the shared **`engine/buildSyst
   Claude-Session: https://claude.ai/code/session_01Cph9L43wotGgSHmHRiLADr
   ```
 - Keep **`tracking.md`** updated (per-phase status + deviations) and `docs/PLAN*.md` as the roadmap.
-- Be honest in docs and reports: if something isn't fixed (e.g. the GPU cell-list), say so and
-  explain the fallback — "correct but slower" beats "fast but wrong".
+- Be honest in docs and reports: if something isn't fixed (e.g. L6 oil/water is still CPU-only),
+  say so and explain the fallback — "correct but slower" beats "fast but wrong".

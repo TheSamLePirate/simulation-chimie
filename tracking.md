@@ -36,6 +36,8 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P26** | Forces moléculaires sur GPU : eau atomistique L4 sur WebGPU (liaisons/angles via atomics i32, exclusions) | ✅ |
 | **P27** | Eau rigide sur GPU (SHAKE/RATTLE par molécule) ⇒ L5/L7/L8 sur WebGPU | ✅ |
 | **P28** | Parois réfléchissantes sur GPU ⇒ le GPU couvre 8/9 niveaux (tout sauf huile/eau L6) | ✅ |
+| **P30** | Cell-list GPU O(N) RÉPARÉ (tri-particules) ⇒ 16k atomes monoatomiques à ~87 FPS | ✅ |
+| **P31** | Cell-list pour le moléculaire (avec exclusions) ⇒ 4000 molécules d'eau (12k atomes) à 120 FPS | ✅ |
 
 ---
 
@@ -559,9 +561,21 @@ rigide par **SETTLE/SHAKE** (par molécule, parallèle), exclusions par molecule
   parois + boîte non-cubique + molécules mixtes ⇒ transitoires que le thermostat GPU sur-corrige).
 
 **Plus de molécules** : vérifié headed — **900 molécules d'eau (2700 atomes) à 95 FPS** sur GPU
-(le CPU fait ~125 à 28 FPS). **Audit final : 10/11 scènes sur GPU à 120 FPS, L6 en repli CPU, 0
-erreur.** Le cell-list O(N) GPU reste un travail futur (réécriture tri-particules) pour la très
-grande échelle (10k+). **74 tests unitaires + 7 e2e.**
+(le CPU fait ~125 à 28 FPS). **Audit : 10/11 scènes sur GPU à 120 FPS, L6 en repli CPU, 0 erreur.**
+
+## P30–P31 — Cell-list GPU O(N) RÉPARÉ ⇒ vraie montée en échelle ✅
+
+Le cell-list à capacité fixe produisait des paires fantômes et était désactivé depuis ~3 sessions.
+**Réécrit façon production** (LAMMPS/HOOMD, tri par comptage) ⇒ le mode de défaillance devient
+structurellement impossible : `clear → comptage par cellule (atomic) → somme préfixe exclusive
+(cellStart) → dispersion dans un tableau trié → parcours du pochoir 27-cellules` (boucle dynamique
+par cellule, **sans capacité fixe**). Maths de paires identiques au brute (mêmes T). **P31** : variante
+avec **exclusions intramoléculaires** pour le moléculaire ; grille dimensionnée au max(2.5·σmax,
+cutoff Coulomb). Activé en périodique avec ≥3 cellules/axe, sinon repli brute.
+
+**Échelle vérifiée headed** : monoatomique **16 000 atomes à 87 FPS** (T=90 K), eau moléculaire
+**12 000 atomes / 4000 molécules à 120 FPS** — le brute plafonnait vers ~3-5k. Aucune régression.
+**74 tests unitaires + 7 e2e.**
 
 ---
 
