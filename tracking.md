@@ -33,6 +33,9 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P23** | Les presets MONTRENT l'effet : T initiale ≠ cible, gouttelettes (initialClump), sphères plus petites | ✅ |
 | **P24** | Correction blow-up cristal serré (image minimale : cutoff LJ ≤ L/2) + mode couleur « Structure » + couleur auto par scène | ✅ |
 | **P25** | Correction fuite de config entre scènes (initialClump rémanent ⇒ NaCl explosait) | ✅ |
+| **P26** | Forces moléculaires sur GPU : eau atomistique L4 sur WebGPU (liaisons/angles via atomics i32, exclusions) | ✅ |
+| **P27** | Eau rigide sur GPU (SHAKE/RATTLE par molécule) ⇒ L5/L7/L8 sur WebGPU | ✅ |
+| **P28** | Parois réfléchissantes sur GPU ⇒ le GPU couvre 8/9 niveaux (tout sauf huile/eau L6) | ✅ |
 
 ---
 
@@ -530,6 +533,35 @@ blob figé) au lieu de montrer une **transition**.
   maintenant ces champs. Tests de non-régression ajoutés. **Montage complet 11 scènes : tout stable.**
 
 **69 tests unitaires + 7 e2e.** Chaque preset montre clairement son phénomène, sans erreur.
+
+---
+
+## P26–P28 — Toutes les scènes (ou presque) sur GPU + bien plus de molécules (retour utilisateur) ✅
+
+**Déclencheur :** « accepte plus de molécules en faisant tourner chaque preset sur WebGPU ; base-toi
+sur la vraie recherche, utilise des agents. » Avant : le GPU ne faisait que le monoatomique L0–L3.
+
+Recherche (agents) → patterns de production (OpenMM/GROMACS) : forces liées par kernel par
+liaison/angle, **pas d'atomics f32 en WebGPU** ⇒ accumulateur **i32 point-fixe** (atomicAdd), eau
+rigide par **SETTLE/SHAKE** (par molécule, parallèle), exclusions par moleculeId.
+
+- **`src/engine/buildSystem.ts`** : un constructeur de système unique et déterministe (état +
+  espèces + topologie plate liaisons/angles/contraintes) ⇒ le GPU bâtit les systèmes moléculaires
+  exactement comme le CPU (test de non-régression : lock-step CPU/GPU sur L1/L3/L4/L5/L8).
+- **P26 (L4)** : forces liées (liaisons + angles) scatterées dans un accumulateur i32 (FORCE_SCALE
+  2¹⁴) puis déquantifiées ; non-lié LJ+Coulomb avec exclusions intramoléculaires (moleculeId).
+  GPU eau atomistique ~270–300 K, 120 FPS, molécules intactes.
+- **P27 (L5/L7/L8)** : eau rigide par **SHAKE/RATTLE par molécule** — un thread possède les 3 atomes
+  d'une molécule ⇒ itérations sans course (sans atomics), réutilise l'algo CPU validé. GPU eau
+  rigide 300,5 K (exactement la cible ⇒ contraintes correctes).
+- **P28** : **parois réfléchissantes** dans l'intégrateur (miroir + inversion de la vitesse normale)
+  ⇒ sédimentation et le reste sur GPU. `gpuSupportsConfig` couvre **tout sauf L6** (huile/eau :
+  parois + boîte non-cubique + molécules mixtes ⇒ transitoires que le thermostat GPU sur-corrige).
+
+**Plus de molécules** : vérifié headed — **900 molécules d'eau (2700 atomes) à 95 FPS** sur GPU
+(le CPU fait ~125 à 28 FPS). **Audit final : 10/11 scènes sur GPU à 120 FPS, L6 en repli CPU, 0
+erreur.** Le cell-list O(N) GPU reste un travail futur (réécriture tri-particules) pour la très
+grande échelle (10k+). **74 tests unitaires + 7 e2e.**
 
 ---
 

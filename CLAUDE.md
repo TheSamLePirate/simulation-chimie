@@ -98,11 +98,18 @@ Headless WebGPU here **does not composite the canvas into screenshots** and **ne
 - Quick GPU sanity = read the temperature metric headed: a physical T (~target) means it works; a
   number like `1e40 K` means the kernel is broken.
 
-GPU support today: monatomic **L0–L3** (multi-species LJ + Coulomb), periodic only. Molecular
-levels L4–L8 are CPU-only — `gpuSupportsConfig()` enforces this (greys out the GPU toggle, falls
-back to CPU so the GPU never runs wrong physics). The GPU **cell-list is disabled** (its binning is
-correct but the traversal force kernel is buggy); the GPU uses the proven **brute O(N²)** kernel,
-which is parallel and handles thousands of atoms.
+GPU support today: **every level except L6** (oil/water). Monatomic **L0–L3** (multi-species LJ +
+Coulomb), atomistic **L4** flexible water (bonded forces scattered into an **i32 quantised force
+accumulator** — WebGPU has no f32 atomics — + intramolecular exclusions by `moleculeId`), and rigid
+water **L5/L7/L8** via **per-molecule SHAKE/RATTLE** (one thread owns a molecule's 3 atoms ⇒
+race-free, no atomics). Both periodic and **reflective** walls (reflective is in the integrator).
+`gpuSupportsConfig()` blocks only L6 (reflective tall box + mixed rigid/flexible + gravity ⇒
+transients the lag-prone async GPU thermostat over-corrects) and NPT (no GPU barostat) — those fall
+back to CPU. The GPU builds molecular systems via the shared **`engine/buildSystem.ts`**
+(deterministic, matches the CPU oracle atom-for-atom — there's a lock-step test). The GPU
+**cell-list is disabled** (binning correct, traversal force kernel buggy); the GPU uses the proven
+**brute O(N²)** kernel — parallel, good for a few thousand atoms (verified ~900 water molecules /
+2700 atoms at ~95 FPS). The O(N) cell-list (a sorted-particle rewrite) is the future path to 10k+.
 
 ---
 
