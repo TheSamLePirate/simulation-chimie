@@ -187,8 +187,7 @@ class GpuDriver implements SimDriver {
     this.engine = new GpuEngine(config);
     this.engine.attach(renderer);
     this.particles = new GpuParticleSystem(this.engine);
-    const l = config.boxLength;
-    this.cell = buildCell([l, l, l]);
+    this.cell = buildCell(this.engine.boxLengths.toArray() as Vec3); // actual (possibly tall) box
     this.group.add(this.particles.mesh, this.cell);
   }
 
@@ -275,19 +274,12 @@ class GpuDriver implements SimDriver {
  * boundaries (no charges, no molecules, no walls). Every other scene must run on the CPU.
  */
 export function gpuSupportsConfig(config: SimConfig): boolean {
-  // GPU covers: monatomic LJ/WCA/Coulomb (L0–L3), flexible water (L4), and rigid water via
-  // per-molecule SHAKE/RATTLE (L5 rigid water, L7 droplet, L8 dissolution). L6 (oil/water) still
-  // needs reflective walls + a non-cubic box, so it stays CPU-only.
-  const supported =
-    config.level === "L0" ||
-    config.level === "L1" ||
-    config.level === "L2" ||
-    config.level === "L3" ||
-    config.level === "L4" ||
-    config.level === "L5" ||
-    config.level === "L7" ||
-    config.level === "L8";
-  return supported && config.boundary === "periodic";
+  // The GPU covers monatomic LJ/WCA/Coulomb (L0–L3), flexible water (L4), and rigid water via
+  // per-molecule SHAKE/RATTLE (L5/L7/L8) — with both periodic and reflective walls (reflective
+  // is handled in the integrator). It has no barostat (NPT → CPU). L6 (oil/water) stays CPU: its
+  // reflective tall box + mixed rigid/flexible molecules + gravity make big transients that the
+  // GPU's lag-prone async thermostat over-corrects; on the CPU it runs cleanly.
+  return config.level !== "L6" && config.barostat === "none";
 }
 
 /** Build the driver for the configured backend; GPU falls back to CPU when unsupported. */

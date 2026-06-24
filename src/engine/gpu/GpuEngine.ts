@@ -17,6 +17,7 @@ import {
   max,
   mod,
   round,
+  select,
   sqrt,
   uint,
   uniform,
@@ -326,8 +327,20 @@ export class GpuEngine {
           .mul(this.uHalfDt),
       );
       p.addAssign(v.mul(this.uDt));
+      // Periodic: wrap into [−L/2, L/2). Reflective: mirror at the walls and flip the normal
+      // velocity (per axis), so reflective-wall scenes (oil/water column, sediment) work on GPU.
       If(this.uPeriodic.greaterThan(0.5), () => {
         p.assign(p.sub(this.uBox.mul(roundVec(p.div(this.uBox)))));
+      });
+      If(this.uPeriodic.lessThan(0.5), () => {
+        const pn = p as Node;
+        const half = this.uBox.mul(0.5);
+        const over = pn.greaterThan(half);
+        const under = pn.lessThan(half.mul(-1));
+        p.assign(select(over, half.mul(2).sub(pn), pn));
+        p.assign(select(under, half.mul(-2).sub(p as Node), p as Node));
+        v.assign(select(over, v.mul(-1), v));
+        v.assign(select(under, v.mul(-1), v));
       });
     }, n);
 
