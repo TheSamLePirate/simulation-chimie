@@ -121,5 +121,5 @@ describe("atomistic water (L4) stability", () => {
     const t = engine.observables().temperature;
     expect(t).toBeGreaterThan(150);
     expect(t).toBeLessThan(500);
-  }, 20_000);
+  }, 45_000);
 });

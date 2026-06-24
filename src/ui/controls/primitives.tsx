@@ -35,6 +35,7 @@ interface SegmentedOption<T extends string> {
   value: T;
   label: string;
   title?: string;
+  disabled?: boolean;
 }
 
 interface SegmentedProps<T extends string> {
@@ -61,6 +62,7 @@ export function Segmented<T extends string>({
             title={option.title}
             className="segmented__item"
             data-active={option.value === value ? "true" : undefined}
+            disabled={option.disabled}
             onClick={() => onChange(option.value)}
           >
             {option.label}

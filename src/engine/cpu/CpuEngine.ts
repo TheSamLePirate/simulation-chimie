@@ -38,6 +38,7 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
     case "L4":
     case "L5":
     case "L6":
+    case "L7":
       // Molecular systems need topology; they are built in CpuEngine.configure().
       throw new Error("molecular force is built in configure()");
   }
@@ -108,11 +109,13 @@ export class CpuEngine implements SimulationEngine {
     const c = this.config;
     this.box = createBox(c.boxLength, c.boundary);
 
-    // L4 — atomistic water: build the molecular system (O+2H per molecule) + topology.
-    if (c.level === "L4" || c.level === "L5") {
-      const rigid = c.level === "L5";
+    // L4 atomistic water / L5 rigid water / L7 rigid-water droplet (surface tension).
+    if (c.level === "L4" || c.level === "L5" || c.level === "L7") {
+      const rigid = c.level === "L5" || c.level === "L7";
       const rng = new Rng(c.seed);
-      const sys = buildWaterSystem(c.particleCount, this.box, c.temperature, rng);
+      // L7: pack at liquid spacing in a centred clump ⇒ vacuum around ⇒ a droplet forms.
+      const spacing = c.level === "L7" ? 0.31 : undefined;
+      const sys = buildWaterSystem(c.particleCount, this.box, c.temperature, rng, spacing);
       this.state = sys.state;
       this.species = sys.species;
       this.force = new WaterForce(sys.topology, rigid);
@@ -295,8 +298,8 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // Molecular levels (L4/L5/L6) change topology/atom count ⇒ full rebuild, not a swap.
-    if (level === "L4" || level === "L5" || level === "L6") {
+    // Molecular levels (L4–L7) change topology/atom count ⇒ full rebuild, not a swap.
+    if (level === "L4" || level === "L5" || level === "L6" || level === "L7") {
       this.configure();
       return;
     }

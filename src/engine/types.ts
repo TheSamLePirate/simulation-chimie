@@ -41,6 +41,11 @@ export const ACCURACY_LEVELS = {
     label: "L6 · Mélange moléculaire",
     description: "Eau atomistique + huile (alcane) : démixtion hydrophobe réelle (CPU)",
   },
+  L7: {
+    id: "L7",
+    label: "L7 · Tension de surface",
+    description: "Gouttelette d'eau dans le vide : la cohésion forme une sphère (CPU)",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

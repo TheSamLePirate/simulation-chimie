@@ -50,8 +50,8 @@ export const SCENES: readonly Scene[] = [
       speciesName: "WATER_O",
       secondSpeciesName: "OIL_CH3",
       fractionSecond: 0.4, // 40% oil molecules, 60% water
-      particleCount: 120, // total molecules (×3 atoms)
-      boxLength: 2.3, // base of a tall column (engine makes y = 2.5×); gravity layers it
+      particleCount: 320, // total molecules (×3 atoms) — cell-list keeps it real-time
+      boxLength: 2.8, // base of a tall column (engine makes y = 2.5×); gravity layers it
       boundary: "reflective",
       temperature: 300,
       timestep: 0.001, // 1 fs (water is rigid via SHAKE)
@@ -100,6 +100,21 @@ export const SCENES: readonly Scene[] = [
       particleCount: 150,
       boxLength: 1.7,
       temperature: 300,
+      timestep: 0.002,
+      thermostat: "berendsen",
+      thermostatTau: 0.2,
+    }),
+  },
+  {
+    id: "droplet",
+    label: "Tension de surface (gouttelette)",
+    description: "Agrégat d'eau dans le vide : la cohésion (liaisons H) le sphérifie",
+    config: make({
+      level: "L7",
+      speciesName: "WATER_O",
+      particleCount: 240, // molecules, packed as a centred clump
+      boxLength: 4.0,
+      temperature: 260, // cool ⇒ stays cohesive (warm water evaporates in vacuum)
       timestep: 0.002,
       thermostat: "berendsen",
       thermostatTau: 0.2,

@@ -1,5 +1,6 @@
 import type { AccuracyLevel } from "../../engine/types";
 import { ACCURACY_LEVELS } from "../../engine/types";
+import { gpuSupportsConfig } from "../../render/drivers";
 import { useAppStore } from "../../state/store";
 import { Field, Segmented, Slider } from "./primitives";
 
@@ -25,6 +26,8 @@ export function ControlPanel() {
   const requestStep = useAppStore((s) => s.requestStep);
   const requestReset = useAppStore((s) => s.requestReset);
   const setSubsteps = useAppStore((s) => s.setSubsteps);
+
+  const gpuOk = gpuSupportsConfig(config);
 
   return (
     <section className="panel">
@@ -55,7 +58,10 @@ export function ControlPanel() {
             {
               value: "gpu",
               label: "GPU",
-              title: "WebGPU compute (rendu GPU-résident)",
+              title: gpuOk
+                ? "WebGPU compute (rendu GPU-résident)"
+                : "GPU : LJ monoatomique périodique uniquement — cette scène tourne sur CPU",
+              disabled: !gpuOk,
             },
           ]}
           onChange={(engineKind) => setEngineKind(engineKind)}

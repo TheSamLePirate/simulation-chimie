@@ -31,12 +31,18 @@ export interface WaterSystem {
 /** Rigid H–H distance implied by the bond length and equilibrium angle. */
 export const WATER_HH = 2 * WATER_BOND_R0 * Math.sin(WATER_ANGLE_THETA0 / 2);
 
-/** Build a box of `molecules` SPC/Fw water molecules on a lattice with random orientation. */
+/**
+ * Build `molecules` SPC/Fw water molecules on a lattice with random orientation.
+ * If `spacing` is given, a centred cube at that lattice spacing is built (so a box larger
+ * than the cube leaves vacuum around it ⇒ the cohesion forms a droplet); otherwise the
+ * molecules fill the whole box.
+ */
 export function buildWaterSystem(
   molecules: number,
   box: Box,
   temperatureK: number,
   rng: Rng,
+  spacing?: number,
 ): WaterSystem {
   const atoms = molecules * 3;
   const typeIds = new Uint8Array(atoms);
@@ -54,9 +60,14 @@ export function buildWaterSystem(
 
   const perSide = Math.max(1, Math.ceil(Math.cbrt(molecules)));
   const [lx, ly, lz] = box.lengths;
-  const sx = lx / perSide;
-  const sy = ly / perSide;
-  const sz = lz / perSide;
+  // Fixed-spacing centred cube (droplet) or fill-the-box lattice.
+  const sx = spacing ?? lx / perSide;
+  const sy = spacing ?? ly / perSide;
+  const sz = spacing ?? lz / perSide;
+  const span = spacing ? spacing * perSide : 0;
+  const ox0 = spacing ? -0.5 * span : -0.5 * lx;
+  const oy0 = spacing ? -0.5 * span : -0.5 * ly;
+  const oz0 = spacing ? -0.5 * span : -0.5 * lz;
 
   const half = WATER_ANGLE_THETA0 / 2;
   const r0 = WATER_BOND_R0;
@@ -69,9 +80,9 @@ export function buildWaterSystem(
   for (let ix = 0; ix < perSide && m < molecules; ix++) {
     for (let iy = 0; iy < perSide && m < molecules; iy++) {
       for (let iz = 0; iz < perSide && m < molecules; iz++) {
-        const ox = -0.5 * lx + (ix + 0.5) * sx;
-        const oy = -0.5 * ly + (iy + 0.5) * sy;
-        const oz = -0.5 * lz + (iz + 0.5) * sz;
+        const ox = ox0 + (ix + 0.5) * sx;
+        const oy = oy0 + (iy + 0.5) * sy;
+        const oz = oz0 + (iz + 0.5) * sz;
 
         // Random rigid rotation (preserves bond lengths / angle): yaw then pitch.
         const a = rng.range(0, 2 * Math.PI);

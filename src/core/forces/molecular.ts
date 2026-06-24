@@ -1,4 +1,5 @@
 import { erfc } from "../math/erf";
+import { forEachNeighborPair } from "../neighbors";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
 import { COULOMB_CONSTANT } from "../units";
 
@@ -42,7 +43,7 @@ export class MolecularForce implements ForceModel {
   ) {}
 
   compute(state: SimState, box: Box, species: readonly Species[]): ForceResult {
-    const { count, positions, forces, typeIds, moleculeId } = state;
+    const { positions, forces, typeIds, moleculeId } = state;
     forces.fill(0);
 
     const [lx, ly, lz] = box.lengths;
@@ -60,66 +61,57 @@ export class MolecularForce implements ForceModel {
     let pe = 0;
     let virial = 0;
 
-    // --- Non-bonded (LJ Lorentz-Berthelot + Coulomb DSF), intramolecular pairs excluded ---
-    for (let i = 0; i < count; i++) {
-      const ix = positions[3 * i];
-      const iy = positions[3 * i + 1];
-      const iz = positions[3 * i + 2];
+    let maxSigma = 0;
+    for (const s of species) if (s.epsilon > 0) maxSigma = Math.max(maxSigma, s.sigma);
+    const gridCutoff = Math.max(rcC, LJ_CUTOFF_FACTOR * maxSigma);
+
+    // --- Non-bonded (LJ Lorentz-Berthelot + Coulomb DSF), intramolecular excluded (cell-list) ---
+    forEachNeighborPair(state, box, gridCutoff, (i, j, dx, dy, dz, r2) => {
+      if (moleculeId[j] === moleculeId[i]) return;
       const si = species[typeIds[i]];
-      const mi = moleculeId[i];
+      const sj = species[typeIds[j]];
+      let fOverR = 0;
+      let r = -1;
 
-      for (let j = i + 1; j < count; j++) {
-        if (moleculeId[j] === mi) continue;
-        const dx = min(ix - positions[3 * j], lx);
-        const dy = min(iy - positions[3 * j + 1], ly);
-        const dz = min(iz - positions[3 * j + 2], lz);
-        const r2 = dx * dx + dy * dy + dz * dz;
-        if (r2 < 1e-12) continue;
-        const sj = species[typeIds[j]];
-
-        let fOverR = 0;
-        let r = -1;
-
-        const epsilon = Math.sqrt(si.epsilon * sj.epsilon);
-        if (epsilon > 0) {
-          const sigma = 0.5 * (si.sigma + sj.sigma);
-          const rcLj = LJ_CUTOFF_FACTOR * sigma;
-          if (r2 < rcLj * rcLj) {
-            r = Math.sqrt(r2);
-            const inv2 = (sigma * sigma) / r2;
-            const inv6 = inv2 * inv2 * inv2;
-            const inv12 = inv6 * inv6;
-            const c2 = (sigma * sigma) / (rcLj * rcLj);
-            const c6 = c2 * c2 * c2;
-            const c12 = c6 * c6;
-            const fAtRc = (24 * epsilon * (2 * c12 - c6)) / rcLj;
-            const vAtRc = 4 * epsilon * (c12 - c6);
-            fOverR += ((24 * epsilon * (2 * inv12 - inv6)) / r - fAtRc) / r;
-            pe += 4 * epsilon * (inv12 - inv6) - vAtRc + (r - rcLj) * fAtRc;
-          }
-        }
-
-        const qq = si.charge * sj.charge;
-        if (qq !== 0 && r2 < rcC2) {
-          if (r < 0) r = Math.sqrt(r2);
-          const erfcR = erfc(alpha * r);
-          const expR = Math.exp(-alpha * alpha * r2);
-          const fCoul = ke * qq * (erfcR / r2 + (TWO_OVER_SQRT_PI * alpha * expR) / r - shift);
-          fOverR += fCoul / r;
-          pe += ke * qq * (erfcR / r - erfcRc / rcC + shift * (r - rcC));
-        }
-
-        if (fOverR !== 0) {
-          forces[3 * i] += fOverR * dx;
-          forces[3 * i + 1] += fOverR * dy;
-          forces[3 * i + 2] += fOverR * dz;
-          forces[3 * j] -= fOverR * dx;
-          forces[3 * j + 1] -= fOverR * dy;
-          forces[3 * j + 2] -= fOverR * dz;
-          virial += fOverR * r2;
+      const epsilon = Math.sqrt(si.epsilon * sj.epsilon);
+      if (epsilon > 0) {
+        const sigma = 0.5 * (si.sigma + sj.sigma);
+        const rcLj = LJ_CUTOFF_FACTOR * sigma;
+        if (r2 < rcLj * rcLj) {
+          r = Math.sqrt(r2);
+          const inv2 = (sigma * sigma) / r2;
+          const inv6 = inv2 * inv2 * inv2;
+          const inv12 = inv6 * inv6;
+          const c2 = (sigma * sigma) / (rcLj * rcLj);
+          const c6 = c2 * c2 * c2;
+          const c12 = c6 * c6;
+          const fAtRc = (24 * epsilon * (2 * c12 - c6)) / rcLj;
+          const vAtRc = 4 * epsilon * (c12 - c6);
+          fOverR += ((24 * epsilon * (2 * inv12 - inv6)) / r - fAtRc) / r;
+          pe += 4 * epsilon * (inv12 - inv6) - vAtRc + (r - rcLj) * fAtRc;
         }
       }
-    }
+
+      const qq = si.charge * sj.charge;
+      if (qq !== 0 && r2 < rcC2) {
+        if (r < 0) r = Math.sqrt(r2);
+        const erfcR = erfc(alpha * r);
+        const expR = Math.exp(-alpha * alpha * r2);
+        const fCoul = ke * qq * (erfcR / r2 + (TWO_OVER_SQRT_PI * alpha * expR) / r - shift);
+        fOverR += fCoul / r;
+        pe += ke * qq * (erfcR / r - erfcRc / rcC + shift * (r - rcC));
+      }
+
+      if (fOverR !== 0) {
+        forces[3 * i] += fOverR * dx;
+        forces[3 * i + 1] += fOverR * dy;
+        forces[3 * i + 2] += fOverR * dz;
+        forces[3 * j] -= fOverR * dx;
+        forces[3 * j + 1] -= fOverR * dy;
+        forces[3 * j + 2] -= fOverR * dz;
+        virial += fOverR * r2;
+      }
+    });
 
     // --- Harmonic bonds ---
     const b = this.bonds;

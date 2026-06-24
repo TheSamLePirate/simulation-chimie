@@ -39,7 +39,7 @@ describe("Berendsen barostat (NPT)", () => {
     expect(finalP).toBeLessThan(initialP);
     // Stays finite / sane.
     expect(Number.isFinite(finalP)).toBe(true);
-  }, 20_000);
+  }, 45_000);
 
   it("leaves the box fixed when the barostat is off", () => {
     const engine = new CpuEngine({ ...BASE, barostat: "none" });

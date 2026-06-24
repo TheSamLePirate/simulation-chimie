@@ -1,6 +1,7 @@
 import * as THREE from "three/webgpu";
 import { demixingOrderParameter } from "../core/observables/demixing";
 import { type RadialDistribution, radialDistribution } from "../core/observables/rdf";
+import { SPECIES_LIBRARY } from "../core/species";
 import type { Vec3 } from "../core/types";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
@@ -269,7 +270,26 @@ class GpuDriver implements SimDriver {
   }
 }
 
-/** Build the driver for the configured backend. */
+/**
+ * The GPU engine only implements single-species monatomic Lennard-Jones / WCA with periodic
+ * boundaries (no charges, no molecules, no walls). Every other scene must run on the CPU.
+ */
+export function gpuSupportsConfig(config: SimConfig): boolean {
+  const monatomicLevel = config.level === "L0" || config.level === "L1" || config.level === "L2";
+  const key = config.speciesName.toUpperCase() as keyof typeof SPECIES_LIBRARY;
+  const charge = SPECIES_LIBRARY[key]?.charge ?? 0;
+  return (
+    monatomicLevel &&
+    config.secondSpeciesName === null &&
+    config.boundary === "periodic" &&
+    charge === 0
+  );
+}
+
+/** Build the driver for the configured backend; GPU falls back to CPU when unsupported. */
 export function createDriver(config: SimConfig, renderer: THREE.WebGPURenderer): SimDriver {
-  return config.engineKind === "gpu" ? new GpuDriver(config, renderer) : new CpuDriver(config);
+  if (config.engineKind === "gpu" && gpuSupportsConfig(config)) {
+    return new GpuDriver(config, renderer);
+  }
+  return new CpuDriver(config);
 }
