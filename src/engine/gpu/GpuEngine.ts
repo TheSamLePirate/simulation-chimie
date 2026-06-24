@@ -69,8 +69,6 @@ function packPairF32(a: Float32Array, b: Float32Array): Float32Array {
 const packScalarF32 = (a: Float32Array): Float32Array =>
   a.length ? Float32Array.from(a) : new Float32Array(1);
 const TWO_POW_1_6 = 1.122462048309373;
-/** Max particles per cell bin. Generous vs liquid occupancy (~15) to avoid dropped pairs. */
-const CELL_CAPACITY = 96;
 
 // Typed storage helpers (the raw `instancedArray` overloads resolve ambiguously).
 const vec3Array = (data: Float32Array) => instancedArray(data, "vec3");
@@ -212,8 +210,13 @@ export class GpuEngine {
   // Berendsen thermostat scale (computed on CPU from the readback KE; 1 = no-op).
   private readonly uThermoLambda = uniform(1);
 
+  // Sorted-particle cell list (counting-sort neighbour search): per-cell counts, the exclusive
+  // prefix sum (start offset), a scatter cursor, and particle indices sorted by cell. No fixed
+  // per-cell capacity ⇒ no dropped / phantom pairs (the failure mode of the old fixed-bin path).
   private readonly cellCounts: UintStorage;
-  private readonly cellParticles: UintStorage;
+  private readonly cellStart: UintStorage;
+  private readonly cellFill: UintStorage;
+  private readonly sortedParticles: UintStorage;
   private cellsEnabled = false;
 
   private readonly kZeroForces: Kernel;
@@ -221,7 +224,9 @@ export class GpuEngine {
   private readonly kForcesWCA: Kernel;
   private readonly kForcesLJ: Kernel;
   private readonly kClearCells: Kernel;
-  private readonly kBinParticles: Kernel;
+  private readonly kCountCells: Kernel;
+  private readonly kPrefixSum: Kernel;
+  private readonly kScatter: Kernel;
   private readonly kForcesCellWCA: Kernel;
   private readonly kForcesCellLJ: Kernel;
   private readonly kThermostat: Kernel;
@@ -296,12 +301,14 @@ export class GpuEngine {
     this.refPositions = vec3Array(new Float32Array(n * 3));
 
     // Cell-list buffers sized for the FINEST grid (WCA cutoff ⇒ most cells); coarser
-    // levels (bigger cutoff) use a subset. Box is fixed per engine (GPU has no barostat).
+    // levels (bigger cutoff) use a contiguous subset (cells 0..cpa³−1). Box fixed per engine.
     const rcFinest = TWO_POW_1_6 * this.species.sigma;
     const cpaMax = Math.max(1, Math.floor(config.boxLength / rcFinest));
     const nCellsAlloc = cpaMax * cpaMax * cpaMax;
     this.cellCounts = uintArray(new Uint32Array(nCellsAlloc)).toAtomic();
-    this.cellParticles = uintArray(new Uint32Array(nCellsAlloc * CELL_CAPACITY));
+    this.cellStart = uintArray(new Uint32Array(nCellsAlloc));
+    this.cellFill = uintArray(new Uint32Array(nCellsAlloc)).toAtomic();
+    this.sortedParticles = uintArray(new Uint32Array(Math.max(1, n)));
 
     this.applyConfigUniforms();
 
@@ -472,19 +479,35 @@ export class GpuEngine {
       );
     }, n);
 
-    // --- Cell-list neighbour search (spatial hash + atomic bins) ---
+    // --- Cell-list neighbour search (counting sort: count → prefix-sum → scatter → traverse) ---
     this.kClearCells = kernel(() => {
       atomicStore(this.cellCounts.element(instanceIndex), uint(0));
+      atomicStore(this.cellFill.element(instanceIndex), uint(0));
     }, nCellsAlloc);
 
-    this.kBinParticles = kernel(() => {
-      const ciF = this.cellIndexFloat(this.positions.element(instanceIndex)).toVar();
-      // atomicAdd returns the previous count = this particle's slot in the bin.
-      const slotF = fl(atomicAdd(this.cellCounts.element(uint(ciF)), uint(1))).toVar();
-      If(slotF.lessThan(float(CELL_CAPACITY)), () => {
-        const dst = uint(ciF.mul(CELL_CAPACITY).add(slotF));
-        this.cellParticles.element(dst).assign(instanceIndex);
+    // Count particles per cell (atomic). cellCounts is left intact for the force traversal.
+    this.kCountCells = kernel(() => {
+      const ci = uv(this.cellIndexFloat(this.positions.element(instanceIndex)));
+      atomicAdd(this.cellCounts.element(ci), uint(1));
+    }, n);
+
+    // Exclusive prefix sum on a single thread: cellStart[c] = Σ cellCounts[0..c-1]. The unused
+    // tail cells (count 0) are harmless. Cheap (runs once/step) vs the O(N·neighbours) force pass.
+    this.kPrefixSum = kernel(() => {
+      const running = uint(0).toVar();
+      Loop(nCellsAlloc, ({ i: c }) => {
+        this.cellStart.element(c).assign(running);
+        running.addAssign(uv(atomicLoad(this.cellCounts.element(c))));
       });
+    }, 1);
+
+    // Scatter each particle into its sorted slot: cellStart[ci] + (running per-cell offset).
+    this.kScatter = kernel(() => {
+      const ci = uv(this.cellIndexFloat(this.positions.element(instanceIndex)));
+      const slot = uv(this.cellStart.element(ci)).add(
+        uv(atomicAdd(this.cellFill.element(ci), uint(1))),
+      );
+      this.sortedParticles.element(slot).assign(instanceIndex);
     }, n);
 
     this.kForcesCellWCA = this.buildCellForceKernel(false);
@@ -825,23 +848,25 @@ export class GpuEngine {
     return this.flatIndex(cx, cy, cz, cpa);
   }
 
-  /** Build a cell-list pair-force kernel (LJ shifted-force, or WCA when `isLJ` is false). */
+  /**
+   * Sorted-particle cell-list force kernel: per atom, sweep the 27 neighbour cells and traverse
+   * each cell's contiguous run of `sortedParticles[cellStart[c] .. +cellCounts[c]]`. Multi-species
+   * (Lorentz-Berthelot) shifted-force LJ (or WCA) + Coulomb (Wolf DSF) — identical pair math to the
+   * brute kernel, so the result matches it exactly while being O(N) instead of O(N²).
+   */
   private buildCellForceKernel(isLJ: boolean): Kernel {
     const n = this.atomCount;
+    const C6 = 0.16 ** 3;
+    const C12 = 0.16 ** 6;
+    const TWO_PI = 2 / Math.sqrt(Math.PI);
     return kernel(() => {
       const idx = instanceIndex;
       const pi = this.positions.element(idx).toVar();
+      const pmi = this.params.element(idx).toVar();
       const fi = vec3(0).toVar();
       const peSum = float(0).toVar();
       const virSum = float(0).toVar();
       const cpa = this.uCellsPerAxis;
-
-      const rc = sqrt(this.uRc2).toVar();
-      const c2 = this.uSigma2.div(this.uRc2);
-      const c6 = c2.mul(c2).mul(c2);
-      const c12 = c6.mul(c6);
-      const fAtRc = float(24).mul(this.uEpsilon).mul(c12.mul(2).sub(c6)).div(rc);
-      const vAtRc = float(4).mul(this.uEpsilon).mul(c12.sub(c6));
 
       const rel = pi.add(vec3(this.uHalfBox)).div(this.uCellSize);
       const cx = fl(clamp(floor(rel.x), float(0), cpa.sub(1))).toVar();
@@ -854,53 +879,89 @@ export class GpuEngine {
           const ncy = fl(mod(cy.add(float(b).sub(1)).add(cpa), cpa));
           Loop(3, ({ i: cIdx }) => {
             const ncz = fl(mod(cz.add(float(cIdx).sub(1)).add(cpa), cpa));
-            const ncellF = this.flatIndex(ncx, ncy, ncz, cpa).toVar();
-            const baseF = ncellF.mul(CELL_CAPACITY).toVar();
-            const cntF = fl(atomicLoad(this.cellCounts.element(uint(ncellF)))).toVar();
-            // Fixed-bound loop with a guard (avoids a dynamic loop count); CELL_CAPACITY
-            // exceeds realistic cell occupancy, so guarded iterations are cheap skips.
-            Loop(CELL_CAPACITY, ({ i: s }) => {
-              If(float(s).lessThan(cntF), () => {
-                const j = this.cellParticles.element(uint(baseF.add(float(s)))).toVar();
-                If(float(j).notEqual(float(idx)), () => {
-                  const d = pi.sub(this.positions.element(j)).toVar();
-                  If(this.uPeriodic.greaterThan(0.5), () => {
-                    d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
-                  });
-                  const r2 = d.dot(d).toVar();
-                  If(r2.greaterThan(float(1e-12)), () => {
-                    If(r2.lessThan(this.uRc2), () => {
-                      const inv2 = this.uSigma2.div(r2);
+            const ncell = uv(this.flatIndex(ncx, ncy, ncz, cpa));
+            const start = uv(this.cellStart.element(ncell)).toVar();
+            const cnt = uv(atomicLoad(this.cellCounts.element(ncell))).toVar();
+            // Dynamic loop over exactly the particles in this cell (no fixed capacity).
+            Loop(cnt as never, ({ i: s }: { i: Node }) => {
+              const j = uv(this.sortedParticles.element(start.add(uv(s)))).toVar();
+              If(j.notEqual(idx), () => {
+                const d = pi.sub(this.positions.element(j)).toVar();
+                If(this.uPeriodic.greaterThan(0.5), () => {
+                  d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
+                });
+                const r2 = d.dot(d).toVar();
+                const pj = this.params.element(j);
+                const sigma = pmi.x.add(pj.x).mul(0.5);
+                const eps = sqrt(pmi.y.mul(pj.y));
+                const qq = pmi.z.mul(pj.z);
+                If(r2.greaterThan(float(1e-12)), () => {
+                  const r = sqrt(r2).toVar();
+                  const fOverR = float(0).toVar();
+                  if (isLJ) {
+                    const rcLj = sigma.mul(2.5);
+                    If(r2.lessThan(rcLj.mul(rcLj)), () => {
+                      const inv2 = sigma.mul(sigma).div(r2);
                       const inv6 = inv2.mul(inv2).mul(inv2);
                       const inv12 = inv6.mul(inv6);
-                      if (isLJ) {
-                        const r = sqrt(r2);
-                        const fRadial = float(24)
-                          .mul(this.uEpsilon)
-                          .mul(inv12.mul(2).sub(inv6))
-                          .div(r);
-                        const fOverR = fRadial.sub(fAtRc).div(r);
-                        const vv = float(4).mul(this.uEpsilon).mul(inv12.sub(inv6));
-                        fi.addAssign(d.mul(fOverR));
-                        peSum.addAssign(vv.sub(vAtRc).add(r.sub(rc).mul(fAtRc)).mul(0.5));
-                        virSum.addAssign(fOverR.mul(r2).mul(0.5));
-                      } else {
-                        const fOverR = float(24)
-                          .mul(this.uEpsilon)
-                          .mul(inv12.mul(2).sub(inv6))
-                          .div(r2);
-                        fi.addAssign(d.mul(fOverR));
+                      const fAtRc = float(24)
+                        .mul(eps)
+                        .mul(C12 * 2 - C6)
+                        .div(rcLj);
+                      const vAtRc = float(4)
+                        .mul(eps)
+                        .mul(C12 - C6);
+                      const fRadial = float(24).mul(eps).mul(inv12.mul(2).sub(inv6)).div(r);
+                      fOverR.addAssign(fRadial.sub(fAtRc).div(r));
+                      peSum.addAssign(
+                        float(4)
+                          .mul(eps)
+                          .mul(inv12.sub(inv6))
+                          .sub(vAtRc)
+                          .add(r.sub(rcLj).mul(fAtRc))
+                          .mul(0.5),
+                      );
+                    });
+                    If(this.uUseCoulomb.greaterThan(0.5), () => {
+                      If(r2.lessThan(this.uRcC2), () => {
+                        const erfcR = erfcApprox(this.uAlpha.mul(r));
+                        const expR = exp(this.uAlpha.mul(this.uAlpha).mul(r2).mul(-1));
+                        fOverR.addAssign(
+                          this.uKe
+                            .mul(qq)
+                            .mul(
+                              erfcR
+                                .div(r2)
+                                .add(float(TWO_PI).mul(this.uAlpha).mul(expR).div(r))
+                                .sub(this.uShiftC),
+                            )
+                            .div(r),
+                        );
                         peSum.addAssign(
-                          float(4)
-                            .mul(this.uEpsilon)
-                            .mul(inv12.sub(inv6))
-                            .add(this.uEpsilon)
+                          this.uKe
+                            .mul(qq)
+                            .mul(
+                              erfcR
+                                .div(r)
+                                .sub(this.uErfcRc.div(this.uRcC))
+                                .add(this.uShiftC.mul(r.sub(this.uRcC))),
+                            )
                             .mul(0.5),
                         );
-                        virSum.addAssign(fOverR.mul(r2).mul(0.5));
-                      }
+                      });
                     });
-                  });
+                  } else {
+                    const rcW = sigma.mul(TWO_POW_1_6);
+                    If(r2.lessThan(rcW.mul(rcW)), () => {
+                      const inv2 = sigma.mul(sigma).div(r2);
+                      const inv6 = inv2.mul(inv2).mul(inv2);
+                      const inv12 = inv6.mul(inv6);
+                      fOverR.addAssign(float(24).mul(eps).mul(inv12.mul(2).sub(inv6)).div(r2));
+                      peSum.addAssign(float(4).mul(eps).mul(inv12.sub(inv6)).add(eps).mul(0.5));
+                    });
+                  }
+                  fi.addAssign(d.mul(fOverR));
+                  virSum.addAssign(fOverR.mul(r2).mul(0.5));
                 });
               });
             });
@@ -965,19 +1026,17 @@ export class GpuEngine {
    * cell grid (cells per axis ≥ cutoff). Cell-lists engage only when ≥ 3 cells/axis fit.
    */
   private updateCutoff(): void {
-    // GPU has no Coulomb kernel; L3 runs the LJ part only (2.5σ cutoff).
     const factor = this.config.level === "L2" || this.config.level === "L3" ? 2.5 : TWO_POW_1_6;
     const rc = factor * this.species.sigma;
     this.uRc2.value = rc * rc;
 
     const L = this.config.boxLength;
     const cpa = Math.floor(L / rc);
-    // The GPU cell-list force kernel is numerically incorrect (the spatial-hash binning is
-    // verified correct, but the cell-traversal force pass produces phantom close-pair forces).
-    // It stays disabled; the brute O(N²) kernel is the proven path and, being fully parallel,
-    // still handles thousands of atoms. Re-enabling needs the force kernel rewritten + a
-    // multi-species/Coulomb pass. Validate any future fix in a real browser (mapAsync readback).
-    this.cellsEnabled = false;
+    // O(N) sorted-particle cell list for monatomic, periodic systems with ≥3 cells/axis (so the
+    // 27-cell stencil maps to distinct cells under the mod wrap, and the cutoff ≤ cell size). The
+    // molecular path keeps the brute kernel (it needs intramolecular exclusions); reflective walls
+    // keep brute too (the cell grid assumes periodic wrapping).
+    this.cellsEnabled = !this.molecular && this.config.boundary === "periodic" && cpa >= 3;
     const usedCpa = Math.max(1, cpa);
     this.uCellsPerAxis.value = usedCpa;
     this.uCellSize.value = L / usedCpa;
@@ -1001,9 +1060,12 @@ export class GpuEngine {
     }
     const isLJ = this.config.level === "L2" || this.config.level === "L3";
     if (this.cellsEnabled) {
+      // counting sort (clear → count → prefix-sum → scatter) then the O(N) traversal.
       return [
         this.kClearCells,
-        this.kBinParticles,
+        this.kCountCells,
+        this.kPrefixSum,
+        this.kScatter,
         isLJ ? this.kForcesCellLJ : this.kForcesCellWCA,
       ];
     }
