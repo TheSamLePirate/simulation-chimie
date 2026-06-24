@@ -73,9 +73,9 @@ export interface SimConfig {
    * the transition (hot gas → cool → condense; cold liquid → heat → boil). Defaults to
    * `temperature`.
    */
-  readonly initialTemperature?: number;
+  readonly initialTemperature?: number | undefined;
   /** Monatomic only: start as a centred liquid-density clump (a droplet) ⇒ heating evaporates it. */
-  readonly initialClump?: boolean;
+  readonly initialClump?: boolean | undefined;
   /** Integration timestep in ps. */
   readonly timestep: number;
   readonly level: AccuracyLevel;

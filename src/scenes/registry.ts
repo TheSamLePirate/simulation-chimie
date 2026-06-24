@@ -12,6 +12,10 @@ export interface Scene {
 
 const make = (overrides: Partial<SimConfig>): SimConfig => ({
   ...DEFAULT_CONFIG,
+  // Reset optional fields so a scene never inherits them from the previously-loaded scene
+  // (the store merges configs): e.g. a clump start must not leak into a tight-box ionic crystal.
+  initialTemperature: undefined,
+  initialClump: undefined,
   ...overrides,
 });
 
