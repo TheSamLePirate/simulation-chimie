@@ -10,16 +10,22 @@ import { BOLTZMANN_KJ_PER_MOL_K } from "./units";
 export function placeOnLattice(
   state: SimState,
   box: Box,
-  options: { jitter?: number; rng?: Rng } = {},
+  options: { jitter?: number; rng?: Rng; spacing?: number | undefined } = {},
 ): void {
   const { count, positions } = state;
   if (count === 0) return;
 
   const perSide = Math.ceil(Math.cbrt(count));
   const [lx, ly, lz] = box.lengths;
-  const sx = lx / perSide;
-  const sy = ly / perSide;
-  const sz = lz / perSide;
+  // With `spacing`, build a centred cube at that lattice spacing (a clump with vacuum around it,
+  // e.g. a liquid droplet); otherwise fill the whole box.
+  const span = options.spacing ? options.spacing * perSide : 0;
+  const sx = options.spacing ?? lx / perSide;
+  const sy = options.spacing ?? ly / perSide;
+  const sz = options.spacing ?? lz / perSide;
+  const ox0 = options.spacing ? -0.5 * span : -0.5 * lx;
+  const oy0 = options.spacing ? -0.5 * span : -0.5 * ly;
+  const oz0 = options.spacing ? -0.5 * span : -0.5 * lz;
   const jitter = options.jitter ?? 0;
   const rng = options.rng;
 
@@ -27,9 +33,9 @@ export function placeOnLattice(
   for (let ix = 0; ix < perSide && placed < count; ix++) {
     for (let iy = 0; iy < perSide && placed < count; iy++) {
       for (let iz = 0; iz < perSide && placed < count; iz++) {
-        let x = -0.5 * lx + (ix + 0.5) * sx;
-        let y = -0.5 * ly + (iy + 0.5) * sy;
-        let z = -0.5 * lz + (iz + 0.5) * sz;
+        let x = ox0 + (ix + 0.5) * sx;
+        let y = oy0 + (iy + 0.5) * sy;
+        let z = oz0 + (iz + 0.5) * sz;
         if (jitter > 0 && rng) {
           x += jitter * sx * (rng.next() - 0.5);
           y += jitter * sy * (rng.next() - 0.5);

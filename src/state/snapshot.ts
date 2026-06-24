@@ -1,4 +1,5 @@
 import { CpuEngine } from "../engine/cpu/CpuEngine";
+import type { SimConfig } from "../engine/types";
 import type { Snapshot } from "./schema";
 
 /** Capture a full, restorable snapshot of a CPU engine (config + serialised state). */
@@ -17,7 +18,7 @@ export function captureSnapshot(engine: CpuEngine): Snapshot {
 
 /** Rebuild a CPU engine from a snapshot and restore its exact state. */
 export function restoreSnapshot(snapshot: Snapshot): CpuEngine {
-  const engine = new CpuEngine(snapshot.config);
+  const engine = new CpuEngine(snapshot.config as SimConfig);
   engine.loadState(
     snapshot.positions,
     snapshot.velocities,

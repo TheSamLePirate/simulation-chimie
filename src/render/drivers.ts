@@ -85,8 +85,9 @@ class CpuDriver implements SimDriver {
 
   constructor(config: SimConfig) {
     this.engine = new CpuEngine(config);
-    // Ball-and-stick scale for molecular systems (so bonds show between atoms).
-    const radiusScale = this.engine.bonds ? 0.42 : 1;
+    // Ball-and-stick scale for molecular systems (so bonds show); smaller monatomic spheres
+    // so liquid/vapour surfaces and crystal order are visible (not one solid mass).
+    const radiusScale = this.engine.bonds ? 0.42 : 0.78;
     this.particles = new ParticleSystem(this.engine.state, this.engine.species, radiusScale);
     this.bonds = this.engine.bonds ? new BondSystem(this.engine.bonds) : null;
     this.cell = buildCell(this.engine.box.lengths);

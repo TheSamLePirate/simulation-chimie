@@ -110,6 +110,8 @@ export class CpuEngine implements SimulationEngine {
   private configure(): void {
     const c = this.config;
     this.box = createBox(c.boxLength, c.boundary);
+    // Velocities start at initialTemperature; the thermostat then drives toward temperature.
+    const initT = c.initialTemperature ?? c.temperature;
 
     // L4 atomistic water / L5 rigid water / L7 rigid-water droplet (surface tension).
     if (c.level === "L4" || c.level === "L5" || c.level === "L7") {
@@ -117,7 +119,7 @@ export class CpuEngine implements SimulationEngine {
       const rng = new Rng(c.seed);
       // L7: pack at liquid spacing in a centred clump ⇒ vacuum around ⇒ a droplet forms.
       const spacing = c.level === "L7" ? 0.31 : undefined;
-      const sys = buildWaterSystem(c.particleCount, this.box, c.temperature, rng, spacing);
+      const sys = buildWaterSystem(c.particleCount, this.box, initT, rng, spacing);
       this.state = sys.state;
       this.species = sys.species;
       this.force = new WaterForce(sys.topology, rigid);
@@ -147,7 +149,7 @@ export class CpuEngine implements SimulationEngine {
       const nOil = Math.round(c.particleCount * c.fractionSecond);
       const nWater = Math.max(0, c.particleCount - nOil);
       const rng = new Rng(c.seed);
-      const sys = buildOilWaterSystem(nWater, nOil, this.box, c.temperature, rng);
+      const sys = buildOilWaterSystem(nWater, nOil, this.box, initT, rng);
       this.state = sys.state;
       this.species = sys.species;
       this.force = new MolecularForce(sys.bonds, sys.angles);
@@ -170,7 +172,7 @@ export class CpuEngine implements SimulationEngine {
     if (c.level === "L8") {
       const crystalSide = Math.max(2, Math.round(Math.cbrt(c.particleCount)));
       const rng = new Rng(c.seed);
-      const sys = buildSaltWaterSystem(this.box, c.temperature, rng, crystalSide);
+      const sys = buildSaltWaterSystem(this.box, initT, rng, crystalSide);
       this.state = sys.state;
       this.species = sys.species;
       this.force = new MolecularForce(sys.bonds, sys.angles);
@@ -206,8 +208,11 @@ export class CpuEngine implements SimulationEngine {
 
   private initialise(): void {
     const rng = new Rng(this.config.seed);
-    placeOnLattice(this.state, this.box, { jitter: 0.05, rng });
-    setMaxwellBoltzmannVelocities(this.state, this.species, this.config.temperature, rng);
+    const initT = this.config.initialTemperature ?? this.config.temperature;
+    // `initialClump` packs a centred liquid-density droplet (≈ argon spacing) ⇒ heating evaporates it.
+    const spacing = this.config.initialClump ? 0.37 : undefined;
+    placeOnLattice(this.state, this.box, { jitter: 0.05, rng, spacing });
+    setMaxwellBoltzmannVelocities(this.state, this.species, initT, rng);
     this.thermostatRng = new Rng(this.config.seed ^ 0x2c1b3c6d);
     this.last = this.force.compute(this.state, this.box, this.species);
     this.stepCount = 0;

@@ -65,8 +65,17 @@ export interface SimConfig {
   /** Cubic cell side in nm. */
   readonly boxLength: number;
   readonly boundary: Box["boundary"];
-  /** Target / initial temperature in K. */
+  /** Thermostat target temperature in K. */
   readonly temperature: number;
+  /**
+   * Initial temperature for the Maxwell-Boltzmann velocities (K). When it differs from
+   * `temperature`, the system is driven toward `temperature` by the thermostat — so you SEE
+   * the transition (hot gas → cool → condense; cold liquid → heat → boil). Defaults to
+   * `temperature`.
+   */
+  readonly initialTemperature?: number;
+  /** Monatomic only: start as a centred liquid-density clump (a droplet) ⇒ heating evaporates it. */
+  readonly initialClump?: boolean;
   /** Integration timestep in ps. */
   readonly timestep: number;
   readonly level: AccuracyLevel;

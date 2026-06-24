@@ -209,7 +209,12 @@ export class GpuEngine {
       boundary: "periodic" as const,
     };
     placeOnLattice(init, box, { jitter: 0.05, rng });
-    setMaxwellBoltzmannVelocities(init, this.speciesList, config.temperature, rng);
+    setMaxwellBoltzmannVelocities(
+      init,
+      this.speciesList,
+      config.initialTemperature ?? config.temperature,
+      rng,
+    );
 
     // Per-atom (σ, ε, charge, 1/mass) packed into a vec4, + CPU mass / render arrays.
     const param = new Float32Array(n * 4);
@@ -226,7 +231,7 @@ export class GpuEngine {
       this.renderColors[3 * i] = ((s.color >> 16) & 0xff) / 255;
       this.renderColors[3 * i + 1] = ((s.color >> 8) & 0xff) / 255;
       this.renderColors[3 * i + 2] = (s.color & 0xff) / 255;
-      this.renderRadii[i] = s.radius;
+      this.renderRadii[i] = s.radius * 0.78; // match the CPU monatomic render scale
     }
     this.params = vec4Array(param);
 

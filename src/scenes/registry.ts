@@ -29,15 +29,20 @@ export const SCENES: readonly Scene[] = [
   },
   {
     id: "lj-liquid",
-    label: "Liquide Lennard-Jones",
-    description: "Condensation van der Waals à basse température (L2)",
+    label: "Liquide (cohésion van der Waals)",
+    description:
+      "L'argon froid se tient en gouttelette liquide (avec une surface libre) au lieu de se disperser comme un gaz parfait — la cohésion de Lennard-Jones",
     config: make({
       level: "L2",
       speciesName: "ARGON",
-      particleCount: 400,
-      boxLength: 4.2,
-      temperature: 110,
-      timestep: 0.004,
+      particleCount: 700,
+      boxLength: 6, // vacuum around the droplet ⇒ a clear liquid surface
+      initialClump: true, // start packed; cohesion holds it as a liquid drop
+      initialTemperature: 130, // warm ⇒ it jiggles and rounds
+      temperature: 90, // a cohesive liquid (below T_c)
+      timestep: 0.005,
+      thermostat: "berendsen",
+      thermostatTau: 0.4,
     }),
   },
   {
@@ -62,17 +67,18 @@ export const SCENES: readonly Scene[] = [
   },
   {
     id: "crystallise",
-    label: "Cristallisation (NVT)",
-    description: "Refroidissement Berendsen sous le point de fusion ⇒ ordre cristallin",
+    label: "Cristallisation (liquide → solide)",
+    description: "Argon liquide trempé bien sous le point de fusion ⇒ il gèle en cristal ordonné",
     config: make({
       level: "L2",
       speciesName: "ARGON",
-      particleCount: 256,
-      boxLength: 2.2,
-      temperature: 40,
-      timestep: 0.003,
+      particleCount: 500,
+      boxLength: 2.9, // near solid density so the lattice can pack
+      initialTemperature: 110, // start liquid
+      temperature: 35, // just below freezing ⇒ orders (not a glassy quench)
+      timestep: 0.004,
       thermostat: "berendsen",
-      thermostatTau: 0.3,
+      thermostatTau: 1.2, // slow anneal ⇒ atoms have time to order
     }),
   },
   {
@@ -173,17 +179,20 @@ export const SCENES: readonly Scene[] = [
   },
   {
     id: "boil",
-    label: "Chauffage / gaz (NVT)",
-    description: "Thermostat chaud ⇒ le liquide s'évapore en gaz",
+    label: "Ébullition (liquide → gaz)",
+    description:
+      "Gouttelette d'argon froide chauffée bien au-dessus de l'ébullition ⇒ elle s'évapore et le gaz remplit la boîte",
     config: make({
       level: "L2",
       speciesName: "ARGON",
-      particleCount: 300,
-      boxLength: 4,
-      temperature: 280,
-      timestep: 0.004,
+      particleCount: 500,
+      boxLength: 6, // room for the gas to expand into
+      initialTemperature: 55, // start as a cold condensed droplet
+      temperature: 250, // heat well above boiling ⇒ evaporates
+      initialClump: true, // start packed as a droplet (vacuum around)
+      timestep: 0.005,
       thermostat: "berendsen",
-      thermostatTau: 0.4,
+      thermostatTau: 0.5,
     }),
   },
 ];
