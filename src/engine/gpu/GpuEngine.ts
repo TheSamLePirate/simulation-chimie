@@ -591,9 +591,11 @@ export class GpuEngine {
 
     const L = this.config.boxLength;
     const cpa = Math.floor(L / rc);
-    // NOTE: the GPU cell-list path is disabled — it is numerically incorrect (causes
-    // blow-ups) and could not be validated headless. The brute O(N²) kernel is the proven,
-    // correct GPU force path; on the GPU its parallelism still handles thousands of atoms.
+    // The GPU cell-list force kernel is numerically incorrect (the spatial-hash binning is
+    // verified correct, but the cell-traversal force pass produces phantom close-pair forces).
+    // It stays disabled; the brute O(N²) kernel is the proven path and, being fully parallel,
+    // still handles thousands of atoms. Re-enabling needs the force kernel rewritten + a
+    // multi-species/Coulomb pass. Validate any future fix in a real browser (mapAsync readback).
     this.cellsEnabled = false;
     const usedCpa = Math.max(1, cpa);
     this.uCellsPerAxis.value = usedCpa;
