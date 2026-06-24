@@ -17,7 +17,7 @@ export class ParticleSystem {
   private readonly species: readonly Species[];
   private lastMode: ColorMode | null = null;
 
-  constructor(state: SimState, species: readonly Species[]) {
+  constructor(state: SimState, species: readonly Species[], radiusScale = 1) {
     this.species = species;
     const geometry = new THREE.IcosahedronGeometry(1, 3);
     const material = new THREE.MeshStandardNodeMaterial({
@@ -29,7 +29,9 @@ export class ParticleSystem {
     this.mesh.frustumCulled = false;
 
     this.radii = new Float32Array(state.count);
-    for (let i = 0; i < state.count; i++) this.radii[i] = species[state.typeIds[i]].radius;
+    for (let i = 0; i < state.count; i++) {
+      this.radii[i] = species[state.typeIds[i]].radius * radiusScale;
+    }
 
     this.applySpeciesColors(state);
     this.update(state, "species");

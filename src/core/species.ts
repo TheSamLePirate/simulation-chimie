@@ -96,6 +96,30 @@ export const WATER_H: Species = {
   radius: 0.06,
 };
 
+/**
+ * United-atom alkane sites (TraPPE) for "oil": a CH3–CH2–CH3 (propane-like) hydrophobic
+ * molecule. No charge ⇒ it doesn't mix with polar water; lower density ⇒ it floats.
+ */
+export const OIL_CH3: Species = {
+  name: "CH₃",
+  mass: 15.035,
+  sigma: 0.375,
+  epsilon: 0.8148, // 98 K · k_B
+  charge: 0,
+  color: 0xf6c177,
+  radius: 0.2,
+};
+
+export const OIL_CH2: Species = {
+  name: "CH₂",
+  mass: 14.027,
+  sigma: 0.395,
+  epsilon: 0.3825, // 46 K · k_B
+  charge: 0,
+  color: 0xe8a13a,
+  radius: 0.21,
+};
+
 export const SPECIES_LIBRARY = {
   ARGON,
   NEON,
@@ -105,4 +129,6 @@ export const SPECIES_LIBRARY = {
   CHLORIDE,
   WATER_O,
   WATER_H,
+  OIL_CH3,
+  OIL_CH2,
 } as const;

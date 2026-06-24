@@ -36,6 +36,11 @@ export const ACCURACY_LEVELS = {
     label: "L5 · Eau rigide",
     description: "Eau rigide (contraintes SHAKE/RATTLE), grand pas de temps (CPU)",
   },
+  L6: {
+    id: "L6",
+    label: "L6 · Mélange moléculaire",
+    description: "Eau atomistique + huile (alcane) : démixtion hydrophobe réelle (CPU)",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

@@ -8,6 +8,7 @@ import type { AccuracyLevel, Observables, SimConfig } from "../engine/types";
 import type { Snapshot } from "../state/schema";
 import { captureSnapshot } from "../state/snapshot";
 import type { ColorMode } from "../state/store";
+import { BondSystem } from "./BondSystem";
 import { GpuParticleSystem } from "./GpuParticleSystem";
 import { ParticleSystem } from "./ParticleSystem";
 
@@ -78,15 +79,20 @@ class CpuDriver implements SimDriver {
   readonly group = new THREE.Group();
   private readonly engine: CpuEngine;
   private readonly particles: ParticleSystem;
+  private readonly bonds: BondSystem | null;
   private readonly cell: THREE.LineSegments;
   private readonly initialBoxLength: number;
 
   constructor(config: SimConfig) {
     this.engine = new CpuEngine(config);
-    this.particles = new ParticleSystem(this.engine.state, this.engine.species);
+    // Ball-and-stick scale for molecular systems (so bonds show between atoms).
+    const radiusScale = this.engine.bonds ? 0.42 : 1;
+    this.particles = new ParticleSystem(this.engine.state, this.engine.species, radiusScale);
+    this.bonds = this.engine.bonds ? new BondSystem(this.engine.bonds) : null;
     this.cell = buildCell(this.engine.box.lengths);
     this.initialBoxLength = this.engine.box.lengths[0];
     this.group.add(this.particles.mesh, this.cell);
+    if (this.bonds) this.group.add(this.bonds.mesh);
   }
 
   /** Keep the cell wireframe in sync with the (possibly NPT-rescaled) box. */
@@ -103,12 +109,14 @@ class CpuDriver implements SimDriver {
   advance(playing: boolean, substeps: number, colorMode: ColorMode): void {
     if (playing) this.engine.step(substeps);
     this.particles.update(this.engine.state, colorMode);
+    this.bonds?.update(this.engine.state);
     this.syncCell();
   }
 
   stepOnce(substeps: number, colorMode: ColorMode): void {
     this.engine.step(substeps);
     this.particles.update(this.engine.state, colorMode);
+    this.bonds?.update(this.engine.state);
     this.syncCell();
   }
 
@@ -156,6 +164,7 @@ class CpuDriver implements SimDriver {
 
   dispose(): void {
     this.particles.dispose();
+    this.bonds?.dispose();
     disposeCell(this.cell);
   }
 }

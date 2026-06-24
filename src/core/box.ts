@@ -6,6 +6,16 @@ export function createBox(length: number, boundary: BoundaryKind = "periodic"): 
   return { lengths, boundary };
 }
 
+/** Build a (possibly non-cubic) cell with explicit per-axis lengths (nm). */
+export function createBoxXYZ(
+  lx: number,
+  ly: number,
+  lz: number,
+  boundary: BoundaryKind = "periodic",
+): Box {
+  return { lengths: [lx, ly, lz], boundary };
+}
+
 export function volume(box: Box): number {
   return box.lengths[0] * box.lengths[1] * box.lengths[2];
 }

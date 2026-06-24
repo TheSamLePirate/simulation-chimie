@@ -1,13 +1,15 @@
 import { applyBoundary } from "../../core/boundary";
-import { createBox, volume } from "../../core/box";
+import { createBox, createBoxXYZ, volume } from "../../core/box";
 import { type DistanceConstraints, rattle, shake } from "../../core/constraints";
 import { IonicForce } from "../../core/forces/ionic";
 import { LennardJonesCellForce } from "../../core/forces/lennardJonesCell";
+import { MolecularForce } from "../../core/forces/molecular";
 import { NoForce } from "../../core/forces/none";
 import { WaterForce } from "../../core/forces/water";
 import { WcaForce } from "../../core/forces/wca";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
 import { velocityVerletStep } from "../../core/integrators/velocityVerlet";
+import { buildOilWaterSystem } from "../../core/mixture";
 import { kineticEnergy, pressure, temperature } from "../../core/observables";
 import { Rng } from "../../core/rng";
 import { SPECIES_LIBRARY } from "../../core/species";
@@ -35,8 +37,9 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
       return new IonicForce();
     case "L4":
     case "L5":
-      // Atomistic water needs topology; it is built in CpuEngine.configure().
-      throw new Error("water force is built in configure()");
+    case "L6":
+      // Molecular systems need topology; they are built in CpuEngine.configure().
+      throw new Error("molecular force is built in configure()");
   }
 }
 
@@ -51,6 +54,23 @@ function buildTypeIds(count: number, fraction: number, seed: number): Uint8Array
 }
 
 /**
+ * Alternating (rock-salt) species assignment matching `placeOnLattice`'s ix→iy→iz fill
+ * order: opposite charges become nearest neighbours, so an ionic crystal starts stable
+ * instead of exploding from like-charge contacts.
+ */
+function buildRockSaltTypeIds(count: number): Uint8Array {
+  const ids = new Uint8Array(count);
+  const perSide = Math.ceil(Math.cbrt(count));
+  for (let p = 0; p < count; p++) {
+    const iz = p % perSide;
+    const iy = Math.floor(p / perSide) % perSide;
+    const ix = Math.floor(p / (perSide * perSide));
+    ids[p] = (ix + iy + iz) & 1;
+  }
+  return ids;
+}
+
+/**
  * CPU reference engine: the deterministic correctness oracle for the whole project.
  * Float64 throughout for clean energy conservation. Intentionally simple (O(N²) forces)
  * — the GPU engine (P2) is the performance path; this one is the source of truth.
@@ -60,6 +80,8 @@ export class CpuEngine implements SimulationEngine {
   state: SimState;
   box: Box;
   species: readonly Species[];
+  /** Bonded atom pairs for molecular rendering (null for monatomic systems). */
+  bonds: { i: Int32Array; j: Int32Array } | null = null;
 
   private force: ForceModel;
   private last: ForceResult = { potentialEnergy: 0, virial: 0 };
@@ -94,6 +116,7 @@ export class CpuEngine implements SimulationEngine {
       this.state = sys.state;
       this.species = sys.species;
       this.force = new WaterForce(sys.topology, rigid);
+      this.bonds = { i: sys.topology.bondI, j: sys.topology.bondJ };
       if (rigid) {
         this.constraints = sys.constraints;
         this.refPositions = new Float64Array(this.state.positions.length);
@@ -111,11 +134,44 @@ export class CpuEngine implements SimulationEngine {
       return;
     }
 
+    // L6 — atomistic oil/water mixture: rigid water + flexible alkane oil, hydrophobic
+    // demixing. particleCount = total molecules; fractionSecond = oil fraction.
+    if (c.level === "L6") {
+      // Tall column so gravity makes the water/oil layering obvious along y.
+      this.box = createBoxXYZ(c.boxLength, c.boxLength * 2.5, c.boxLength, c.boundary);
+      const nOil = Math.round(c.particleCount * c.fractionSecond);
+      const nWater = Math.max(0, c.particleCount - nOil);
+      const rng = new Rng(c.seed);
+      const sys = buildOilWaterSystem(nWater, nOil, this.box, c.temperature, rng);
+      this.state = sys.state;
+      this.species = sys.species;
+      this.force = new MolecularForce(sys.bonds, sys.angles);
+      this.bonds = sys.renderBonds;
+      this.constraints = sys.constraints;
+      this.refPositions = new Float64Array(this.state.positions.length);
+      this.invMass = new Float64Array(this.state.count);
+      for (let a = 0; a < this.state.count; a++) {
+        this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
+      }
+      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
+      this.last = this.force.compute(this.state, this.box, this.species);
+      this.stepCount = 0;
+      this.elapsed = 0;
+      return;
+    }
+
+    this.bonds = null;
     this.species = c.secondSpeciesName
       ? [resolveSpecies(c.speciesName), resolveSpecies(c.secondSpeciesName)]
       : [resolveSpecies(c.speciesName)];
     const fraction = c.secondSpeciesName ? c.fractionSecond : 0;
-    this.state = createState(c.particleCount, buildTypeIds(c.particleCount, fraction, c.seed));
+    // Ionic binaries (L3) start on a rock-salt lattice so opposite charges neighbour;
+    // everything else uses a seeded random species mix.
+    const ionicCrystal = c.level === "L3" && c.secondSpeciesName !== null;
+    const typeIds = ionicCrystal
+      ? buildRockSaltTypeIds(c.particleCount)
+      : buildTypeIds(c.particleCount, fraction, c.seed);
+    this.state = createState(c.particleCount, typeIds);
     this.force = makeForceModel(c.level, c.crossScale);
     this.initialise();
   }
@@ -239,8 +295,8 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // Water (L4/L5) changes topology/atom count ⇒ full rebuild rather than a force swap.
-    if (level === "L4" || level === "L5") {
+    // Molecular levels (L4/L5/L6) change topology/atom count ⇒ full rebuild, not a swap.
+    if (level === "L4" || level === "L5" || level === "L6") {
       this.configure();
       return;
     }

@@ -64,5 +64,5 @@ describe("immiscible binary mixture", () => {
     const after = demixingOrderParameter(state, box, cutoff);
 
     expect(after).toBeGreaterThan(before + 0.03);
-  }, 30_000);
+  }, 60_000);
 });

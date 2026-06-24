@@ -24,6 +24,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P14** | Polish visuel (éclairage hémisphérique + tone mapping ACES) | ✅ |
 | **P15** | GPU cell-lists O(N) (spatial hash + atomics) + thermostat GPU | ✅ |
 | **P16** | Rendu de surface de fluide (metaballs écran-espace) | ✅ |
+| **P17** | Réalisme : molécules réelles + démixtion huile/eau + corrections physiques + GPU honnête | ✅ |
 
 ---
 
@@ -435,6 +436,35 @@ uniques) ⇒ l'électrostatique y serait non physique ; cela demanderait d'abord
 - **Validation :** typecheck + **E2E headless** qui exécute réellement les 3 passes (RenderTargets +
   `overrideMaterial` + `QuadMesh`) sans exception. **Le rendu visuel se vérifie en navigateur réel**
   (le canvas WebGPU n'est pas composé dans les captures headless).
+
+---
+
+## P17 — Réalisme, démixtion huile/eau, corrections physiques + GPU ✅ (retour utilisateur)
+
+**Déclencheur :** « aucun preset ne fonctionne, je veux voir les 2 phases se former, rends les vraies
+molécules, scientifiquement hyper correct + es-tu sûr du GPU ? » → mise en place d'une **boucle de
+vérification visuelle** (Playwright **headed** = le canvas WebGPU est composé ; le headless ne l'est pas).
+
+**Diagnostiqué visuellement :** le rendu marchait (les captures headless noires étaient un artefact de
+compositing), mais : molécules non rendues comme molécules (pas de liaisons) ; huile/eau ne démixe pas ;
+**NaCl explosait à 1849 K** ; **eau L4 à 503 K** ; **le GPU explosait** (T ≈ 1e40 K).
+
+**Corrigé :**
+- **Vraies molécules à l'écran** : `BondSystem` (cylindres instanciés par liaison, image-minimale) +
+  rendu **ball-and-stick** (atomes réduits) ⇒ l'eau se lit comme H₂O coudé, l'huile comme une chaîne C–C–C.
+- **NaCl** : placement **rock-salt alterné** (charges opposées voisines) ⇒ cristal stable **277 K** (vs 1849).
+- **Eau L4** : thermostat **CSVR** ⇒ ~340 K (vs 503).
+- **NOUVEAU L6 — mélange atomistique huile/eau** : `MolecularForce` (champ de forces général : LJ
+  Lorentz-Berthelot + Coulomb Wolf + exclusions intramoléculaires + liaisons/angles harmoniques par
+  élément) + `buildOilWaterSystem` (**eau SPC rigide SHAKE + huile alcane TraPPE flexible**, départ mélangé,
+  **colonne haute** + **gravité**). **Démixtion hydrophobe réelle** : l'eau (dense) coule **sous** l'huile
+  (légère) — vérifié **numériquement** (water_y < oil_y) **et visuellement**.
+- **GPU honnête** : la parité headed a montré que le **cell-list GPU était faux** (explosion). Désactivé ⇒
+  retour au kernel **brute O(N²) éprouvé** ; le GPU est de nouveau **stable** (T ≈ CPU). Le cell-list GPU
+  reste dans le code mais gaté off (à corriger/valider en navigateur réel).
+
+**Tests :** +2 (gradient liaison/angle de `MolecularForce`, sanity du builder) ⇒ **66 unitaires + 7 e2e**.
+Diagnostic « aucun preset n'explose » exécuté pour les 9 scènes (toutes finies).
 
 ---
 

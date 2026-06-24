@@ -432,7 +432,10 @@ export class GpuEngine {
 
     const L = this.config.boxLength;
     const cpa = Math.floor(L / rc);
-    this.cellsEnabled = cpa >= 3;
+    // NOTE: the GPU cell-list path is disabled — it is numerically incorrect (causes
+    // blow-ups) and could not be validated headless. The brute O(N²) kernel is the proven,
+    // correct GPU force path; on the GPU its parallelism still handles thousands of atoms.
+    this.cellsEnabled = false;
     const usedCpa = Math.max(1, cpa);
     this.uCellsPerAxis.value = usedCpa;
     this.uCellSize.value = L / usedCpa;

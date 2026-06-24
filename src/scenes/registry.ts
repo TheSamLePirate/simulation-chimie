@@ -42,18 +42,22 @@ export const SCENES: readonly Scene[] = [
   },
   {
     id: "oil-water",
-    label: "Huile + Eau (démixtion)",
-    description: "Mélange binaire immiscible : les phases se séparent (L2)",
+    label: "Huile + Eau (démixtion + gravité)",
+    description:
+      "Eau atomistique + huile (alcane) sous gravité : l'eau (dense) coule, l'huile flotte ⇒ 2 phases",
     config: make({
-      level: "L2",
-      speciesName: "WATER",
-      secondSpeciesName: "OIL",
-      fractionSecond: 0.5,
-      crossScale: 0.3,
-      particleCount: 600,
-      boxLength: 4.6,
-      temperature: 180,
-      timestep: 0.004,
+      level: "L6",
+      speciesName: "WATER_O",
+      secondSpeciesName: "OIL_CH3",
+      fractionSecond: 0.4, // 40% oil molecules, 60% water
+      particleCount: 120, // total molecules (×3 atoms)
+      boxLength: 2.3, // base of a tall column (engine makes y = 2.5×); gravity layers it
+      boundary: "reflective",
+      temperature: 300,
+      timestep: 0.001, // 1 fs (water is rigid via SHAKE)
+      thermostat: "csvr",
+      thermostatTau: 0.1,
+      gravity: 0.2,
     }),
   },
   {
@@ -82,8 +86,8 @@ export const SCENES: readonly Scene[] = [
       boxLength: 1.6,
       temperature: 300,
       timestep: 0.0005,
-      thermostat: "berendsen",
-      thermostatTau: 0.2,
+      thermostat: "csvr",
+      thermostatTau: 0.1,
     }),
   },
   {
@@ -111,12 +115,12 @@ export const SCENES: readonly Scene[] = [
       secondSpeciesName: "CHLORIDE",
       fractionSecond: 0.5,
       crossScale: 1,
-      particleCount: 250,
-      boxLength: 3,
+      particleCount: 216, // 6×6×6 rock-salt lattice
+      boxLength: 1.75,
       temperature: 300,
-      timestep: 0.002,
+      timestep: 0.001,
       thermostat: "berendsen",
-      thermostatTau: 0.4,
+      thermostatTau: 0.2,
     }),
   },
   {
