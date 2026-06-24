@@ -275,15 +275,18 @@ class GpuDriver implements SimDriver {
  * boundaries (no charges, no molecules, no walls). Every other scene must run on the CPU.
  */
 export function gpuSupportsConfig(config: SimConfig): boolean {
-  // Monatomic LJ/WCA/Coulomb (L0–L3) + flexible atomistic water (L4: bonds + angles +
-  // intramolecular exclusions, all on the GPU). Rigid-water levels (L5–L8) need the GPU
-  // SETTLE constraint solver; L6 also needs reflective walls — both still CPU-only.
+  // GPU covers: monatomic LJ/WCA/Coulomb (L0–L3), flexible water (L4), and rigid water via
+  // per-molecule SHAKE/RATTLE (L5 rigid water, L7 droplet, L8 dissolution). L6 (oil/water) still
+  // needs reflective walls + a non-cubic box, so it stays CPU-only.
   const supported =
     config.level === "L0" ||
     config.level === "L1" ||
     config.level === "L2" ||
     config.level === "L3" ||
-    config.level === "L4";
+    config.level === "L4" ||
+    config.level === "L5" ||
+    config.level === "L7" ||
+    config.level === "L8";
   return supported && config.boundary === "periodic";
 }
 

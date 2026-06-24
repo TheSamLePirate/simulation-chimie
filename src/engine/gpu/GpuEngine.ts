@@ -676,36 +676,120 @@ export class GpuEngine {
     }, this.atomCount);
   }
 
+  /** One SHAKE position correction for a constraint pair (mutates the pa/pb/va/vb vars). */
+  private shakePair(
+    pa: Node,
+    pb: Node,
+    va: Node,
+    vb: Node,
+    ra: Node,
+    rb: Node,
+    d0: Node,
+    iA: Node,
+    iB: Node,
+  ): void {
+    const s = pa.sub(pb).toVar();
+    this.wrapMinImage(s);
+    const r = ra.sub(rb).toVar();
+    this.wrapMinImage(r);
+    const diff = d0.mul(d0).sub(s.dot(s));
+    const g = diff.div(float(2).mul(iA.add(iB)).mul(r.dot(s)).add(1e-12));
+    pa.addAssign(r.mul(iA.mul(g)));
+    pb.addAssign(r.mul(iB.mul(g)).mul(-1));
+    const gdt = g.div(this.uDt);
+    va.addAssign(r.mul(iA.mul(gdt)));
+    vb.addAssign(r.mul(iB.mul(gdt)).mul(-1));
+  }
+
+  /** One RATTLE velocity correction for a constraint pair (mutates va/vb). */
+  private rattlePair(pa: Node, pb: Node, va: Node, vb: Node, iA: Node, iB: Node): void {
+    const r = pa.sub(pb).toVar();
+    this.wrapMinImage(r);
+    const rv = r.dot(va.sub(vb));
+    const kf = rv.mul(-1).div(iA.add(iB).mul(r.dot(r)).add(1e-12));
+    va.addAssign(r.mul(iA.mul(kf)));
+    vb.addAssign(r.mul(iB.mul(kf)).mul(-1));
+  }
+
+  /** Per-water-molecule indices: constraint triple 3g=(O,H1), 3g+1=(O,H2), 3g+2=(H1,H2). */
+  private waterAtoms(g: Node): {
+    iO: Node;
+    iH1: Node;
+    iH2: Node;
+    dOH: Node;
+    dHH: Node;
+  } {
+    const c0 = g.mul(3);
+    return {
+      iO: uv(this.constraintIdx.element(c0.mul(2))),
+      iH1: uv(this.constraintIdx.element(c0.mul(2).add(1))),
+      iH2: uv(this.constraintIdx.element(c0.add(1).mul(2).add(1))),
+      dOH: this.constraintD0.element(c0),
+      dHH: this.constraintD0.element(c0.add(2)),
+    };
+  }
+
   /**
-   * SETTLE/SHAKE rigid-distance position constraint — placeholder (real solver lands with the
-   * rigid-water phase). Wired per-constraint and references the constraint buffers + ref
-   * positions; rigid GPU levels stay disabled in gpuSupportsConfig until the solver is real.
+   * Rigid water by per-molecule SHAKE — one thread per molecule owns its 3 atoms (O,H1,H2), so
+   * the iterations are race-free (no atomics). Equivalent in effect to SETTLE for 3-site water,
+   * but reuses the validated CPU SHAKE algorithm. Fixed iteration count (no early exit on GPU).
    */
   private buildSettle(): Kernel {
+    const ITERS = 6;
     return kernel(
       () => {
-        const c = instanceIndex;
-        const i = this.constraintIdx.element(c.mul(2)).toVar();
-        const j = this.constraintIdx.element(c.mul(2).add(1)).toVar();
-        const d0 = this.constraintD0.element(c).toVar();
-        // Reference ref positions (used by the real solver); inert placeholder add of 0·d0.
-        const ref = this.refPositions.element(uv(i));
-        this.positions.element(uv(i)).addAssign(ref.mul(0).mul(d0));
-        this.positions.element(uv(j)).addAssign(this.positions.element(uv(j)).mul(0));
+        const a = this.waterAtoms(instanceIndex);
+        const pO = this.positions.element(a.iO).toVar();
+        const pH1 = this.positions.element(a.iH1).toVar();
+        const pH2 = this.positions.element(a.iH2).toVar();
+        const vO = this.velocities.element(a.iO).toVar();
+        const vH1 = this.velocities.element(a.iH1).toVar();
+        const vH2 = this.velocities.element(a.iH2).toVar();
+        const rO = this.refPositions.element(a.iO).toVar();
+        const rH1 = this.refPositions.element(a.iH1).toVar();
+        const rH2 = this.refPositions.element(a.iH2).toVar();
+        const iMO = this.params.element(a.iO).w;
+        const iMH = this.params.element(a.iH1).w;
+        Loop(ITERS, () => {
+          this.shakePair(pO, pH1, vO, vH1, rO, rH1, a.dOH, iMO, iMH);
+          this.shakePair(pO, pH2, vO, vH2, rO, rH2, a.dOH, iMO, iMH);
+          this.shakePair(pH1, pH2, vH1, vH2, rH1, rH2, a.dHH, iMH, iMH);
+        });
+        this.positions.element(a.iO).assign(pO);
+        this.positions.element(a.iH1).assign(pH1);
+        this.positions.element(a.iH2).assign(pH2);
+        this.velocities.element(a.iO).assign(vO);
+        this.velocities.element(a.iH1).assign(vH1);
+        this.velocities.element(a.iH2).assign(vH2);
       },
-      Math.max(1, this.numConstraints),
+      Math.max(1, this.numConstraints / 3),
     );
   }
 
-  /** RATTLE velocity constraint — placeholder (real solver lands with the rigid-water phase). */
+  /** Rigid water velocity correction by per-molecule RATTLE (race-free, one thread per molecule). */
   private buildRattle(): Kernel {
+    const ITERS = 4;
     return kernel(
       () => {
-        const c = instanceIndex;
-        const i = this.constraintIdx.element(c.mul(2)).toVar();
-        this.velocities.element(uv(i)).addAssign(this.velocities.element(uv(i)).mul(0));
+        const a = this.waterAtoms(instanceIndex);
+        const pO = this.positions.element(a.iO).toVar();
+        const pH1 = this.positions.element(a.iH1).toVar();
+        const pH2 = this.positions.element(a.iH2).toVar();
+        const vO = this.velocities.element(a.iO).toVar();
+        const vH1 = this.velocities.element(a.iH1).toVar();
+        const vH2 = this.velocities.element(a.iH2).toVar();
+        const iMO = this.params.element(a.iO).w;
+        const iMH = this.params.element(a.iH1).w;
+        Loop(ITERS, () => {
+          this.rattlePair(pO, pH1, vO, vH1, iMO, iMH);
+          this.rattlePair(pO, pH2, vO, vH2, iMO, iMH);
+          this.rattlePair(pH1, pH2, vH1, vH2, iMH, iMH);
+        });
+        this.velocities.element(a.iO).assign(vO);
+        this.velocities.element(a.iH1).assign(vH1);
+        this.velocities.element(a.iH2).assign(vH2);
       },
-      Math.max(1, this.numConstraints),
+      Math.max(1, this.numConstraints / 3),
     );
   }
 
