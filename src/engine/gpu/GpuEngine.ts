@@ -1,4 +1,5 @@
 import {
+  acos,
   atomicAdd,
   atomicLoad,
   atomicStore,
@@ -11,7 +12,9 @@ import {
   If,
   instancedArray,
   instanceIndex,
+  int,
   Loop,
+  max,
   mod,
   round,
   sqrt,
@@ -22,17 +25,48 @@ import {
 } from "three/tsl";
 import type * as THREE from "three/webgpu";
 import { Vector3 } from "three/webgpu";
-import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
 import { erfc as erfcScalar } from "../../core/math/erf";
 import { pressure } from "../../core/observables";
-import { Rng } from "../../core/rng";
 import { SPECIES_LIBRARY } from "../../core/species";
-import { createState } from "../../core/state";
 import type { Species } from "../../core/types";
 import { BAR_PER_KJ_PER_MOL_NM3, COULOMB_CONSTANT, temperatureFromKinetic } from "../../core/units";
+import { buildSystem } from "../buildSystem";
 import type { AccuracyLevel, Observables, SimConfig } from "../types";
 
 const WORKGROUP = [64];
+/** Fixed-point scale for the i32 quantised force accumulator (WebGPU has no f32 atomics). */
+const FORCE_SCALE = 1 << 14; // 16384 ⇒ ~±1.3e5 kJ·mol⁻¹·nm⁻¹ range, ~6e-5 resolution
+
+/** Pack per-bond (i,j) atom indices into a flat uint array (min length 1 for empty topology). */
+function packBondIdx(i: Int32Array, j: Int32Array): Uint32Array {
+  const out = new Uint32Array(2 * Math.max(1, i.length));
+  for (let b = 0; b < i.length; b++) {
+    out[2 * b] = i[b];
+    out[2 * b + 1] = j[b];
+  }
+  return out;
+}
+/** Pack per-angle (i,j,k) atom indices into a flat uint array. */
+function packAngleIdx(i: Int32Array, j: Int32Array, k: Int32Array): Uint32Array {
+  const out = new Uint32Array(3 * Math.max(1, i.length));
+  for (let a = 0; a < i.length; a++) {
+    out[3 * a] = i[a];
+    out[3 * a + 1] = j[a];
+    out[3 * a + 2] = k[a];
+  }
+  return out;
+}
+/** Interleave two Float32 arrays into a vec2 buffer (e.g. (r0,k) or (theta0,kt) per item). */
+function packPairF32(a: Float32Array, b: Float32Array): Float32Array {
+  const out = new Float32Array(2 * Math.max(1, a.length));
+  for (let x = 0; x < a.length; x++) {
+    out[2 * x] = a[x];
+    out[2 * x + 1] = b[x];
+  }
+  return out;
+}
+const packScalarF32 = (a: Float32Array): Float32Array =>
+  a.length ? Float32Array.from(a) : new Float32Array(1);
 const TWO_POW_1_6 = 1.122462048309373;
 /** Max particles per cell bin. Generous vs liquid occupancy (~15) to avoid dropped pairs. */
 const CELL_CAPACITY = 96;
@@ -42,10 +76,12 @@ const vec3Array = (data: Float32Array) => instancedArray(data, "vec3");
 const vec2Array = (data: Float32Array) => instancedArray(data, "vec2");
 const vec4Array = (data: Float32Array) => instancedArray(data, "vec4");
 const uintArray = (data: Uint32Array) => instancedArray(data, "uint");
+const floatArray = (data: Float32Array) => instancedArray(data, "float");
 type Vec3Storage = ReturnType<typeof vec3Array>;
 type Vec2Storage = ReturnType<typeof vec2Array>;
 type Vec4Storage = ReturnType<typeof vec4Array>;
 type UintStorage = ReturnType<typeof uintArray>;
+type FloatStorage = ReturnType<typeof floatArray>;
 type Kernel = ReturnType<typeof compute>;
 
 // biome-ignore lint/suspicious/noExplicitAny: TSL node arithmetic is loosely typed.
@@ -93,30 +129,13 @@ function roundVec<T>(x: T): T {
  * arithmetic API in the typings (the runtime supports it). `fl()` restores it.
  */
 const fl = (x: unknown) => float(x as never);
+/** Re-wrap as a fluent int / uint node (the typings reject atomic / derived nodes here). */
+const iv = (x: unknown) => int(x as never);
+const uv = (x: unknown) => uint(x as never);
 
 function resolveSpecies(name: string): Species {
   const key = name.toUpperCase() as keyof typeof SPECIES_LIBRARY;
   return SPECIES_LIBRARY[key] ?? SPECIES_LIBRARY.ARGON;
-}
-
-/** Species assignment matching the CPU engine: rock-salt for ionic (L3) binaries, else seeded mix. */
-function makeTypeIds(config: SimConfig, hasSecond: boolean): Uint8Array {
-  const n = config.particleCount;
-  const ids = new Uint8Array(n);
-  if (!hasSecond) return ids;
-  if (config.level === "L3") {
-    const perSide = Math.ceil(Math.cbrt(n));
-    for (let p = 0; p < n; p++) {
-      const iz = p % perSide;
-      const iy = Math.floor(p / perSide) % perSide;
-      const ix = Math.floor(p / (perSide * perSide));
-      ids[p] = (ix + iy + iz) & 1;
-    }
-    return ids;
-  }
-  const rng = new Rng(config.seed ^ 0x5bd1e995);
-  for (let i = 0; i < n; i++) ids[i] = rng.next() < config.fractionSecond ? 1 : 0;
-  return ids;
 }
 
 /**
@@ -139,10 +158,32 @@ export class GpuEngine {
   /** Per-atom (σ, ε, charge, 1/mass) — enables multi-species + electrostatics on the GPU. */
   private readonly params: Vec4Storage;
   private readonly masses: Float64Array;
-  private readonly speciesList: readonly Species[];
   /** Per-atom RGB colour (0–1) and radius (nm) for multi-species GPU rendering. */
   readonly renderColors: Float32Array;
   readonly renderRadii: Float32Array;
+
+  /** Atom count (≥ 3× molecule count for molecular systems); the kernel dispatch size. */
+  readonly atomCount: number;
+  /** True for molecular levels (L4–L8): bonded forces + intramolecular exclusions + constraints. */
+  readonly molecular: boolean;
+  /** Render bonds (i,j) for ball-and-stick molecular drawing, or null (monatomic). */
+  readonly renderBonds: { i: Int32Array; j: Int32Array } | null;
+  /** Per-atom molecule id (for intramolecular nonbonded exclusions). */
+  private readonly moleculeIds: UintStorage;
+  /** i32 (stored as uint, atomic) quantised force accumulator for bonded scatter-adds. */
+  private readonly forceQ: UintStorage;
+  /** Positions before the constraint step (for SETTLE/RATTLE). */
+  private readonly refPositions: Vec3Storage;
+  // Flat bonded topology (uploaded once; box/forcefield are fixed per engine instance).
+  private readonly numBonds: number;
+  private readonly numAngles: number;
+  private readonly numConstraints: number;
+  private readonly bondIdx: UintStorage;
+  private readonly bondParam: Vec2Storage;
+  private readonly angleIdx: UintStorage;
+  private readonly angleParam: Vec2Storage;
+  private readonly constraintIdx: UintStorage;
+  private readonly constraintD0: FloatStorage;
 
   // Uniforms (updated from the CPU on config change).
   private readonly uDt = uniform(0);
@@ -184,6 +225,15 @@ export class GpuEngine {
   private readonly kForcesCellLJ: Kernel;
   private readonly kThermostat: Kernel;
   private readonly kIntegrateB: Kernel;
+  // Molecular kernels (built only for molecular systems; null for monatomic L0–L3).
+  private readonly kForcesMol: Kernel | null;
+  private readonly kBondForces: Kernel | null;
+  private readonly kAngleForces: Kernel | null;
+  private readonly kAddQForces: Kernel | null;
+  private readonly kZeroForceQ: Kernel | null;
+  private readonly kSettle: Kernel | null;
+  private readonly kRattle: Kernel | null;
+  private readonly kSaveRef: Kernel | null;
 
   private renderer: THREE.WebGPURenderer | null = null;
   private stepCount = 0;
@@ -192,37 +242,26 @@ export class GpuEngine {
   constructor(config: SimConfig) {
     this.config = config;
     this.species = resolveSpecies(config.speciesName);
-    const n = config.particleCount;
-    this.boxLengths = new Vector3(config.boxLength, config.boxLength, config.boxLength);
 
-    // Multi-species set-up mirroring the CPU engine: optional second species, with an
-    // alternating rock-salt layout for ionic (L3) binaries and a seeded mix otherwise.
-    const second = config.secondSpeciesName ? resolveSpecies(config.secondSpeciesName) : null;
-    this.speciesList = second ? [this.species, second] : [this.species];
-    const typeIds = makeTypeIds(config, second !== null);
-
-    // Initial conditions from the shared CPU initialiser (lattice + Maxwell-Boltzmann).
-    const init = createState(n, typeIds);
-    const rng = new Rng(config.seed);
-    const box = {
-      lengths: [config.boxLength, config.boxLength, config.boxLength] as const,
-      boundary: "periodic" as const,
-    };
-    placeOnLattice(init, box, { jitter: 0.05, rng });
-    setMaxwellBoltzmannVelocities(
-      init,
-      this.speciesList,
-      config.initialTemperature ?? config.temperature,
-      rng,
-    );
+    // Build the full system (state + species + flat topology) the same way the CPU engine
+    // does — this is what lets molecular levels (L4–L8: water, oil, ions) run on the GPU.
+    const system = buildSystem(config);
+    const { state, box, species, bonds, angles, constraints } = system;
+    const n = state.count; // ATOM count (molecular systems have ≥3× the molecule count)
+    this.atomCount = n;
+    this.molecular = system.molecular;
+    this.renderBonds = system.renderBonds;
+    this.boxLengths = new Vector3(box.lengths[0], box.lengths[1], box.lengths[2]);
+    const typeIds = state.typeIds;
 
     // Per-atom (σ, ε, charge, 1/mass) packed into a vec4, + CPU mass / render arrays.
     const param = new Float32Array(n * 4);
     this.masses = new Float64Array(n);
     this.renderColors = new Float32Array(n * 3);
     this.renderRadii = new Float32Array(n);
+    const renderScale = this.molecular ? 0.42 : 0.78; // ball-and-stick for molecules
     for (let i = 0; i < n; i++) {
-      const s = this.speciesList[typeIds[i]];
+      const s = species[typeIds[i]];
       param[4 * i] = s.sigma;
       param[4 * i + 1] = s.epsilon;
       param[4 * i + 2] = s.charge;
@@ -231,14 +270,29 @@ export class GpuEngine {
       this.renderColors[3 * i] = ((s.color >> 16) & 0xff) / 255;
       this.renderColors[3 * i + 1] = ((s.color >> 8) & 0xff) / 255;
       this.renderColors[3 * i + 2] = (s.color & 0xff) / 255;
-      this.renderRadii[i] = s.radius * 0.78; // match the CPU monatomic render scale
+      this.renderRadii[i] = s.radius * renderScale;
     }
     this.params = vec4Array(param);
 
-    this.positions = vec3Array(Float32Array.from(init.positions));
-    this.velocities = vec3Array(Float32Array.from(init.velocities));
+    this.positions = vec3Array(Float32Array.from(state.positions));
+    this.velocities = vec3Array(Float32Array.from(state.velocities));
     this.forces = vec3Array(new Float32Array(n * 3));
     this.energyVirial = vec2Array(new Float32Array(n * 2));
+    this.moleculeIds = uintArray(Uint32Array.from(state.moleculeId));
+
+    // Bonded topology + i32 quantised force accumulator (WebGPU has no f32 atomics, so bonded
+    // kernels scatter forces as fixed-point integers; a dequantise pass adds them to `forces`).
+    this.numBonds = bonds.i.length;
+    this.numAngles = angles.i.length;
+    this.numConstraints = constraints.i.length;
+    this.bondIdx = uintArray(packBondIdx(bonds.i, bonds.j));
+    this.bondParam = vec2Array(packPairF32(bonds.r0, bonds.k));
+    this.angleIdx = uintArray(packAngleIdx(angles.i, angles.j, angles.k));
+    this.angleParam = vec2Array(packPairF32(angles.theta0, angles.kt));
+    this.constraintIdx = uintArray(packBondIdx(constraints.i, constraints.j));
+    this.constraintD0 = floatArray(packScalarF32(constraints.d0));
+    this.forceQ = uintArray(new Uint32Array(n * 3)).toAtomic();
+    this.refPositions = vec3Array(new Float32Array(n * 3));
 
     // Cell-list buffers sized for the FINEST grid (WCA cutoff ⇒ most cells); coarser
     // levels (bigger cutoff) use a subset. Box is fixed per engine (GPU has no barostat).
@@ -428,6 +482,231 @@ export class GpuEngine {
       const v = this.velocities.element(instanceIndex);
       v.assign(v.mul(this.uThermoLambda));
     }, n);
+
+    // --- Molecular kernels: nonbonded with exclusions + bonded forces + rigid constraints ---
+    const rigid = this.numConstraints > 0;
+    this.kZeroForceQ = this.molecular ? this.buildZeroForceQ() : null;
+    this.kForcesMol = this.molecular ? this.buildMolNonbonded() : null;
+    this.kBondForces = this.molecular && this.numBonds > 0 ? this.buildBondForces() : null;
+    this.kAngleForces = this.molecular && this.numAngles > 0 ? this.buildAngleForces() : null;
+    this.kAddQForces = this.molecular ? this.buildAddQForces() : null;
+    this.kSaveRef = rigid ? this.buildSaveRef() : null;
+    this.kSettle = rigid ? this.buildSettle() : null;
+    this.kRattle = rigid ? this.buildRattle() : null;
+  }
+
+  /** Wrap a separation vector to the minimum image (no-op for reflective boundaries). */
+  private wrapMinImage(d: Node): void {
+    If(this.uPeriodic.greaterThan(0.5), () => {
+      d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
+    });
+  }
+
+  /** Scatter a vec3 force onto an atom's i32 quantised accumulator (atomic, race-safe). */
+  private addForceQ(atomIdx: Node, f: Node): void {
+    const base = atomIdx.mul(3);
+    atomicAdd(this.forceQ.element(uv(base)), uv(iv(roundVec(f.x.mul(FORCE_SCALE)))));
+    atomicAdd(this.forceQ.element(uv(base.add(1))), uv(iv(roundVec(f.y.mul(FORCE_SCALE)))));
+    atomicAdd(this.forceQ.element(uv(base.add(2))), uv(iv(roundVec(f.z.mul(FORCE_SCALE)))));
+  }
+
+  /** Zero the i32 quantised bonded-force accumulator (3 components per atom). */
+  private buildZeroForceQ(): Kernel {
+    return kernel(() => {
+      atomicStore(this.forceQ.element(instanceIndex), uint(0));
+    }, this.atomCount * 3);
+  }
+
+  /** Multi-species LJ (Lorentz-Berthelot) + Coulomb (Wolf DSF) with intramolecular exclusions. */
+  private buildMolNonbonded(): Kernel {
+    const n = this.atomCount;
+    const C6 = 0.16 ** 3;
+    const C12 = 0.16 ** 6;
+    const TWO_PI = 2 / Math.sqrt(Math.PI);
+    return kernel(() => {
+      const idx = instanceIndex;
+      const pi = this.positions.element(idx).toVar();
+      const pmi = this.params.element(idx).toVar();
+      const myMol = this.moleculeIds.element(idx).toVar();
+      const fi = vec3(0).toVar();
+      const peSum = float(0).toVar();
+      const virSum = float(0).toVar();
+
+      Loop(n, ({ i: j }) => {
+        // Intramolecular exclusion: skip bonded (same-molecule) pairs incl. self.
+        If(this.moleculeIds.element(j).notEqual(myMol), () => {
+          const d = pi.sub(this.positions.element(j)).toVar();
+          this.wrapMinImage(d);
+          const r2 = d.dot(d).toVar();
+          const pj = this.params.element(j);
+          const sigma = pmi.x.add(pj.x).mul(0.5);
+          const eps = sqrt(pmi.y.mul(pj.y));
+          const qq = pmi.z.mul(pj.z);
+          const rcLj = sigma.mul(2.5);
+          const rcLj2 = rcLj.mul(rcLj);
+
+          If(r2.greaterThan(float(1e-12)), () => {
+            const r = sqrt(r2).toVar();
+            const fOverR = float(0).toVar();
+
+            If(r2.lessThan(rcLj2), () => {
+              const inv2 = sigma.mul(sigma).div(r2);
+              const inv6 = inv2.mul(inv2).mul(inv2);
+              const inv12 = inv6.mul(inv6);
+              const fAtRc = float(24)
+                .mul(eps)
+                .mul(C12 * 2 - C6)
+                .div(rcLj);
+              const vAtRc = float(4)
+                .mul(eps)
+                .mul(C12 - C6);
+              const fRadial = float(24).mul(eps).mul(inv12.mul(2).sub(inv6)).div(r);
+              fOverR.addAssign(fRadial.sub(fAtRc).div(r));
+              const vv = float(4).mul(eps).mul(inv12.sub(inv6));
+              peSum.addAssign(vv.sub(vAtRc).add(r.sub(rcLj).mul(fAtRc)).mul(0.5));
+            });
+
+            If(this.uUseCoulomb.greaterThan(0.5), () => {
+              If(r2.lessThan(this.uRcC2), () => {
+                const erfcR = erfcApprox(this.uAlpha.mul(r));
+                const expR = exp(this.uAlpha.mul(this.uAlpha).mul(r2).mul(-1));
+                const fCoul = this.uKe
+                  .mul(qq)
+                  .mul(
+                    erfcR
+                      .div(r2)
+                      .add(float(TWO_PI).mul(this.uAlpha).mul(expR).div(r))
+                      .sub(this.uShiftC),
+                  );
+                fOverR.addAssign(fCoul.div(r));
+                peSum.addAssign(
+                  this.uKe
+                    .mul(qq)
+                    .mul(
+                      erfcR
+                        .div(r)
+                        .sub(this.uErfcRc.div(this.uRcC))
+                        .add(this.uShiftC.mul(r.sub(this.uRcC))),
+                    )
+                    .mul(0.5),
+                );
+              });
+            });
+
+            fi.addAssign(d.mul(fOverR));
+            virSum.addAssign(fOverR.mul(r2).mul(0.5));
+          });
+        });
+      });
+
+      this.forces.element(idx).assign(fi);
+      this.energyVirial.element(idx).assign(vec2(peSum, virSum));
+    }, n);
+  }
+
+  /** Harmonic bonds: one thread per bond, scatter forces via the i32 accumulator. */
+  private buildBondForces(): Kernel {
+    return kernel(() => {
+      const b = instanceIndex;
+      const i = this.bondIdx.element(b.mul(2)).toVar();
+      const j = this.bondIdx.element(b.mul(2).add(1)).toVar();
+      const par = this.bondParam.element(b).toVar(); // (r0, k)
+      const d = this.positions.element(i).sub(this.positions.element(j)).toVar();
+      this.wrapMinImage(d);
+      const r = sqrt(d.dot(d)).toVar();
+      const fOverR = par.y
+        .mul(r.sub(par.x))
+        .mul(-1)
+        .div(max(r, float(1e-9)));
+      const fvec = d.mul(fOverR).toVar();
+      this.addForceQ(i, fvec);
+      this.addForceQ(j, fvec.mul(-1));
+    }, this.numBonds);
+  }
+
+  /** Harmonic angles (j = vertex): one thread per angle, scatter forces via the i32 accumulator. */
+  private buildAngleForces(): Kernel {
+    return kernel(() => {
+      const a = instanceIndex;
+      const i = this.angleIdx.element(a.mul(3)).toVar();
+      const j = this.angleIdx.element(a.mul(3).add(1)).toVar();
+      const k = this.angleIdx.element(a.mul(3).add(2)).toVar();
+      const par = this.angleParam.element(a).toVar(); // (theta0, kt)
+      const rij = this.positions.element(i).sub(this.positions.element(j)).toVar();
+      this.wrapMinImage(rij);
+      const rkj = this.positions.element(k).sub(this.positions.element(j)).toVar();
+      this.wrapMinImage(rkj);
+      const lij = max(sqrt(rij.dot(rij)), float(1e-9)).toVar();
+      const lkj = max(sqrt(rkj.dot(rkj)), float(1e-9)).toVar();
+      const cosT = clamp(rij.dot(rkj).div(lij.mul(lkj)), float(-1), float(1)).toVar();
+      const sinT = max(sqrt(float(1).sub(cosT.mul(cosT))), float(1e-6)).toVar();
+      const factor = par.y.mul(acos(cosT).sub(par.x)).div(sinT).toVar();
+      const fi = rkj
+        .div(lij.mul(lkj))
+        .sub(rij.mul(cosT).div(lij.mul(lij)))
+        .mul(factor)
+        .toVar();
+      const fk = rij
+        .div(lij.mul(lkj))
+        .sub(rkj.mul(cosT).div(lkj.mul(lkj)))
+        .mul(factor)
+        .toVar();
+      this.addForceQ(i, fi);
+      this.addForceQ(k, fk);
+      this.addForceQ(j, fi.add(fk).mul(-1));
+    }, this.numAngles);
+  }
+
+  /** Dequantise the bonded-force accumulator and add it into the f32 force buffer. */
+  private buildAddQForces(): Kernel {
+    return kernel(() => {
+      const idx = instanceIndex;
+      const base = idx.mul(3);
+      const fx = fl(iv(atomicLoad(this.forceQ.element(uv(base))))).div(FORCE_SCALE);
+      const fy = fl(iv(atomicLoad(this.forceQ.element(uv(base.add(1)))))).div(FORCE_SCALE);
+      const fz = fl(iv(atomicLoad(this.forceQ.element(uv(base.add(2)))))).div(FORCE_SCALE);
+      this.forces.element(idx).addAssign(vec3(fx, fy, fz));
+    }, this.atomCount);
+  }
+
+  /** Save positions before the constraint step (SETTLE/RATTLE reference). */
+  private buildSaveRef(): Kernel {
+    return kernel(() => {
+      this.refPositions.element(instanceIndex).assign(this.positions.element(instanceIndex));
+    }, this.atomCount);
+  }
+
+  /**
+   * SETTLE/SHAKE rigid-distance position constraint — placeholder (real solver lands with the
+   * rigid-water phase). Wired per-constraint and references the constraint buffers + ref
+   * positions; rigid GPU levels stay disabled in gpuSupportsConfig until the solver is real.
+   */
+  private buildSettle(): Kernel {
+    return kernel(
+      () => {
+        const c = instanceIndex;
+        const i = this.constraintIdx.element(c.mul(2)).toVar();
+        const j = this.constraintIdx.element(c.mul(2).add(1)).toVar();
+        const d0 = this.constraintD0.element(c).toVar();
+        // Reference ref positions (used by the real solver); inert placeholder add of 0·d0.
+        const ref = this.refPositions.element(uv(i));
+        this.positions.element(uv(i)).addAssign(ref.mul(0).mul(d0));
+        this.positions.element(uv(j)).addAssign(this.positions.element(uv(j)).mul(0));
+      },
+      Math.max(1, this.numConstraints),
+    );
+  }
+
+  /** RATTLE velocity constraint — placeholder (real solver lands with the rigid-water phase). */
+  private buildRattle(): Kernel {
+    return kernel(
+      () => {
+        const c = instanceIndex;
+        const i = this.constraintIdx.element(c.mul(2)).toVar();
+        this.velocities.element(uv(i)).addAssign(this.velocities.element(uv(i)).mul(0));
+      },
+      Math.max(1, this.numConstraints),
+    );
   }
 
   /** Flat index ((z·cpa + y)·cpa + x) as a fluent float; each step re-wrapped (typing). */
@@ -451,7 +730,7 @@ export class GpuEngine {
 
   /** Build a cell-list pair-force kernel (LJ shifted-force, or WCA when `isLJ` is false). */
   private buildCellForceKernel(isLJ: boolean): Kernel {
-    const n = this.config.particleCount;
+    const n = this.atomCount;
     return kernel(() => {
       const idx = instanceIndex;
       const pi = this.positions.element(idx).toVar();
@@ -542,7 +821,7 @@ export class GpuEngine {
     this.uDt.value = config.timestep;
     this.uHalfDt.value = 0.5 * config.timestep;
     this.uInvMass.value = 1 / species.mass;
-    this.uBox.value.set(config.boxLength, config.boxLength, config.boxLength);
+    this.uBox.value.copy(this.boxLengths); // actual (possibly non-cubic) box lengths
     this.uSigma2.value = species.sigma * species.sigma;
     this.uEpsilon.value = species.epsilon;
     this.updateCutoff();
@@ -614,6 +893,15 @@ export class GpuEngine {
 
   /** Force-computation passes: cell-list (clear→bin→forces) when it fits, else O(N²) brute. */
   private forcePassNodes(): Kernel[] {
+    // Molecular: nonbonded-with-exclusions (assigns f32 forces) + bonded scatter into the i32
+    // accumulator (zeroed first) + a dequantise pass that folds it into the f32 forces.
+    if (this.molecular && this.kForcesMol && this.kZeroForceQ && this.kAddQForces) {
+      const passes: Kernel[] = [this.kZeroForceQ, this.kForcesMol];
+      if (this.kBondForces) passes.push(this.kBondForces);
+      if (this.kAngleForces) passes.push(this.kAngleForces);
+      passes.push(this.kAddQForces);
+      return passes;
+    }
     const isLJ = this.config.level === "L2" || this.config.level === "L3";
     if (this.cellsEnabled) {
       return [
@@ -638,9 +926,16 @@ export class GpuEngine {
   }
 
   private stepNodes(): Kernel[] {
-    const nodes: Kernel[] = [this.kIntegrateA];
+    // Rigid molecules (SETTLE/RATTLE): save ref positions → drift → constrain positions →
+    // forces → kick → constrain velocities. Mirrors the CPU stepRigidConstrained() order.
+    const rigid = this.kSettle && this.kRattle && this.kSaveRef;
+    const nodes: Kernel[] = [];
+    if (rigid && this.kSaveRef) nodes.push(this.kSaveRef);
+    nodes.push(this.kIntegrateA);
+    if (rigid && this.kSettle) nodes.push(this.kSettle);
     if (this.forcesEnabled) nodes.push(...this.forcePassNodes());
     nodes.push(this.kIntegrateB);
+    if (rigid && this.kRattle) nodes.push(this.kRattle);
     if (this.config.thermostat !== "none") nodes.push(this.kThermostat);
     return nodes;
   }
@@ -686,7 +981,7 @@ export class GpuEngine {
   /** Read measurements back from the GPU (async). Throttle the caller. */
   async observables(): Promise<Observables> {
     const renderer = this.renderer;
-    const n = this.config.particleCount;
+    const n = this.atomCount;
     const base = { step: this.stepCount, time: this.elapsed };
     if (!renderer) {
       return {
@@ -748,14 +1043,14 @@ export class GpuEngine {
   /** Read the current positions back to the CPU (for tests / parity checks). */
   async readPositions(): Promise<Float32Array> {
     const renderer = this.renderer;
-    if (!renderer) return new Float32Array(this.config.particleCount * 3);
+    if (!renderer) return new Float32Array(this.atomCount * 3);
     return new Float32Array(await renderer.getArrayBufferAsync(this.positions.value));
   }
 
   /** Read the current forces back to the CPU (for parity checks). */
   async readForces(): Promise<Float32Array> {
     const renderer = this.renderer;
-    if (!renderer) return new Float32Array(this.config.particleCount * 3);
+    if (!renderer) return new Float32Array(this.atomCount * 3);
     return new Float32Array(await renderer.getArrayBufferAsync(this.forces.value));
   }
 
