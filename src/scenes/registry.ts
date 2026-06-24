@@ -167,6 +167,8 @@ export const SCENES: readonly Scene[] = [
       temperature: 120,
       timestep: 0.005,
       gravity: 0.12,
+      thermostat: "berendsen", // NVT ⇒ stays at T (gravity work doesn't overheat it)
+      thermostatTau: 0.5,
     }),
   },
   {

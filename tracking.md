@@ -25,6 +25,10 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P15** | GPU cell-lists O(N) (spatial hash + atomics) + thermostat GPU | ✅ |
 | **P16** | Rendu de surface de fluide (metaballs écran-espace) | ✅ |
 | **P17** | Réalisme : molécules réelles + démixtion huile/eau + corrections physiques + GPU honnête | ✅ |
+| **P18** | Gouttelette (tension de surface L7) + cell-list CPU pour les forces atomistiques + repli GPU honnête | ✅ |
+| **P19** | GPU multi-espèces + Coulomb (Wolf DSF, erfc en TSL) + rendu par espèce | ✅ |
+| **P20** | Dissolution d'un cristal de sel (NaCl) dans l'eau (L8) | ✅ |
+| **P21** | Cell-list GPU : diagnostiqué (binning OK, kernel de force faux) ⇒ gardé désactivé (brute correct) | ✅ |
 
 ---
 
@@ -465,6 +469,33 @@ compositing), mais : molécules non rendues comme molécules (pas de liaisons) ;
 
 **Tests :** +2 (gradient liaison/angle de `MolecularForce`, sanity du builder) ⇒ **66 unitaires + 7 e2e**.
 Diagnostic « aucun preset n'explose » exécuté pour les 9 scènes (toutes finies).
+
+---
+
+## P18–P21 — Phénomènes, performance, GPU multi-espèces (retour utilisateur) ✅
+
+**Déclencheur :** « pousse le nombre de molécules, corrige le cell-list GPU, tension de surface,
+dissolution d'un cristal, plein de phénomènes, MD parfaitement correcte. »
+
+- **P18 — Tension de surface (L7)** : `buildWaterSystem` peut empaqueter un agrégat centré (vide
+  autour) ⇒ la cohésion (liaisons H) sphérifie l'eau. **Perf** : `core/neighbors.ts`
+  `forEachNeighborPair` (cell-list O(N), repli brute) ; `WaterForce` et `MolecularForce` l'utilisent
+  pour le non-lié ⇒ la colonne huile/eau passe de quelques FPS à ~66 FPS, **nombre de molécules
+  poussé** (huile/eau 120→320). **GPU honnête** : `gpuSupportsConfig` + repli CPU + bascule GPU
+  grisée là où non supporté.
+- **P19 — GPU multi-espèces + Coulomb** : paramètres par atome (σ, ε, charge, 1/m) en vec4 ; LJ
+  Lorentz-Berthelot + **Coulomb Wolf DSF** (erfc approximé en TSL) ; intégrateurs et KE par atome ;
+  **rendu par espèce** (Na⁺/Cl⁻ distincts). Vérifié en navigateur réel : GPU NaCl ~300–310 K stable.
+  La GPU couvre maintenant **L0–L3** (ions, mélanges) ; L4–L8 (liaisons/contraintes) restent CPU.
+- **P20 — Dissolution (L8)** : cristal de NaCl rock-salt neutralisé plongé dans l'eau SPC
+  (`core/dissolution.ts`) ; l'eau polaire solvate les ions de surface, le cristal se dissout.
+- **P21 — Cell-list GPU** : diagnostic en navigateur réel — **binning correct** (somme des comptes
+  = N), mais le kernel de **parcours de cellules** produit des forces fantômes ⇒ **gardé désactivé**,
+  le kernel **brute O(N²)** (correct, parallèle, gère des milliers d'atomes) reste le chemin GPU.
+
+**Phénomènes visibles** (11 scènes, 0 erreur) : gaz parfait, liquide LJ, **démixtion huile/eau +
+gravité**, cristallisation, eau atomistique H₂O, eau rigide, **tension de surface (gouttelette)**,
+cristal NaCl (CPU + GPU), **dissolution d'un cristal de sel**, sédimentation, ébullition.
 
 ---
 
