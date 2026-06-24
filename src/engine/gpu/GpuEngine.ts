@@ -4,6 +4,7 @@ import {
   atomicStore,
   clamp,
   compute,
+  exp,
   Fn,
   float,
   floor,
@@ -22,12 +23,13 @@ import {
 import type * as THREE from "three/webgpu";
 import { Vector3 } from "three/webgpu";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
+import { erfc as erfcScalar } from "../../core/math/erf";
 import { pressure } from "../../core/observables";
 import { Rng } from "../../core/rng";
 import { SPECIES_LIBRARY } from "../../core/species";
 import { createState } from "../../core/state";
 import type { Species } from "../../core/types";
-import { BAR_PER_KJ_PER_MOL_NM3, temperatureFromKinetic } from "../../core/units";
+import { BAR_PER_KJ_PER_MOL_NM3, COULOMB_CONSTANT, temperatureFromKinetic } from "../../core/units";
 import type { AccuracyLevel, Observables, SimConfig } from "../types";
 
 const WORKGROUP = [64];
@@ -38,11 +40,41 @@ const CELL_CAPACITY = 96;
 // Typed storage helpers (the raw `instancedArray` overloads resolve ambiguously).
 const vec3Array = (data: Float32Array) => instancedArray(data, "vec3");
 const vec2Array = (data: Float32Array) => instancedArray(data, "vec2");
+const vec4Array = (data: Float32Array) => instancedArray(data, "vec4");
 const uintArray = (data: Uint32Array) => instancedArray(data, "uint");
 type Vec3Storage = ReturnType<typeof vec3Array>;
 type Vec2Storage = ReturnType<typeof vec2Array>;
+type Vec4Storage = ReturnType<typeof vec4Array>;
 type UintStorage = ReturnType<typeof uintArray>;
 type Kernel = ReturnType<typeof compute>;
+
+// biome-ignore lint/suspicious/noExplicitAny: TSL node arithmetic is loosely typed.
+type Node = any;
+
+/** erfc(x) for x ≥ 0 (Numerical Recipes rational-exponential approximation), in TSL. */
+function erfcApprox(x: Node): Node {
+  const t = float(1).div(x.mul(0.5).add(1));
+  const p = t
+    .mul(0.17087277)
+    .add(-0.82215223)
+    .mul(t)
+    .add(1.48851587)
+    .mul(t)
+    .add(-1.13520398)
+    .mul(t)
+    .add(0.27886807)
+    .mul(t)
+    .add(-0.18628806)
+    .mul(t)
+    .add(0.09678418)
+    .mul(t)
+    .add(0.37409196)
+    .mul(t)
+    .add(1.00002368)
+    .mul(t)
+    .add(-1.26551223);
+  return t.mul(exp(x.mul(x).mul(-1).add(p)));
+}
 
 /** Wrap a TSL compute body into a dispatchable kernel. */
 function kernel(body: () => void, count: number): Kernel {
@@ -67,6 +99,26 @@ function resolveSpecies(name: string): Species {
   return SPECIES_LIBRARY[key] ?? SPECIES_LIBRARY.ARGON;
 }
 
+/** Species assignment matching the CPU engine: rock-salt for ionic (L3) binaries, else seeded mix. */
+function makeTypeIds(config: SimConfig, hasSecond: boolean): Uint8Array {
+  const n = config.particleCount;
+  const ids = new Uint8Array(n);
+  if (!hasSecond) return ids;
+  if (config.level === "L3") {
+    const perSide = Math.ceil(Math.cbrt(n));
+    for (let p = 0; p < n; p++) {
+      const iz = p % perSide;
+      const iy = Math.floor(p / perSide) % perSide;
+      const ix = Math.floor(p / (perSide * perSide));
+      ids[p] = (ix + iy + iz) & 1;
+    }
+    return ids;
+  }
+  const rng = new Rng(config.seed ^ 0x5bd1e995);
+  for (let i = 0; i < n; i++) ids[i] = rng.next() < config.fractionSecond ? 1 : 0;
+  return ids;
+}
+
 /**
  * WebGPU molecular-dynamics engine (TSL compute). Velocity-Verlet across three
  * compute passes (half-kick → forces → half-kick), O(N²) pair forces with periodic
@@ -84,6 +136,13 @@ export class GpuEngine {
   private readonly velocities: Vec3Storage;
   private readonly forces: Vec3Storage;
   private readonly energyVirial: Vec2Storage;
+  /** Per-atom (σ, ε, charge, 1/mass) — enables multi-species + electrostatics on the GPU. */
+  private readonly params: Vec4Storage;
+  private readonly masses: Float64Array;
+  private readonly speciesList: readonly Species[];
+  /** Per-atom RGB colour (0–1) and radius (nm) for multi-species GPU rendering. */
+  readonly renderColors: Float32Array;
+  readonly renderRadii: Float32Array;
 
   // Uniforms (updated from the CPU on config change).
   private readonly uDt = uniform(0);
@@ -95,6 +154,15 @@ export class GpuEngine {
   private readonly uRc2 = uniform(0);
   private readonly uPeriodic = uniform(1);
   private readonly uGravity = uniform(0);
+  // Electrostatics (Coulomb–Wolf DSF). uUseCoulomb / uUseShift switch the force form per level.
+  private readonly uAlpha = uniform(2.5);
+  private readonly uRcC2 = uniform(0);
+  private readonly uErfcRc = uniform(0);
+  private readonly uShiftC = uniform(0);
+  private readonly uRcC = uniform(0);
+  private readonly uKe = uniform(0);
+  private readonly uUseCoulomb = uniform(0);
+  private readonly uUseShift = uniform(0);
   // Cell-list grid.
   private readonly uCellsPerAxis = uniform(1);
   private readonly uCellSize = uniform(1);
@@ -127,15 +195,40 @@ export class GpuEngine {
     const n = config.particleCount;
     this.boxLengths = new Vector3(config.boxLength, config.boxLength, config.boxLength);
 
+    // Multi-species set-up mirroring the CPU engine: optional second species, with an
+    // alternating rock-salt layout for ionic (L3) binaries and a seeded mix otherwise.
+    const second = config.secondSpeciesName ? resolveSpecies(config.secondSpeciesName) : null;
+    this.speciesList = second ? [this.species, second] : [this.species];
+    const typeIds = makeTypeIds(config, second !== null);
+
     // Initial conditions from the shared CPU initialiser (lattice + Maxwell-Boltzmann).
-    const init = createState(n);
+    const init = createState(n, typeIds);
     const rng = new Rng(config.seed);
     const box = {
       lengths: [config.boxLength, config.boxLength, config.boxLength] as const,
       boundary: "periodic" as const,
     };
     placeOnLattice(init, box, { jitter: 0.05, rng });
-    setMaxwellBoltzmannVelocities(init, [this.species], config.temperature, rng);
+    setMaxwellBoltzmannVelocities(init, this.speciesList, config.temperature, rng);
+
+    // Per-atom (σ, ε, charge, 1/mass) packed into a vec4, + CPU mass / render arrays.
+    const param = new Float32Array(n * 4);
+    this.masses = new Float64Array(n);
+    this.renderColors = new Float32Array(n * 3);
+    this.renderRadii = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const s = this.speciesList[typeIds[i]];
+      param[4 * i] = s.sigma;
+      param[4 * i + 1] = s.epsilon;
+      param[4 * i + 2] = s.charge;
+      param[4 * i + 3] = 1 / s.mass;
+      this.masses[i] = s.mass;
+      this.renderColors[3 * i] = ((s.color >> 16) & 0xff) / 255;
+      this.renderColors[3 * i + 1] = ((s.color >> 8) & 0xff) / 255;
+      this.renderColors[3 * i + 2] = (s.color & 0xff) / 255;
+      this.renderRadii[i] = s.radius;
+    }
+    this.params = vec4Array(param);
 
     this.positions = vec3Array(Float32Array.from(init.positions));
     this.velocities = vec3Array(Float32Array.from(init.velocities));
@@ -157,13 +250,19 @@ export class GpuEngine {
       this.energyVirial.element(instanceIndex).assign(vec2(0, 0));
     }, n);
 
+    // Shifted-force LJ constants at r_c = 2.5σ: (σ/r_c)² = (1/2.5)² = 0.16 ⇒ σ-independent.
+    const C6 = 0.16 ** 3;
+    const C12 = 0.16 ** 6;
+    const TWO_PI = 2 / Math.sqrt(Math.PI);
+
     this.kIntegrateA = kernel(() => {
       const p = this.positions.element(instanceIndex);
       const v = this.velocities.element(instanceIndex);
       const f = this.forces.element(instanceIndex);
+      const invM = this.params.element(instanceIndex).w;
       v.addAssign(
         f
-          .mul(this.uInvMass)
+          .mul(invM)
           .sub(vec3(0, this.uGravity, 0))
           .mul(this.uHalfDt),
       );
@@ -173,9 +272,11 @@ export class GpuEngine {
       });
     }, n);
 
+    // L1 — multi-species WCA (purely repulsive LJ truncated at 2^(1/6)·σ_ij).
     this.kForcesWCA = kernel(() => {
       const idx = instanceIndex;
       const pi = this.positions.element(idx).toVar();
+      const pmi = this.params.element(idx).toVar();
       const fi = vec3(0).toVar();
       const peSum = float(0).toVar();
       const virSum = float(0).toVar();
@@ -186,16 +287,19 @@ export class GpuEngine {
           d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
         });
         const r2 = d.dot(d).toVar();
+        const pj = this.params.element(j);
+        const sigma = pmi.x.add(pj.x).mul(0.5);
+        const eps = sqrt(pmi.y.mul(pj.y));
+        const rcW = sigma.mul(TWO_POW_1_6);
+        const rc2 = rcW.mul(rcW);
         If(r2.greaterThan(float(1e-12)), () => {
-          If(r2.lessThan(this.uRc2), () => {
-            const inv2 = this.uSigma2.div(r2);
+          If(r2.lessThan(rc2), () => {
+            const inv2 = sigma.mul(sigma).div(r2);
             const inv6 = inv2.mul(inv2).mul(inv2);
             const inv12 = inv6.mul(inv6);
-            const fOverR = float(24).mul(this.uEpsilon).mul(inv12.mul(2).sub(inv6)).div(r2);
+            const fOverR = float(24).mul(eps).mul(inv12.mul(2).sub(inv6)).div(r2);
             fi.addAssign(d.mul(fOverR));
-            peSum.addAssign(
-              float(4).mul(this.uEpsilon).mul(inv12.sub(inv6)).add(this.uEpsilon).mul(0.5),
-            );
+            peSum.addAssign(float(4).mul(eps).mul(inv12.sub(inv6)).add(eps).mul(0.5));
             virSum.addAssign(fOverR.mul(r2).mul(0.5));
           });
         });
@@ -205,20 +309,14 @@ export class GpuEngine {
       this.energyVirial.element(idx).assign(vec2(peSum, virSum));
     }, n);
 
-    // L2 — full Lennard-Jones with shifted-force truncation at r_c = √uRc2.
+    // L2/L3 — multi-species shifted-force LJ (Lorentz-Berthelot) + optional Coulomb (Wolf DSF).
     this.kForcesLJ = kernel(() => {
       const idx = instanceIndex;
       const pi = this.positions.element(idx).toVar();
+      const pmi = this.params.element(idx).toVar();
       const fi = vec3(0).toVar();
       const peSum = float(0).toVar();
       const virSum = float(0).toVar();
-
-      const rc = sqrt(this.uRc2).toVar();
-      const c2 = this.uSigma2.div(this.uRc2);
-      const c6 = c2.mul(c2).mul(c2);
-      const c12 = c6.mul(c6);
-      const fAtRc = float(24).mul(this.uEpsilon).mul(c12.mul(2).sub(c6)).div(rc);
-      const vAtRc = float(4).mul(this.uEpsilon).mul(c12.sub(c6));
 
       Loop(n, ({ i: j }) => {
         const d = pi.sub(this.positions.element(j)).toVar();
@@ -226,19 +324,63 @@ export class GpuEngine {
           d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
         });
         const r2 = d.dot(d).toVar();
+        const pj = this.params.element(j);
+        const sigma = pmi.x.add(pj.x).mul(0.5);
+        const eps = sqrt(pmi.y.mul(pj.y));
+        const qq = pmi.z.mul(pj.z);
+        const rcLj = sigma.mul(2.5);
+        const rcLj2 = rcLj.mul(rcLj);
+
         If(r2.greaterThan(float(1e-12)), () => {
-          If(r2.lessThan(this.uRc2), () => {
-            const r = sqrt(r2);
-            const inv2 = this.uSigma2.div(r2);
+          const r = sqrt(r2).toVar();
+          const fOverR = float(0).toVar();
+
+          If(r2.lessThan(rcLj2), () => {
+            const inv2 = sigma.mul(sigma).div(r2);
             const inv6 = inv2.mul(inv2).mul(inv2);
             const inv12 = inv6.mul(inv6);
-            const fRadial = float(24).mul(this.uEpsilon).mul(inv12.mul(2).sub(inv6)).div(r);
-            const fOverR = fRadial.sub(fAtRc).div(r);
-            const v = float(4).mul(this.uEpsilon).mul(inv12.sub(inv6));
-            fi.addAssign(d.mul(fOverR));
-            peSum.addAssign(v.sub(vAtRc).add(r.sub(rc).mul(fAtRc)).mul(0.5));
-            virSum.addAssign(fOverR.mul(r2).mul(0.5));
+            const fAtRc = float(24)
+              .mul(eps)
+              .mul(C12 * 2 - C6)
+              .div(rcLj);
+            const vAtRc = float(4)
+              .mul(eps)
+              .mul(C12 - C6);
+            const fRadial = float(24).mul(eps).mul(inv12.mul(2).sub(inv6)).div(r);
+            fOverR.addAssign(fRadial.sub(fAtRc).div(r));
+            const vv = float(4).mul(eps).mul(inv12.sub(inv6));
+            peSum.addAssign(vv.sub(vAtRc).add(r.sub(rcLj).mul(fAtRc)).mul(0.5));
           });
+
+          If(this.uUseCoulomb.greaterThan(0.5), () => {
+            If(r2.lessThan(this.uRcC2), () => {
+              const erfcR = erfcApprox(this.uAlpha.mul(r));
+              const expR = exp(this.uAlpha.mul(this.uAlpha).mul(r2).mul(-1));
+              const fCoul = this.uKe
+                .mul(qq)
+                .mul(
+                  erfcR
+                    .div(r2)
+                    .add(float(TWO_PI).mul(this.uAlpha).mul(expR).div(r))
+                    .sub(this.uShiftC),
+                );
+              fOverR.addAssign(fCoul.div(r));
+              peSum.addAssign(
+                this.uKe
+                  .mul(qq)
+                  .mul(
+                    erfcR
+                      .div(r)
+                      .sub(this.uErfcRc.div(this.uRcC))
+                      .add(this.uShiftC.mul(r.sub(this.uRcC))),
+                  )
+                  .mul(0.5),
+              );
+            });
+          });
+
+          fi.addAssign(d.mul(fOverR));
+          virSum.addAssign(fOverR.mul(r2).mul(0.5));
         });
       });
 
@@ -249,9 +391,10 @@ export class GpuEngine {
     this.kIntegrateB = kernel(() => {
       const v = this.velocities.element(instanceIndex);
       const f = this.forces.element(instanceIndex);
+      const invM = this.params.element(instanceIndex).w;
       v.addAssign(
         f
-          .mul(this.uInvMass)
+          .mul(invM)
           .sub(vec3(0, this.uGravity, 0))
           .mul(this.uHalfDt),
       );
@@ -400,6 +543,22 @@ export class GpuEngine {
     this.updateCutoff();
     this.uPeriodic.value = config.boundary === "periodic" ? 1 : 0;
     this.uGravity.value = config.gravity;
+
+    // Electrostatics (Wolf DSF), active for L3. Pre-compute the cutoff-shift constants.
+    const useCoulomb = config.level === "L3";
+    this.uUseCoulomb.value = useCoulomb ? 1 : 0;
+    this.uUseShift.value = config.level === "L2" || config.level === "L3" ? 1 : 0;
+    const alpha = 2.5;
+    const rcC = Math.min(0.9, 0.49 * config.boxLength);
+    const erfcRc = erfcScalar(alpha * rcC);
+    const expRc = Math.exp(-alpha * alpha * rcC * rcC);
+    const twoPi = 2 / Math.sqrt(Math.PI);
+    this.uAlpha.value = alpha;
+    this.uRcC.value = rcC;
+    this.uRcC2.value = rcC * rcC;
+    this.uErfcRc.value = erfcRc;
+    this.uShiftC.value = erfcRc / (rcC * rcC) + (twoPi * alpha * expRc) / rcC;
+    this.uKe.value = COULOMB_CONSTANT;
   }
 
   /** Update gravity (nm·ps⁻², downward) live. */
@@ -540,13 +699,12 @@ export class GpuEngine {
     const vel = new Float32Array(velBuf);
     const ev = new Float32Array(evBuf);
 
-    const mass = this.species.mass;
     let ke = 0;
     for (let i = 0; i < n; i++) {
       const vx = vel[3 * i];
       const vy = vel[3 * i + 1];
       const vz = vel[3 * i + 2];
-      ke += 0.5 * mass * (vx * vx + vy * vy + vz * vz);
+      ke += 0.5 * this.masses[i] * (vx * vx + vy * vy + vz * vz);
     }
     let pe = 0;
     let virial = 0;
@@ -596,7 +754,7 @@ export class GpuEngine {
 
   setLevel(level: AccuracyLevel): void {
     (this.config as { level: AccuracyLevel }).level = level;
-    this.updateCutoff();
+    this.applyConfigUniforms(); // refresh cutoff + electrostatics uniforms for the level
     void this.renderer?.computeAsync(
       this.forcesEnabled ? this.forcePassNodes() : [this.kZeroForces],
     );

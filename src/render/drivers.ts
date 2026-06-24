@@ -1,7 +1,6 @@
 import * as THREE from "three/webgpu";
 import { demixingOrderParameter } from "../core/observables/demixing";
 import { type RadialDistribution, radialDistribution } from "../core/observables/rdf";
-import { SPECIES_LIBRARY } from "../core/species";
 import type { Vec3 } from "../core/types";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
@@ -275,15 +274,12 @@ class GpuDriver implements SimDriver {
  * boundaries (no charges, no molecules, no walls). Every other scene must run on the CPU.
  */
 export function gpuSupportsConfig(config: SimConfig): boolean {
-  const monatomicLevel = config.level === "L0" || config.level === "L1" || config.level === "L2";
-  const key = config.speciesName.toUpperCase() as keyof typeof SPECIES_LIBRARY;
-  const charge = SPECIES_LIBRARY[key]?.charge ?? 0;
-  return (
-    monatomicLevel &&
-    config.secondSpeciesName === null &&
-    config.boundary === "periodic" &&
-    charge === 0
-  );
+  const monatomic =
+    config.level === "L0" ||
+    config.level === "L1" ||
+    config.level === "L2" ||
+    config.level === "L3";
+  return monatomic && config.boundary === "periodic";
 }
 
 /** Build the driver for the configured backend; GPU falls back to CPU when unsupported. */
