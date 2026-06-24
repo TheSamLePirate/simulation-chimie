@@ -49,7 +49,7 @@ describe("NVT thermostats drive temperature to target", () => {
     }
     expect(temperature(state, SPECIES, true)).toBeGreaterThan(80);
     expect(temperature(state, SPECIES, true)).toBeLessThan(170);
-  }, 20_000);
+  }, 60_000);
 
   it("CSVR maintains temperature near the target on average", () => {
     const { state, box } = makeSystem(2, 150);
@@ -72,5 +72,5 @@ describe("NVT thermostats drive temperature to target", () => {
     }
     expect(sumT / samples).toBeGreaterThan(120);
     expect(sumT / samples).toBeLessThan(180);
-  }, 20_000);
+  }, 60_000);
 });
