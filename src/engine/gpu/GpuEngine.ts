@@ -163,6 +163,8 @@ export class GpuEngine {
 
   /** Atom count (≥ 3× molecule count for molecular systems); the kernel dispatch size. */
   readonly atomCount: number;
+  /** Largest LJ σ over the species (sizes the cell grid). */
+  private readonly maxSigma: number;
   /** True for molecular levels (L4–L8): bonded forces + intramolecular exclusions + constraints. */
   readonly molecular: boolean;
   /** Render bonds (i,j) for ball-and-stick molecular drawing, or null (monatomic). */
@@ -233,6 +235,8 @@ export class GpuEngine {
   private readonly kIntegrateB: Kernel;
   // Molecular kernels (built only for molecular systems; null for monatomic L0–L3).
   private readonly kForcesMol: Kernel | null;
+  /** Cell-list nonbonded with intramolecular exclusions (O(N) molecular nonbonded). */
+  private readonly kForcesMolCell: Kernel | null;
   private readonly kBondForces: Kernel | null;
   private readonly kAngleForces: Kernel | null;
   private readonly kAddQForces: Kernel | null;
@@ -265,6 +269,11 @@ export class GpuEngine {
     this.masses = new Float64Array(n);
     this.renderColors = new Float32Array(n * 3);
     this.renderRadii = new Float32Array(n);
+    // Largest σ over species ⇒ the cell grid must be ≥ 2.5·maxσ (and the Coulomb cutoff).
+    this.maxSigma = Math.max(
+      ...species.map((s) => (s.epsilon > 0 ? s.sigma : 0)),
+      this.species.sigma,
+    );
     const renderScale = this.molecular ? 0.42 : 0.78; // ball-and-stick for molecules
     for (let i = 0; i < n; i++) {
       const s = species[typeIds[i]];
@@ -523,6 +532,7 @@ export class GpuEngine {
     const rigid = this.numConstraints > 0;
     this.kZeroForceQ = this.molecular ? this.buildZeroForceQ() : null;
     this.kForcesMol = this.molecular ? this.buildMolNonbonded() : null;
+    this.kForcesMolCell = this.molecular ? this.buildCellForceKernel(true, true) : null;
     this.kBondForces = this.molecular && this.numBonds > 0 ? this.buildBondForces() : null;
     this.kAngleForces = this.molecular && this.numAngles > 0 ? this.buildAngleForces() : null;
     this.kAddQForces = this.molecular ? this.buildAddQForces() : null;
@@ -854,7 +864,7 @@ export class GpuEngine {
    * (Lorentz-Berthelot) shifted-force LJ (or WCA) + Coulomb (Wolf DSF) — identical pair math to the
    * brute kernel, so the result matches it exactly while being O(N) instead of O(N²).
    */
-  private buildCellForceKernel(isLJ: boolean): Kernel {
+  private buildCellForceKernel(isLJ: boolean, exclude = false): Kernel {
     const n = this.atomCount;
     const C6 = 0.16 ** 3;
     const C12 = 0.16 ** 6;
@@ -863,6 +873,8 @@ export class GpuEngine {
       const idx = instanceIndex;
       const pi = this.positions.element(idx).toVar();
       const pmi = this.params.element(idx).toVar();
+      // Molecular: exclude intramolecular pairs (same moleculeId, which also covers self).
+      const myMol = exclude ? this.moleculeIds.element(idx).toVar() : null;
       const fi = vec3(0).toVar();
       const peSum = float(0).toVar();
       const virSum = float(0).toVar();
@@ -885,7 +897,10 @@ export class GpuEngine {
             // Dynamic loop over exactly the particles in this cell (no fixed capacity).
             Loop(cnt as never, ({ i: s }: { i: Node }) => {
               const j = uv(this.sortedParticles.element(start.add(uv(s)))).toVar();
-              If(j.notEqual(idx), () => {
+              const pass = exclude
+                ? this.moleculeIds.element(j).notEqual(myMol as Node)
+                : j.notEqual(idx);
+              If(pass, () => {
                 const d = pi.sub(this.positions.element(j)).toVar();
                 If(this.uPeriodic.greaterThan(0.5), () => {
                   d.assign(d.sub(this.uBox.mul(roundVec(d.div(this.uBox)))));
@@ -1031,12 +1046,16 @@ export class GpuEngine {
     this.uRc2.value = rc * rc;
 
     const L = this.config.boxLength;
-    const cpa = Math.floor(L / rc);
-    // O(N) sorted-particle cell list for monatomic, periodic systems with ≥3 cells/axis (so the
-    // 27-cell stencil maps to distinct cells under the mod wrap, and the cutoff ≤ cell size). The
-    // molecular path keeps the brute kernel (it needs intramolecular exclusions); reflective walls
-    // keep brute too (the cell grid assumes periodic wrapping).
-    this.cellsEnabled = !this.molecular && this.config.boundary === "periodic" && cpa >= 3;
+    // The cell grid must be ≥ the LARGEST interaction range: shifted-force LJ (2.5·maxσ over all
+    // species) and, for molecular systems, the Coulomb cutoff. Then every in-range pair lies in
+    // the 27-cell stencil.
+    const rcCoulomb = this.molecular ? Math.min(0.9, 0.49 * L) : 0;
+    const rcCell = Math.max(2.5 * this.maxSigma, rcCoulomb, 1e-6);
+    const cpa = Math.floor(L / rcCell);
+    // O(N) sorted-particle cell list for periodic systems with ≥3 cells/axis (so the 27-cell
+    // stencil maps to distinct cells under the mod wrap). Reflective walls keep brute (the cell
+    // grid assumes periodic wrapping). Molecular uses the exclusion-aware variant.
+    this.cellsEnabled = this.config.boundary === "periodic" && cpa >= 3;
     const usedCpa = Math.max(1, cpa);
     this.uCellsPerAxis.value = usedCpa;
     this.uCellSize.value = L / usedCpa;
@@ -1051,8 +1070,27 @@ export class GpuEngine {
   private forcePassNodes(): Kernel[] {
     // Molecular: nonbonded-with-exclusions (assigns f32 forces) + bonded scatter into the i32
     // accumulator (zeroed first) + a dequantise pass that folds it into the f32 forces.
-    if (this.molecular && this.kForcesMol && this.kZeroForceQ && this.kAddQForces) {
-      const passes: Kernel[] = [this.kZeroForceQ, this.kForcesMol];
+    if (
+      this.molecular &&
+      this.kForcesMol &&
+      this.kForcesMolCell &&
+      this.kZeroForceQ &&
+      this.kAddQForces
+    ) {
+      // Nonbonded: O(N) cell list (with exclusions) when it fits, else brute. Then bonded scatter
+      // into the i32 accumulator (zeroed first) + a dequantise pass that folds it into f32 forces.
+      const passes: Kernel[] = [this.kZeroForceQ];
+      if (this.cellsEnabled) {
+        passes.push(
+          this.kClearCells,
+          this.kCountCells,
+          this.kPrefixSum,
+          this.kScatter,
+          this.kForcesMolCell,
+        );
+      } else {
+        passes.push(this.kForcesMol);
+      }
       if (this.kBondForces) passes.push(this.kBondForces);
       if (this.kAngleForces) passes.push(this.kAngleForces);
       passes.push(this.kAddQForces);
