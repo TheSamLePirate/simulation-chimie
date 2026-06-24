@@ -51,6 +51,8 @@ export class ParticleSystem {
 
     if (colorMode === "speed") {
       this.applySpeedColors(state);
+    } else if (colorMode === "coordination") {
+      this.applyCoordinationColors(state);
     } else if (this.lastMode !== "species") {
       this.applySpeciesColors(state);
     }
@@ -79,6 +81,43 @@ export class ParticleSystem {
       const t = Math.min(1, speed * scale);
       // Hue 0.66 (blue, slow) → 0 (red, fast).
       this.color.setHSL((1 - t) * 0.66, 0.9, 0.55);
+      this.mesh.setColorAt(i, this.color);
+    }
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+  }
+
+  /**
+   * Colour by local coordination (number of intermolecular neighbours within ~1.3σ). Dense /
+   * ordered regions (liquid + solid cores, ~12 neighbours) glow warm; surfaces and gas (few
+   * neighbours) stay cool — so droplets, condensation and freezing read at a glance.
+   */
+  private applyCoordinationColors(state: SimState): void {
+    const { positions, count, typeIds, moleculeId } = state;
+    const cutoffs = new Float32Array(count);
+    for (let i = 0; i < count; i++) cutoffs[i] = 1.3 * this.species[typeIds[i]].sigma;
+    const coord = new Int32Array(count);
+    for (let i = 0; i < count; i++) {
+      const ix = positions[3 * i];
+      const iy = positions[3 * i + 1];
+      const iz = positions[3 * i + 2];
+      const ci = cutoffs[i];
+      const mi = moleculeId[i];
+      for (let j = i + 1; j < count; j++) {
+        if (moleculeId[j] === mi) continue;
+        const dx = ix - positions[3 * j];
+        const dy = iy - positions[3 * j + 1];
+        const dz = iz - positions[3 * j + 2];
+        const r2 = dx * dx + dy * dy + dz * dz;
+        const rc = Math.max(ci, cutoffs[j]);
+        if (r2 < rc * rc) {
+          coord[i]++;
+          coord[j]++;
+        }
+      }
+    }
+    for (let i = 0; i < count; i++) {
+      const t = Math.min(1, coord[i] / 12); // 12 ≈ close-packed
+      this.color.setHSL((1 - t) * 0.66, 0.85, 0.55); // blue (isolated) → red (dense core)
       this.mesh.setColorAt(i, this.color);
     }
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;

@@ -147,6 +147,11 @@ export function ControlPanel() {
               label: "Vitesse",
               title: "Carte de vitesse (bleu lent → rouge rapide)",
             },
+            {
+              value: "coordination",
+              label: "Structure",
+              title: "Coordination locale : cœurs denses/ordonnés en chaud, surfaces/gaz en froid",
+            },
           ]}
           onChange={setColorMode}
         />

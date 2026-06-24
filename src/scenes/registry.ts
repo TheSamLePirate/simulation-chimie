@@ -1,11 +1,13 @@
 import type { SimConfig } from "../engine/types";
-import { DEFAULT_CONFIG } from "../state/store";
+import { type ColorMode, DEFAULT_CONFIG } from "../state/store";
 
 export interface Scene {
   id: string;
   label: string;
   description: string;
   config: SimConfig;
+  /** View colouring auto-applied on load so the effect reads immediately (default "species"). */
+  colorMode?: ColorMode;
 }
 
 const make = (overrides: Partial<SimConfig>): SimConfig => ({
@@ -26,6 +28,7 @@ export const SCENES: readonly Scene[] = [
       boxLength: 6,
       temperature: 300,
     }),
+    colorMode: "speed", // shows the Maxwell-Boltzmann speed spread
   },
   {
     id: "lj-liquid",
@@ -44,6 +47,7 @@ export const SCENES: readonly Scene[] = [
       thermostat: "berendsen",
       thermostatTau: 0.4,
     }),
+    colorMode: "coordination", // dense liquid core (warm) vs vapour (cool)
   },
   {
     id: "oil-water",
@@ -80,6 +84,7 @@ export const SCENES: readonly Scene[] = [
       thermostat: "berendsen",
       thermostatTau: 1.2, // slow anneal ⇒ atoms have time to order
     }),
+    colorMode: "coordination", // dense ordered core (warm) vs surface (cool)
   },
   {
     id: "water",
@@ -118,12 +123,13 @@ export const SCENES: readonly Scene[] = [
     config: make({
       level: "L7",
       speciesName: "WATER_O",
-      particleCount: 240, // molecules, packed as a centred clump
-      boxLength: 4.0,
-      temperature: 260, // cool ⇒ stays cohesive (warm water evaporates in vacuum)
+      particleCount: 170, // fewer ⇒ faster ⇒ you watch the cube round into a sphere
+      boxLength: 3.2,
+      initialTemperature: 80, // start cold & blocky (a little cube)
+      temperature: 235, // warm liquid ⇒ surface tension rounds it into a sphere
       timestep: 0.002,
       thermostat: "berendsen",
-      thermostatTau: 0.2,
+      thermostatTau: 0.3,
     }),
   },
   {
@@ -176,6 +182,7 @@ export const SCENES: readonly Scene[] = [
       thermostat: "berendsen", // NVT ⇒ stays at T (gravity work doesn't overheat it)
       thermostatTau: 0.5,
     }),
+    colorMode: "coordination", // the dense sediment pile (warm) vs the gas above (cool)
   },
   {
     id: "boil",
@@ -194,5 +201,6 @@ export const SCENES: readonly Scene[] = [
       thermostat: "berendsen",
       thermostatTau: 0.5,
     }),
+    colorMode: "coordination", // watch the droplet (warm) boil away into gas (cool)
   },
 ];

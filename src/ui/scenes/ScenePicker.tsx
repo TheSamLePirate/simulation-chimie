@@ -5,6 +5,7 @@ import { useAppStore } from "../../state/store";
 export function ScenePicker() {
   const patchConfig = useAppStore((s) => s.patchConfig);
   const setPlaying = useAppStore((s) => s.setPlaying);
+  const setColorMode = useAppStore((s) => s.setColorMode);
   const activeSeed = useAppStore((s) => s.config.seed);
   const activeSpecies = useAppStore((s) => s.config.speciesName);
 
@@ -24,6 +25,7 @@ export function ScenePicker() {
               title={scene.description}
               onClick={() => {
                 patchConfig(scene.config);
+                setColorMode(scene.colorMode ?? "species");
                 setPlaying(true);
               }}
             >

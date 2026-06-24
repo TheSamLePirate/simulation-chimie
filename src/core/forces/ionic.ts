@@ -34,8 +34,10 @@ export class IonicForce implements ForceModel {
     const ke = COULOMB_CONSTANT;
     const alpha = this.alpha;
 
-    // Coulomb cutoff must respect the minimum-image limit (≤ L/2).
-    const rcC = Math.min(this.coulombCutoff, 0.49 * Math.min(lx, ly, lz));
+    // Both cutoffs must respect the minimum-image limit (≤ L/2): beyond it an atom would
+    // interact with a neighbour AND its periodic image, double-counting the force (a slow blow-up).
+    const minImage = 0.49 * Math.min(lx, ly, lz);
+    const rcC = Math.min(this.coulombCutoff, minImage);
     const rcC2 = rcC * rcC;
     const erfcRc = erfc(alpha * rcC);
     const expRc = Math.exp(-alpha * alpha * rcC * rcC);
@@ -68,7 +70,7 @@ export class IonicForce implements ForceModel {
         // --- Lennard-Jones (shifted-force at 2.5σ) ---
         const sigma = 0.5 * (si.sigma + sj.sigma);
         const epsilon = Math.sqrt(si.epsilon * sj.epsilon);
-        const rcLj = LJ_CUTOFF_FACTOR * sigma;
+        const rcLj = Math.min(LJ_CUTOFF_FACTOR * sigma, minImage);
         let r = -1;
         if (epsilon > 0 && r2 < rcLj * rcLj) {
           r = Math.sqrt(r2);

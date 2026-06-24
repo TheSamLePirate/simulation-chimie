@@ -4,7 +4,7 @@ import type { RadialDistribution } from "../core/observables/rdf";
 import type { AccuracyLevel, EngineKind, Observables, SimConfig } from "../engine/types";
 
 /** Particle colouring mode (view-only, not part of the physics config). */
-export type ColorMode = "species" | "speed";
+export type ColorMode = "species" | "speed" | "coordination";
 
 /** Render style (view-only): instanced spheres, or a screen-space fluid surface (CPU). */
 export type RenderStyle = "spheres" | "fluid";

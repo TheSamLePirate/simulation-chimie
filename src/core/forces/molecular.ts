@@ -52,7 +52,10 @@ export class MolecularForce implements ForceModel {
 
     const ke = COULOMB_CONSTANT;
     const alpha = this.alpha;
-    const rcC = Math.min(this.coulombCutoff, 0.49 * Math.min(lx, ly, lz));
+    // Cutoffs must respect the minimum-image limit (≤ L/2), else an atom interacts with a
+    // neighbour and its periodic image ⇒ double-counted force ⇒ slow blow-up.
+    const minImage = 0.49 * Math.min(lx, ly, lz);
+    const rcC = Math.min(this.coulombCutoff, minImage);
     const rcC2 = rcC * rcC;
     const erfcRc = erfc(alpha * rcC);
     const expRc = Math.exp(-alpha * alpha * rcC * rcC);
@@ -63,7 +66,7 @@ export class MolecularForce implements ForceModel {
 
     let maxSigma = 0;
     for (const s of species) if (s.epsilon > 0) maxSigma = Math.max(maxSigma, s.sigma);
-    const gridCutoff = Math.max(rcC, LJ_CUTOFF_FACTOR * maxSigma);
+    const gridCutoff = Math.min(minImage, Math.max(rcC, LJ_CUTOFF_FACTOR * maxSigma));
 
     // --- Non-bonded (LJ Lorentz-Berthelot + Coulomb DSF), intramolecular excluded (cell-list) ---
     forEachNeighborPair(state, box, gridCutoff, (i, j, dx, dy, dz, r2) => {
@@ -76,7 +79,7 @@ export class MolecularForce implements ForceModel {
       const epsilon = Math.sqrt(si.epsilon * sj.epsilon);
       if (epsilon > 0) {
         const sigma = 0.5 * (si.sigma + sj.sigma);
-        const rcLj = LJ_CUTOFF_FACTOR * sigma;
+        const rcLj = Math.min(LJ_CUTOFF_FACTOR * sigma, minImage);
         if (r2 < rcLj * rcLj) {
           r = Math.sqrt(r2);
           const inv2 = (sigma * sigma) / r2;
