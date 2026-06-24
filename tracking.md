@@ -29,6 +29,10 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P19** | GPU multi-espèces + Coulomb (Wolf DSF, erfc en TSL) + rendu par espèce | ✅ |
 | **P20** | Dissolution d'un cristal de sel (NaCl) dans l'eau (L8) | ✅ |
 | **P21** | Cell-list GPU : diagnostiqué (binning OK, kernel de force faux) ⇒ gardé désactivé (brute correct) | ✅ |
+| **P22** | Sédimentation thermostatée + docs (CLAUDE.md) | ✅ |
+| **P23** | Les presets MONTRENT l'effet : T initiale ≠ cible, gouttelettes (initialClump), sphères plus petites | ✅ |
+| **P24** | Correction blow-up cristal serré (image minimale : cutoff LJ ≤ L/2) + mode couleur « Structure » + couleur auto par scène | ✅ |
+| **P25** | Correction fuite de config entre scènes (initialClump rémanent ⇒ NaCl explosait) | ✅ |
 
 ---
 
@@ -496,6 +500,36 @@ dissolution d'un cristal, plein de phénomènes, MD parfaitement correcte. »
 **Phénomènes visibles** (11 scènes, 0 erreur) : gaz parfait, liquide LJ, **démixtion huile/eau +
 gravité**, cristallisation, eau atomistique H₂O, eau rigide, **tension de surface (gouttelette)**,
 cristal NaCl (CPU + GPU), **dissolution d'un cristal de sel**, sédimentation, ébullition.
+
+---
+
+## P23–P25 — « On ne voit pas les effets » : rendre chaque preset lisible (retour utilisateur) ✅
+
+**Déclencheur :** « rends chaque preset bien meilleur, je ne vois presque plus les effets désirés…
+améliore le moteur physique. » Les scènes monoatomiques remplissaient la boîte uniformément (un
+blob figé) au lieu de montrer une **transition**.
+
+- **P23 — moteur : `initialTemperature` ≠ cible + `initialClump`.** Les vitesses partent à
+  `initialTemperature`, le thermostat tire vers `temperature` ⇒ on **voit** la transition.
+  `initialClump` place les atomes monoatomiques en gouttelette centrée (densité liquide). Scènes
+  refondues : **Liquide** (gouttelette cohésive + surface + vapeur), **Cristallisation**
+  (liquide → solide, recuit lent), **Ébullition** (gouttelette froide chauffée ⇒ s'évapore).
+  Sphères monoatomiques réduites (0.78×) pour voir surfaces et structure.
+- **P24 — bug réel : blow-up des cristaux serrés.** Dans une boîte < 2·(2.5σ), le cutoff **LJ**
+  dépassait L/2 ⇒ un atome interagissait avec un voisin ET son image périodique (force
+  double-comptée ⇒ explosion lente : NaCl atteignait ~1e62 K). Tous les modèles de force (ionic,
+  water, molecular) **plafonnent désormais chaque cutoff** (LJ + grille du cell-list) à l'image
+  minimale, comme le faisait déjà Coulomb. Test de non-régression ajouté. **Mode couleur
+  « Structure »** (coordination locale : cœurs denses/ordonnés en chaud, surfaces/gaz en froid) +
+  **couleur auto par scène** (Gaz → vitesse ; Liquide/Cristal/Sédiment/Ébullition → Structure) ⇒
+  l'effet se lit immédiatement.
+- **P25 — bug réel : fuite de config entre scènes.** Le store charge une scène par **fusion**
+  (`{...prev, ...scene}`) ; comme `make()` omettait `initialClump`/`initialTemperature`, le flag
+  `initialClump:true` de **Liquide/Ébullition** **persistait** jusqu'à **NaCl**, dont les 216 ions
+  se retrouvaient empaquetés dans un amas plus gros que la boîte ⇒ explosion. `make()` réinitialise
+  maintenant ces champs. Tests de non-régression ajoutés. **Montage complet 11 scènes : tout stable.**
+
+**69 tests unitaires + 7 e2e.** Chaque preset montre clairement son phénomène, sans erreur.
 
 ---
 
