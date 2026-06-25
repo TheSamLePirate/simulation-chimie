@@ -1,3 +1,4 @@
+import { buildAlkaneSystem } from "../../core/alkane";
 import { applyBoundary } from "../../core/boundary";
 import { createBox, createBoxXYZ, volume } from "../../core/box";
 import { type DistanceConstraints, rattle, shake } from "../../core/constraints";
@@ -11,6 +12,7 @@ import { WcaForce } from "../../core/forces/wca";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
 import { velocityVerletStep } from "../../core/integrators/velocityVerlet";
 import { buildOilWaterSystem } from "../../core/mixture";
+import { buildMorseSystem } from "../../core/morseDiatomic";
 import { kineticEnergy, pressure, temperature } from "../../core/observables";
 import { Rng } from "../../core/rng";
 import { SPECIES_LIBRARY } from "../../core/species";
@@ -41,6 +43,8 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
     case "L6":
     case "L7":
     case "L8":
+    case "L9":
+    case "L10":
       // Molecular systems need topology; they are built in CpuEngine.configure().
       throw new Error("molecular force is built in configure()");
   }
@@ -160,6 +164,40 @@ export class CpuEngine implements SimulationEngine {
       for (let a = 0; a < this.state.count; a++) {
         this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
       }
+      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
+      this.last = this.force.compute(this.state, this.box, this.species);
+      this.stepCount = 0;
+      this.elapsed = 0;
+      return;
+    }
+
+    // L9 — alkane chains: flexible bonds + angles + RB dihedrals ⇒ trans/gauche conformations.
+    // particleCount = number of chains; each chain is 9 united-atom carbons.
+    if (c.level === "L9") {
+      const rng = new Rng(c.seed);
+      const sys = buildAlkaneSystem(c.particleCount, 9, this.box, initT, rng);
+      this.state = sys.state;
+      this.species = sys.species;
+      this.force = new MolecularForce(sys.bonds, sys.angles, 2.5, 0.9, sys.dihedrals);
+      this.bonds = sys.renderBonds;
+      this.constraints = null;
+      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
+      this.last = this.force.compute(this.state, this.box, this.species);
+      this.stepCount = 0;
+      this.elapsed = 0;
+      return;
+    }
+
+    // L10 — Morse dissociation: diatomic molecules whose anharmonic bonds break when heated.
+    // particleCount = number of diatomic molecules.
+    if (c.level === "L10") {
+      const rng = new Rng(c.seed);
+      const sys = buildMorseSystem(c.particleCount, this.box, initT, rng);
+      this.state = sys.state;
+      this.species = sys.species;
+      this.force = new MolecularForce(sys.bonds, sys.angles);
+      this.bonds = sys.renderBonds;
+      this.constraints = null;
       this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
       this.last = this.force.compute(this.state, this.box, this.species);
       this.stepCount = 0;
@@ -348,8 +386,16 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // Molecular levels (L4–L8) change topology/atom count ⇒ full rebuild, not a swap.
-    if (level === "L4" || level === "L5" || level === "L6" || level === "L7" || level === "L8") {
+    // Molecular levels (L4–L10) change topology/atom count ⇒ full rebuild, not a swap.
+    if (
+      level === "L4" ||
+      level === "L5" ||
+      level === "L6" ||
+      level === "L7" ||
+      level === "L8" ||
+      level === "L9" ||
+      level === "L10"
+    ) {
       this.configure();
       return;
     }

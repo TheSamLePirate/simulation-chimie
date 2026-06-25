@@ -11,7 +11,7 @@ export const simConfigSchema = z.object({
   initialTemperature: z.number().min(0).optional(),
   initialClump: z.boolean().optional(),
   timestep: z.number().positive(),
-  level: z.enum(["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"]),
+  level: z.enum(["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10"]),
   speciesName: z.string(),
   secondSpeciesName: z.string().nullable(),
   fractionSecond: z.number().min(0).max(1),

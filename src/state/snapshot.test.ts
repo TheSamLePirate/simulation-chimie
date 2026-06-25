@@ -49,7 +49,7 @@ describe("config schema validation", () => {
   });
 
   it("rejects an invalid enum value", () => {
-    expect(() => parseConfig({ ...CONFIG, level: "L9" })).toThrow();
+    expect(() => parseConfig({ ...CONFIG, level: "L99" })).toThrow();
   });
 
   it("rejects an out-of-range field", () => {

@@ -51,6 +51,17 @@ export const ACCURACY_LEVELS = {
     label: "L8 · Dissolution",
     description: "Cristal de sel (NaCl) dans l'eau : les ions se solvatent et se dissolvent (CPU)",
   },
+  L9: {
+    id: "L9",
+    label: "L9 · Alcane (dièdres)",
+    description:
+      "Chaînes d'alcane : torsions dièdres ⇒ conformations trans/gauche, repliement (CPU)",
+  },
+  L10: {
+    id: "L10",
+    label: "L10 · Dissociation",
+    description: "Molécules à liaison de Morse : chauffées, les liaisons se rompent (CPU)",
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

@@ -213,6 +213,41 @@ export const SCENES: readonly Scene[] = [
     }),
   },
   {
+    id: "alkane",
+    label: "Alcane (dièdres, conformations)",
+    description:
+      "Chaînes d'alcane (9 carbones) : les torsions dièdres font basculer les liaisons entre trans et gauche ⇒ les chaînes se replient et ondulent (CPU, L9)",
+    config: make({
+      level: "L9",
+      speciesName: "OIL_CH2",
+      particleCount: 8, // chains (×9 united-atom carbons); dilute so each is visible + can't overlap
+      boxLength: 6,
+      temperature: 450, // warm ⇒ frequent trans⇄gauche flips
+      timestep: 0.001,
+      thermostat: "csvr",
+      thermostatTau: 0.1,
+    }),
+  },
+  {
+    id: "dissociation",
+    label: "Dissociation (liaison de Morse)",
+    description:
+      "Molécules diatomiques à liaison de Morse chauffées bien au-dessus de la profondeur du puits ⇒ les liaisons se rompent et les atomes se séparent (impossible avec un ressort harmonique) (CPU, L10)",
+    config: make({
+      level: "L10",
+      speciesName: "OIL_CH2",
+      particleCount: 64, // diatomic molecules (×2 atoms)
+      boxLength: 4.5,
+      boundary: "reflective", // freed atoms stay in view (no wrap)
+      initialTemperature: 60, // start bonded & cold
+      temperature: 1000, // heat far past the ~25 kJ/mol well ⇒ bonds snap
+      timestep: 0.002,
+      thermostat: "berendsen",
+      thermostatTau: 0.4,
+    }),
+    colorMode: "speed", // freed atoms fly fast ⇒ light up
+  },
+  {
     id: "sediment",
     label: "Sédimentation (gravité)",
     description: "Gravité + parois : les particules tombent et s'accumulent au fond",

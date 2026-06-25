@@ -6,12 +6,18 @@ import { COULOMB_CONSTANT } from "../units";
 const LJ_CUTOFF_FACTOR = 2.5;
 const TWO_OVER_SQRT_PI = 2 / Math.sqrt(Math.PI);
 
-/** Harmonic bonds (i–j at r0, stiffness k). */
+/**
+ * Bonds i–j at r0, stiffness k. Optionally anharmonic (Morse): when `morseA[n] > 0` the bond uses
+ * V = Dₑ(1 − e^(−a(r−r₀)))² with Dₑ = k/(2a²) (so the curvature at r₀ matches the harmonic k). The
+ * Morse force vanishes as r → ∞ ⇒ the bond can BREAK (dissociation), unlike a harmonic spring.
+ */
 export interface BondList {
   readonly i: Int32Array;
   readonly j: Int32Array;
   readonly r0: Float64Array;
   readonly k: Float64Array;
+  /** Per-bond Morse width a (nm⁻¹); 0/absent ⇒ harmonic. */
+  readonly morseA?: Float64Array;
 }
 
 /** Harmonic angles i–j–k (j = vertex) at theta0, stiffness kt. */
@@ -21,6 +27,21 @@ export interface AngleList {
   readonly k: Int32Array;
   readonly theta0: Float64Array;
   readonly kt: Float64Array;
+}
+
+/**
+ * Proper dihedrals i–j–k–l with a Ryckaert-Bellemans potential in the cos(φ) basis:
+ * V(φ) = Σ_{n=0}^{5} cn[n]·cosⁿφ, where φ is the i-j-k-l torsion angle. This is what gives alkanes
+ * their trans/gauche conformations (rotation about the central bond). Each row's coefficients live
+ * in `c0..c5` (kJ·mol⁻¹).
+ */
+export interface DihedralList {
+  readonly i: Int32Array;
+  readonly j: Int32Array;
+  readonly k: Int32Array;
+  readonly l: Int32Array;
+  /** RB coefficients per dihedral: c[n] holds cn (length 6 × count, row-major). */
+  readonly c: Float64Array;
 }
 
 /**
@@ -35,12 +56,25 @@ export interface AngleList {
 export class MolecularForce implements ForceModel {
   readonly name = "Mélange moléculaire";
 
+  private readonly dihedrals: DihedralList;
+
   constructor(
     private readonly bonds: BondList,
     private readonly angles: AngleList,
     private readonly alpha = 2.5,
     private readonly coulombCutoff = 0.9,
-  ) {}
+    dihedrals?: DihedralList,
+  ) {
+    this.dihedrals =
+      dihedrals ??
+      ({
+        i: new Int32Array(0),
+        j: new Int32Array(0),
+        k: new Int32Array(0),
+        l: new Int32Array(0),
+        c: new Float64Array(0),
+      } satisfies DihedralList);
+  }
 
   compute(state: SimState, box: Box, species: readonly Species[]): ForceResult {
     const { positions, forces, typeIds, moleculeId } = state;
@@ -127,8 +161,19 @@ export class MolecularForce implements ForceModel {
       const r = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (r < 1e-9) continue;
       const dr = r - b.r0[n];
-      pe += 0.5 * b.k[n] * dr * dr;
-      const fOverR = (-b.k[n] * dr) / r;
+      const a = b.morseA?.[n] ?? 0;
+      let fOverR: number;
+      if (a > 0) {
+        // Morse: V = Dₑ(1−e^(−a·dr))², Dₑ = k/(2a²). F = −dV/dr = −2Dₑ·a·e^(−a·dr)(1−e^(−a·dr)).
+        const de = b.k[n] / (2 * a * a);
+        const e = Math.exp(-a * dr);
+        pe += de * (1 - e) * (1 - e);
+        const dVdr = 2 * de * a * e * (1 - e);
+        fOverR = -dVdr / r;
+      } else {
+        pe += 0.5 * b.k[n] * dr * dr;
+        fOverR = (-b.k[n] * dr) / r;
+      }
       forces[3 * i] += fOverR * dx;
       forces[3 * i + 1] += fOverR * dy;
       forces[3 * i + 2] += fOverR * dz;
@@ -177,6 +222,85 @@ export class MolecularForce implements ForceModel {
       forces[3 * j] -= fix + fkx;
       forces[3 * j + 1] -= fiy + fky;
       forces[3 * j + 2] -= fiz + fkz;
+    }
+
+    // --- Proper dihedrals (Ryckaert-Bellemans), force via the standard GROMACS gradient ---
+    const d = this.dihedrals;
+    for (let n = 0; n < d.i.length; n++) {
+      const i = d.i[n];
+      const j = d.j[n];
+      const k = d.k[n];
+      const l = d.l[n];
+      // r_ij = r_i − r_j, r_kj = r_k − r_j, r_kl = r_k − r_l (minimum image).
+      const ijx = min(positions[3 * i] - positions[3 * j], lx);
+      const ijy = min(positions[3 * i + 1] - positions[3 * j + 1], ly);
+      const ijz = min(positions[3 * i + 2] - positions[3 * j + 2], lz);
+      const kjx = min(positions[3 * k] - positions[3 * j], lx);
+      const kjy = min(positions[3 * k + 1] - positions[3 * j + 1], ly);
+      const kjz = min(positions[3 * k + 2] - positions[3 * j + 2], lz);
+      const klx = min(positions[3 * k] - positions[3 * l], lx);
+      const kly = min(positions[3 * k + 1] - positions[3 * l + 1], ly);
+      const klz = min(positions[3 * k + 2] - positions[3 * l + 2], lz);
+      // m = r_ij × r_kj, nv = r_kj × r_kl (plane normals).
+      const mx = ijy * kjz - ijz * kjy;
+      const my = ijz * kjx - ijx * kjz;
+      const mz = ijx * kjy - ijy * kjx;
+      const nx = kjy * klz - kjz * kly;
+      const ny = kjz * klx - kjx * klz;
+      const nz = kjx * kly - kjy * klx;
+      const m2 = mx * mx + my * my + mz * mz;
+      const n2 = nx * nx + ny * ny + nz * nz;
+      const kjLen = Math.hypot(kjx, kjy, kjz);
+      if (m2 < 1e-12 || n2 < 1e-12 || kjLen < 1e-9) continue; // collinear ⇒ undefined torsion
+      const mLen = Math.sqrt(m2);
+      const nLen = Math.sqrt(n2);
+      let cosP = (mx * nx + my * ny + mz * nz) / (mLen * nLen);
+      cosP = Math.max(-1, Math.min(1, cosP));
+      // sinφ from (m × n)·r_kj, signed.
+      const sinP =
+        ((my * nz - mz * ny) * kjx + (mz * nx - mx * nz) * kjy + (mx * ny - my * nx) * kjz) /
+        (mLen * nLen * kjLen);
+      // V(φ) = Σ c_p cosᵖφ ; dV/dφ = −sinφ·Σ p·c_p cosᵖ⁻¹φ.
+      let v = 0;
+      let dVdcos = 0;
+      let cp = 1; // cosᵖφ
+      for (let p = 0; p < 6; p++) {
+        const cn = d.c[6 * n + p];
+        v += cn * cp;
+        if (p > 0) dVdcos += (p * cn * cp) / cosP; // p·c_p·cosᵖ⁻¹
+        cp *= cosP;
+      }
+      pe += v;
+      const dVdphi = -sinP * dVdcos;
+      // GROMACS dihedral forces (momentum-conserving): F_i, F_l from the normals; F_j, F_k balance.
+      const fiC = (-dVdphi * kjLen) / m2;
+      const flC = (dVdphi * kjLen) / n2;
+      const fix = fiC * mx;
+      const fiy = fiC * my;
+      const fiz = fiC * mz;
+      const flx = flC * nx;
+      const fly = flC * ny;
+      const flz = flC * nz;
+      const pCoef = (ijx * kjx + ijy * kjy + ijz * kjz) / (kjLen * kjLen);
+      const qCoef = (klx * kjx + kly * kjy + klz * kjz) / (kjLen * kjLen);
+      const fjx = (pCoef - 1) * fix - qCoef * flx;
+      const fjy = (pCoef - 1) * fiy - qCoef * fly;
+      const fjz = (pCoef - 1) * fiz - qCoef * flz;
+      const fkx = (qCoef - 1) * flx - pCoef * fix;
+      const fky = (qCoef - 1) * fly - pCoef * fiy;
+      const fkz = (qCoef - 1) * flz - pCoef * fiz;
+      forces[3 * i] += fix;
+      forces[3 * i + 1] += fiy;
+      forces[3 * i + 2] += fiz;
+      forces[3 * j] += fjx;
+      forces[3 * j + 1] += fjy;
+      forces[3 * j + 2] += fjz;
+      forces[3 * k] += fkx;
+      forces[3 * k + 1] += fky;
+      forces[3 * k + 2] += fkz;
+      forces[3 * l] += flx;
+      forces[3 * l + 1] += fly;
+      forces[3 * l + 2] += flz;
     }
 
     return { potentialEnergy: pe, virial };
