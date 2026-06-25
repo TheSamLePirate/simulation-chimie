@@ -16,11 +16,12 @@ export const simConfigSchema = z.object({
   secondSpeciesName: z.string().nullable(),
   fractionSecond: z.number().min(0).max(1),
   crossScale: z.number().min(0).max(2),
-  thermostat: z.enum(["none", "berendsen", "csvr"]),
+  thermostat: z.enum(["none", "berendsen", "csvr", "langevin"]),
   thermostatTau: z.number().positive(),
   barostat: z.enum(["none", "berendsen"]),
   pressureTarget: z.number(),
   gravity: z.number(),
+  electricField: z.number().optional(),
   engineKind: z.enum(["cpu", "gpu"]),
 });
 

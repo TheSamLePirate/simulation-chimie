@@ -18,6 +18,7 @@ export interface StepResult extends ForceResult {
  *
  * @param dt timestep in ps.
  * @param gravity downward acceleration in nm·ps⁻² applied to −y (0 = none).
+ * @param electricField uniform field along +x in kJ·mol⁻¹·nm⁻¹·e⁻¹; force = q·E (0 = none).
  */
 export function velocityVerletStep(
   state: SimState,
@@ -26,14 +27,17 @@ export function velocityVerletStep(
   force: ForceModel,
   dt: number,
   gravity = 0,
+  electricField = 0,
 ): StepResult {
   const { count, positions, velocities, forces, typeIds } = state;
   const halfDt = 0.5 * dt;
 
-  // First half-kick + drift. Gravity adds a uniform −y acceleration (mass-independent).
+  // First half-kick + drift. Gravity adds a uniform −y acceleration (mass-independent); the
+  // electric field adds a charge-dependent +x acceleration q·E/m (0 for neutral atoms).
   for (let i = 0; i < count; i++) {
-    const invMass = 1 / species[typeIds[i]].mass;
-    velocities[3 * i] += halfDt * forces[3 * i] * invMass;
+    const sp = species[typeIds[i]];
+    const invMass = 1 / sp.mass;
+    velocities[3 * i] += halfDt * (forces[3 * i] + sp.charge * electricField) * invMass;
     velocities[3 * i + 1] += halfDt * (forces[3 * i + 1] * invMass - gravity);
     velocities[3 * i + 2] += halfDt * forces[3 * i + 2] * invMass;
     positions[3 * i] += dt * velocities[3 * i];
@@ -48,8 +52,9 @@ export function velocityVerletStep(
 
   // Second half-kick.
   for (let i = 0; i < count; i++) {
-    const invMass = 1 / species[typeIds[i]].mass;
-    velocities[3 * i] += halfDt * forces[3 * i] * invMass;
+    const sp = species[typeIds[i]];
+    const invMass = 1 / sp.mass;
+    velocities[3 * i] += halfDt * (forces[3 * i] + sp.charge * electricField) * invMass;
     velocities[3 * i + 1] += halfDt * (forces[3 * i + 1] * invMass - gravity);
     velocities[3 * i + 2] += halfDt * forces[3 * i + 2] * invMass;
   }

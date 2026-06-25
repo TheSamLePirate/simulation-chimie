@@ -71,6 +71,7 @@ export interface SimDriver {
   setThermostat(kind: SimConfig["thermostat"], tau: number): void;
   setBarostat(kind: SimConfig["barostat"], pressureTarget: number): void;
   setGravity(gravity: number): void;
+  setElectricField(electricField: number): void;
   dispose(): void;
 }
 
@@ -161,6 +162,9 @@ class CpuDriver implements SimDriver {
   }
   setGravity(gravity: number): void {
     this.engine.setGravity(gravity);
+  }
+  setElectricField(electricField: number): void {
+    this.engine.setElectricField(electricField);
   }
 
   dispose(): void {
@@ -260,6 +264,9 @@ class GpuDriver implements SimDriver {
   }
   setGravity(gravity: number): void {
     this.engine.setGravity(gravity);
+  }
+  setElectricField(electricField: number): void {
+    this.engine.setElectricField(electricField);
   }
 
   dispose(): void {

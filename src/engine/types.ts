@@ -100,6 +100,11 @@ export interface SimConfig {
   readonly pressureTarget: number;
   /** Downward gravitational acceleration in nm·ps⁻² (0 = off; exaggerated vs real g for visibility). */
   readonly gravity: number;
+  /**
+   * Uniform external electric field along +x in kJ·mol⁻¹·nm⁻¹·e⁻¹ (0 = off). The force on an
+   * atom is q·E (charge-dependent), so + and − ions drift in opposite directions (electrophoresis).
+   */
+  readonly electricField?: number | undefined;
   /** Compute backend: CPU reference oracle or WebGPU. */
   readonly engineKind: EngineKind;
 }

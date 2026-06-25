@@ -91,6 +91,11 @@ export function ControlPanel() {
               label: "CSVR",
               title: "NVT — échantillonnage canonique correct",
             },
+            {
+              value: "langevin",
+              label: "Langevin",
+              title: "NVT stochastique — friction + bruit ⇒ mouvement brownien",
+            },
           ]}
           onChange={(thermostat) => patchConfig({ thermostat })}
         />
@@ -210,6 +215,15 @@ export function ControlPanel() {
           step={0.005}
           format={(v) => (v === 0 ? "off" : v.toFixed(3))}
           onChange={(gravity) => patchConfig({ gravity })}
+        />
+        <Slider
+          label="Champ électrique"
+          value={config.electricField ?? 0}
+          min={0}
+          max={500}
+          step={10}
+          format={(v) => (v === 0 ? "off" : `${v.toFixed(0)} →`)}
+          onChange={(electricField) => patchConfig({ electricField })}
         />
         <Slider
           label="Taille de cellule"

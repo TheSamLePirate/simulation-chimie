@@ -15,7 +15,7 @@ import { kineticEnergy, pressure, temperature } from "../../core/observables";
 import { Rng } from "../../core/rng";
 import { SPECIES_LIBRARY } from "../../core/species";
 import { createState } from "../../core/state";
-import { berendsenLambda, csvrLambda } from "../../core/thermostats";
+import { berendsenLambda, csvrLambda, langevinFactors } from "../../core/thermostats";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../../core/types";
 import { BAR_PER_KJ_PER_MOL_NM3, BOLTZMANN_KJ_PER_MOL_K, pressureToBar } from "../../core/units";
 import { buildWaterSystem } from "../../core/water";
@@ -231,6 +231,7 @@ export class CpuEngine implements SimulationEngine {
             this.force,
             dt,
             this.config.gravity,
+            this.config.electricField ?? 0,
           );
       this.applyThermostat(dt);
       this.applyBarostat(dt);
@@ -243,14 +244,16 @@ export class CpuEngine implements SimulationEngine {
   private stepRigidConstrained(dt: number): ForceResult {
     const c = this.constraints;
     if (!c) return velocityVerletStep(this.state, this.box, this.species, this.force, dt);
-    const { positions, velocities, forces, count } = this.state;
+    const { positions, velocities, forces, count, typeIds } = this.state;
     const inv = this.invMass;
     const g = this.config.gravity;
+    const eField = this.config.electricField ?? 0;
     const halfDt = 0.5 * dt;
 
     this.refPositions.set(positions);
     for (let a = 0; a < count; a++) {
-      velocities[3 * a] += halfDt * forces[3 * a] * inv[a];
+      const qE = this.species[typeIds[a]].charge * eField;
+      velocities[3 * a] += halfDt * (forces[3 * a] + qE) * inv[a];
       velocities[3 * a + 1] += halfDt * (forces[3 * a + 1] * inv[a] - g);
       velocities[3 * a + 2] += halfDt * forces[3 * a + 2] * inv[a];
       positions[3 * a] += dt * velocities[3 * a];
@@ -262,7 +265,8 @@ export class CpuEngine implements SimulationEngine {
 
     const result = this.force.compute(this.state, this.box, this.species);
     for (let a = 0; a < count; a++) {
-      velocities[3 * a] += halfDt * forces[3 * a] * inv[a];
+      const qE = this.species[typeIds[a]].charge * eField;
+      velocities[3 * a] += halfDt * (forces[3 * a] + qE) * inv[a];
       velocities[3 * a + 1] += halfDt * (forces[3 * a + 1] * inv[a] - g);
       velocities[3 * a + 2] += halfDt * forces[3 * a + 2] * inv[a];
     }
@@ -293,6 +297,22 @@ export class CpuEngine implements SimulationEngine {
   private applyThermostat(dt: number): void {
     const kind = this.config.thermostat;
     if (kind === "none") return;
+
+    // Langevin: per-atom friction + random kick (Brownian motion). Mass-dependent, so it can't
+    // be a single global λ; v ← c₁·v + c₂·η with η ~ N(0,1) per component.
+    if (kind === "langevin") {
+      const { velocities, typeIds, count } = this.state;
+      const target = this.config.temperature;
+      const tau = this.config.thermostatTau;
+      for (let a = 0; a < count; a++) {
+        const { c1, c2 } = langevinFactors(dt, tau, target, this.species[typeIds[a]].mass);
+        velocities[3 * a] = c1 * velocities[3 * a] + c2 * this.thermostatRng.gaussian();
+        velocities[3 * a + 1] = c1 * velocities[3 * a + 1] + c2 * this.thermostatRng.gaussian();
+        velocities[3 * a + 2] = c1 * velocities[3 * a + 2] + c2 * this.thermostatRng.gaussian();
+      }
+      return;
+    }
+
     const dof = 3 * this.state.count - 3;
     if (dof < 1) return;
 
@@ -370,6 +390,10 @@ export class CpuEngine implements SimulationEngine {
   /** Update gravity (nm·ps⁻², downward) live. */
   setGravity(gravity: number): void {
     this.config = { ...this.config, gravity };
+  }
+
+  setElectricField(electricField: number): void {
+    this.config = { ...this.config, electricField };
   }
 
   /** Overwrite the live state from a snapshot (sizes must match the config). */

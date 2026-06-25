@@ -16,6 +16,7 @@ const make = (overrides: Partial<SimConfig>): SimConfig => ({
   // (the store merges configs): e.g. a clump start must not leak into a tight-box ionic crystal.
   initialTemperature: undefined,
   initialClump: undefined,
+  electricField: undefined,
   ...overrides,
 });
 
@@ -153,6 +154,47 @@ export const SCENES: readonly Scene[] = [
       thermostat: "berendsen",
       thermostatTau: 0.2,
     }),
+  },
+  {
+    id: "electrophoresis",
+    label: "Électrophorèse (champ électrique)",
+    description:
+      "Champ électrique + parois : les ions + et − migrent vers les électrodes opposées (séparation des charges) — CPU + GPU",
+    config: make({
+      level: "L3",
+      speciesName: "SODIUM",
+      secondSpeciesName: "CHLORIDE",
+      fractionSecond: 0.5,
+      crossScale: 1,
+      particleCount: 216,
+      boxLength: 4, // diluted ⇒ ions are mobile (not locked in a crystal)
+      boundary: "reflective", // ions pile up at opposite walls (the electrodes)
+      temperature: 320,
+      timestep: 0.001,
+      // Langevin friction gives each ion a terminal drift velocity v = q·E/(m·γ) — exactly
+      // electrophoretic mobility — and dissipates the work the field does at the walls (strong
+      // coupling, τ=0.1) so it stays stable on the GPU where a lagging Berendsen would overheat.
+      thermostat: "langevin",
+      thermostatTau: 0.1,
+      electricField: 150, // q·E force along +x; + ions go +x, − ions go −x
+    }),
+  },
+  {
+    id: "brownian",
+    label: "Mouvement brownien (Langevin)",
+    description:
+      "Thermostat de Langevin : friction + coups aléatoires ⇒ marche aléatoire diffusive (mouvement brownien) — CPU + GPU",
+    config: make({
+      level: "L1",
+      speciesName: "ARGON",
+      particleCount: 250,
+      boxLength: 7, // dilute ⇒ the random walk of each particle is easy to follow
+      temperature: 300,
+      timestep: 0.005,
+      thermostat: "langevin",
+      thermostatTau: 0.4,
+    }),
+    colorMode: "speed", // the random thermal kicks light up as flickering colours
   },
   {
     id: "dissolution",

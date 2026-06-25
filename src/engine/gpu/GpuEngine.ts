@@ -3,6 +3,7 @@ import {
   atomicAdd,
   atomicLoad,
   atomicStore,
+  bitXor,
   clamp,
   compute,
   exp,
@@ -18,6 +19,7 @@ import {
   mod,
   round,
   select,
+  shiftRight,
   sqrt,
   uint,
   uniform,
@@ -30,7 +32,12 @@ import { erfc as erfcScalar } from "../../core/math/erf";
 import { pressure } from "../../core/observables";
 import { SPECIES_LIBRARY } from "../../core/species";
 import type { Species } from "../../core/types";
-import { BAR_PER_KJ_PER_MOL_NM3, COULOMB_CONSTANT, temperatureFromKinetic } from "../../core/units";
+import {
+  BAR_PER_KJ_PER_MOL_NM3,
+  BOLTZMANN_KJ_PER_MOL_K,
+  COULOMB_CONSTANT,
+  temperatureFromKinetic,
+} from "../../core/units";
 import { buildSystem } from "../buildSystem";
 import type { AccuracyLevel, Observables, SimConfig } from "../types";
 
@@ -196,6 +203,8 @@ export class GpuEngine {
   private readonly uRc2 = uniform(0);
   private readonly uPeriodic = uniform(1);
   private readonly uGravity = uniform(0);
+  /** Uniform external electric field along +x (kJ·mol⁻¹·nm⁻¹·e⁻¹); force = q·E. */
+  private readonly uElectric = uniform(0);
   // Electrostatics (Coulomb–Wolf DSF). uUseCoulomb / uUseShift switch the force form per level.
   private readonly uAlpha = uniform(2.5);
   private readonly uRcC2 = uniform(0);
@@ -211,6 +220,10 @@ export class GpuEngine {
   private readonly uHalfBox = uniform(0.5);
   // Berendsen thermostat scale (computed on CPU from the readback KE; 1 = no-op).
   private readonly uThermoLambda = uniform(1);
+  // Langevin thermostat (per-atom friction + random kick): v ← c₁·v + (c₂·√invM)·η.
+  private readonly uLangevinC1 = uniform(1);
+  private readonly uLangevinC2 = uniform(0); // √[(1−c₁²)·k_B·T]; ×√invM per atom in-kernel
+  private readonly uStep = uniform(0); // step counter (re-seeds the per-atom RNG each substep)
 
   // Sorted-particle cell list (counting-sort neighbour search): per-cell counts, the exclusive
   // prefix sum (start offset), a scatter cursor, and particle indices sorted by cell. No fixed
@@ -232,6 +245,7 @@ export class GpuEngine {
   private readonly kForcesCellWCA: Kernel;
   private readonly kForcesCellLJ: Kernel;
   private readonly kThermostat: Kernel;
+  private readonly kLangevin: Kernel;
   private readonly kIntegrateB: Kernel;
   // Molecular kernels (built only for molecular systems; null for monatomic L0–L3).
   private readonly kForcesMol: Kernel | null;
@@ -335,10 +349,13 @@ export class GpuEngine {
       const p = this.positions.element(instanceIndex);
       const v = this.velocities.element(instanceIndex);
       const f = this.forces.element(instanceIndex);
-      const invM = this.params.element(instanceIndex).w;
+      const pm = this.params.element(instanceIndex);
+      const invM = pm.w;
+      // a = F/m + q·E/m (+x, charge-dependent) − g (−y).
       v.addAssign(
         f
           .mul(invM)
+          .add(vec3(pm.z.mul(this.uElectric).mul(invM), 0, 0))
           .sub(vec3(0, this.uGravity, 0))
           .mul(this.uHalfDt),
       );
@@ -479,10 +496,12 @@ export class GpuEngine {
     this.kIntegrateB = kernel(() => {
       const v = this.velocities.element(instanceIndex);
       const f = this.forces.element(instanceIndex);
-      const invM = this.params.element(instanceIndex).w;
+      const pm = this.params.element(instanceIndex);
+      const invM = pm.w;
       v.addAssign(
         f
           .mul(invM)
+          .add(vec3(pm.z.mul(this.uElectric).mul(invM), 0, 0))
           .sub(vec3(0, this.uGravity, 0))
           .mul(this.uHalfDt),
       );
@@ -526,6 +545,37 @@ export class GpuEngine {
     this.kThermostat = kernel(() => {
       const v = this.velocities.element(instanceIndex);
       v.assign(v.mul(this.uThermoLambda));
+    }, n);
+
+    // Langevin thermostat (Brownian motion): per-atom friction + a random kick,
+    // v ← c₁·v + (c₂·√invM·√3)·η, η = 2u−1 ∈ [−1,1] (variance 1/3, the √3 folds in ⇒ unit
+    // variance ⇒ correct T). u comes from an explicit integer PCG hash of (atom, step, component)
+    // — a true per-element RNG (decorrelated across atoms AND substeps), unlike smooth value-noise.
+    // No GPU RNG state; re-seeds each substep via uStep. PCG: O'Neill 2014, single-round permute.
+    const pcg = (seedU: Node): Node => {
+      const state = uv(seedU).mul(uint(747796405)).add(uint(2891336453));
+      const rot = uv(uv(shiftRight(state, uint(28))).add(uint(4)));
+      const word = uv(bitXor(shiftRight(state, rot), state)).mul(uint(277803737));
+      return bitXor(shiftRight(word, uint(22)), word);
+    };
+    this.kLangevin = kernel(() => {
+      const idx = instanceIndex;
+      const v = this.velocities.element(idx).toVar();
+      const c2 = this.uLangevinC2.mul(sqrt(this.params.element(idx).w)).mul(1.7320508); // ×√3
+      const stepU = uv(this.uStep);
+      // distinct uint seed per (atom, step, component) via large odd multipliers (hash spacing).
+      const u = (comp: number): Node =>
+        fl(
+          pcg(
+            uv(idx)
+              .mul(uint(2654435761))
+              .add(stepU.mul(uint(40503)))
+              .add(uint(comp).mul(uint(2246822519))),
+          ),
+        ).mul(2.3283064e-10); // /2³² ⇒ [0,1)
+      const eta = (comp: number): Node => u(comp).mul(2).sub(1);
+      v.assign(v.mul(this.uLangevinC1).add(vec3(eta(0), eta(1), eta(2)).mul(c2)));
+      this.velocities.element(idx).assign(v);
     }, n);
 
     // --- Molecular kernels: nonbonded with exclusions + bonded forces + rigid constraints ---
@@ -1000,6 +1050,13 @@ export class GpuEngine {
     this.updateCutoff();
     this.uPeriodic.value = config.boundary === "periodic" ? 1 : 0;
     this.uGravity.value = config.gravity;
+    this.uElectric.value = config.electricField ?? 0;
+    // Langevin coefficients: c₁ = e^(−Δt/τ), c₂ = √[(1−c₁²)·k_B·T] (×√invM per atom in-kernel).
+    const c1 = Math.exp(-config.timestep / config.thermostatTau);
+    this.uLangevinC1.value = c1;
+    this.uLangevinC2.value = Math.sqrt(
+      Math.max(0, (1 - c1 * c1) * BOLTZMANN_KJ_PER_MOL_K * config.temperature),
+    );
 
     // Electrostatics (Wolf DSF), active for L3. Pre-compute the cutoff-shift constants.
     const useCoulomb = config.level === "L3";
@@ -1024,6 +1081,11 @@ export class GpuEngine {
     this.uGravity.value = gravity;
   }
 
+  setElectricField(electricField: number): void {
+    (this.config as { electricField: number }).electricField = electricField;
+    this.uElectric.value = electricField;
+  }
+
   /** Switch thermostat (Berendsen on GPU via λ from the readback KE). */
   setThermostat(thermostat: SimConfig["thermostat"], tau: number): void {
     (
@@ -1034,6 +1096,12 @@ export class GpuEngine {
     ).thermostat = thermostat;
     (this.config as { thermostatTau: number }).thermostatTau = tau;
     if (thermostat === "none") this.uThermoLambda.value = 1;
+    // Refresh Langevin coefficients for the new τ (c₁ = e^(−Δt/τ)).
+    const c1 = Math.exp(-this.config.timestep / tau);
+    this.uLangevinC1.value = c1;
+    this.uLangevinC2.value = Math.sqrt(
+      Math.max(0, (1 - c1 * c1) * BOLTZMANN_KJ_PER_MOL_K * this.config.temperature),
+    );
   }
 
   /**
@@ -1133,7 +1201,9 @@ export class GpuEngine {
     if (this.forcesEnabled) nodes.push(...this.forcePassNodes());
     nodes.push(this.kIntegrateB);
     if (rigid && this.kRattle) nodes.push(this.kRattle);
-    if (this.config.thermostat !== "none") nodes.push(this.kThermostat);
+    // Langevin = per-atom friction + noise (kLangevin); Berendsen/CSVR = global rescale (kThermostat).
+    if (this.config.thermostat === "langevin") nodes.push(this.kLangevin);
+    else if (this.config.thermostat !== "none") nodes.push(this.kThermostat);
     return nodes;
   }
 
@@ -1146,7 +1216,9 @@ export class GpuEngine {
     const renderer = this.renderer;
     if (!renderer) return;
     const nodes = this.stepNodes();
+    const langevin = this.config.thermostat === "langevin";
     for (let s = 0; s < steps; s++) {
+      if (langevin) this.uStep.value = this.stepCount; // re-seed the per-atom RNG each substep
       void renderer.computeAsync(nodes);
       this.elapsed += this.config.timestep;
       this.stepCount += 1;
@@ -1168,7 +1240,9 @@ export class GpuEngine {
     const renderer = this.renderer;
     if (!renderer) return;
     const nodes = this.stepNodes();
+    const langevin = this.config.thermostat === "langevin";
     for (let s = 0; s < steps; s++) {
+      if (langevin) this.uStep.value = this.stepCount;
       await renderer.computeAsync(nodes);
       this.elapsed += this.config.timestep;
       this.stepCount += 1;

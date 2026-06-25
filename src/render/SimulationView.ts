@@ -144,6 +144,9 @@ export class SimulationView {
     if (state.config.gravity !== prev.config.gravity) {
       this.driver.setGravity(state.config.gravity);
     }
+    if (state.config.electricField !== prev.config.electricField) {
+      this.driver.setElectricField(state.config.electricField ?? 0);
+    }
     if (state.stepNonce !== prev.stepNonce) this.driver.stepOnce(state.substeps, state.colorMode);
   }
 
