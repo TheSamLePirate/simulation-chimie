@@ -274,12 +274,23 @@ class GpuDriver implements SimDriver {
  * boundaries (no charges, no molecules, no walls). Every other scene must run on the CPU.
  */
 export function gpuSupportsConfig(config: SimConfig): boolean {
-  // The GPU covers monatomic LJ/WCA/Coulomb (L0–L3), flexible water (L4), and rigid water via
-  // per-molecule SHAKE/RATTLE (L5/L7/L8) — with both periodic and reflective walls (reflective
-  // is handled in the integrator). It has no barostat (NPT → CPU). L6 (oil/water) stays CPU: its
-  // reflective tall box + mixed rigid/flexible molecules + gravity make big transients that the
-  // GPU's lag-prone async thermostat over-corrects; on the CPU it runs cleanly.
-  return config.level !== "L6" && config.barostat === "none";
+  // The GPU runs ONLY what it reproduces bit-for-physics identically to the CPU oracle: monatomic
+  // LJ/WCA/Coulomb (L0–L3), periodic or reflective, no barostat. Its forces match the CPU to
+  // float32 precision (verified) and the per-step thermostat matches too, so GPU == CPU here, and
+  // the O(N) cell list scales it to ~16k atoms.
+  //
+  // Molecular levels (L4–L8: atomistic water/oil/ions) are CPU-ONLY. The GPU molecular FORCES are
+  // correct (LJ + Wolf-DSF Coulomb + bonds/angles + SHAKE/RATTLE, all verified against the CPU),
+  // but the float32 velocity-Verlet does not conserve energy like the CPU's float64 for these
+  // stiff, light-atom (H), strong-Coulomb systems — it runs hot, so water never settles into a
+  // droplet. Until that's solved (mixed-precision accumulation), molecular runs on the CPU where
+  // it is correct, so "every GPU compute matches the CPU" holds.
+  const monatomic =
+    config.level === "L0" ||
+    config.level === "L1" ||
+    config.level === "L2" ||
+    config.level === "L3";
+  return monatomic && config.barostat === "none";
 }
 
 /** Build the driver for the configured backend; GPU falls back to CPU when unsupported. */
