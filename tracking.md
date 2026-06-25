@@ -38,6 +38,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P28** | Parois réfléchissantes sur GPU ⇒ le GPU couvre 8/9 niveaux (tout sauf huile/eau L6) | ✅ |
 | **P30** | Cell-list GPU O(N) RÉPARÉ (tri-particules) ⇒ 16k atomes monoatomiques à ~87 FPS | ✅ |
 | **P31** | Cell-list pour le moléculaire (avec exclusions) ⇒ 4000 molécules d'eau (12k atomes) à 120 FPS | ✅ |
+| **P32** | Correction GPU==CPU : le GPU ne fait QUE le monoatomique (vérifié identique au CPU) ; moléculaire → CPU (dérive float32) | ✅ |
 
 ---
 
@@ -576,6 +577,25 @@ cutoff Coulomb). Activé en périodique avec ≥3 cellules/axe, sinon repli brut
 **Échelle vérifiée headed** : monoatomique **16 000 atomes à 87 FPS** (T=90 K), eau moléculaire
 **12 000 atomes / 4000 molécules à 120 FPS** — le brute plafonnait vers ~3-5k. Aucune régression.
 **74 tests unitaires + 7 e2e.**
+
+## P32 — « Le GPU doit donner le MÊME résultat que le CPU » (retour utilisateur) ✅
+
+**Déclencheur :** sur GPU la gouttelette d'eau ne se forme pas, les molécules tournent trop vite et
+sortent de la boîte ; pareil pour les presets moléculaires. Diagnostic rigoureux (lecture headed +
+comparaison force par force CPU↔GPU **aux positions identiques**) :
+- Les **forces GPU sont correctes** : elles correspondent au CPU à la précision float32 (écart max
+  ~0,05 sur des forces ~2000) pour l'eau flexible (L4) et rigide (L5) — LJ + Coulomb Wolf-DSF +
+  liaisons/angles + exclusions intramoléculaires.
+- MAIS le velocity-Verlet **float32 ne conserve pas l'énergie** comme le float64 du CPU pour ces
+  systèmes raides, à atomes légers (H) et à fort Coulomb : en NVE l'eau GPU monte à ~2000 K vs ~550 K
+  au CPU (indépendant du pas de temps, non corrigé par plus d'itérations SHAKE) ⇒ limite de
+  précision, pas un bug des forces. L'eau trop chaude ne se condense jamais en gouttelette.
+
+**Décision (correction > couverture)** : `gpuSupportsConfig` n'autorise QUE le monoatomique L0–L3
+(où le GPU est **vérifié identique au CPU** : lj 90 K, NaCl ~300 K, cristal 35 K). Les niveaux
+moléculaires (L4–L8) repassent sur **CPU** (corrects, forment des gouttelettes). « Chaque calcul GPU
+== CPU » est donc vrai. Les kernels moléculaires GPU restent dans le code (forces correctes) pour un
+futur intégrateur en précision mixte. **74 tests + 7 e2e.**
 
 ---
 

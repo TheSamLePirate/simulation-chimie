@@ -98,21 +98,23 @@ Headless WebGPU here **does not composite the canvas into screenshots** and **ne
 - Quick GPU sanity = read the temperature metric headed: a physical T (~target) means it works; a
   number like `1e40 K` means the kernel is broken.
 
-GPU support today: **every level except L6** (oil/water). Monatomic **L0–L3** (multi-species LJ +
-Coulomb), atomistic **L4** flexible water (bonded forces scattered into an **i32 quantised force
-accumulator** — WebGPU has no f32 atomics — + intramolecular exclusions by `moleculeId`), and rigid
-water **L5/L7/L8** via **per-molecule SHAKE/RATTLE** (one thread owns a molecule's 3 atoms ⇒
-race-free, no atomics). Both periodic and **reflective** walls (reflective is in the integrator).
-`gpuSupportsConfig()` blocks only L6 (reflective tall box + mixed rigid/flexible + gravity ⇒
-transients the lag-prone async GPU thermostat over-corrects) and NPT (no GPU barostat) — those fall
-back to CPU. The GPU builds molecular systems via the shared **`engine/buildSystem.ts`**
-(deterministic, matches the CPU oracle atom-for-atom — there's a lock-step test). Neighbour search
-is an **O(N) sorted-particle cell list** (counting sort: clear → count → exclusive prefix-sum →
-scatter into a sorted array → 27-cell traversal with a dynamic per-cell loop — no fixed capacity, so
-no phantom pairs), with an exclusion-aware variant for molecular nonbonded; it engages for periodic
-systems with ≥3 cells/axis and falls back to brute O(N²) otherwise (tiny boxes, reflective walls).
-Verified: monatomic **16k atoms @ ~87 FPS**, molecular water **12k atoms (4000 molecules) @ 120
-FPS** — vs the CPU's hundreds.
+GPU support today (the rule: **the GPU runs only what it reproduces identically to the CPU oracle**):
+**monatomic L0–L3** (multi-species LJ + Coulomb), periodic or reflective, no barostat. There it is
+verified to match the CPU — lj-liquid 90 K, NaCl ~300 K, crystallise 35 K all track the CPU — and the
+**O(N) sorted-particle cell list** (counting sort: clear → count → exclusive prefix-sum → scatter
+into a sorted array → 27-cell traversal with a dynamic per-cell loop — no fixed capacity, so no
+phantom pairs) scales it to **~16k atoms @ ~87 FPS**. `gpuSupportsConfig()` returns
+`monatomic && barostat==="none"`.
+
+**Molecular levels (L4–L8) are CPU-only.** The GPU molecular kernels exist and are *correct* — their
+forces (LJ + Wolf-DSF Coulomb + bonds/angles via an **i32 quantised force accumulator** since WebGPU
+has no f32 atomics + intramolecular `moleculeId` exclusions + per-molecule SHAKE/RATTLE) match the
+CPU to **float32 precision** (verified force-by-force at identical positions). BUT the float32
+velocity-Verlet doesn't conserve energy like the CPU's float64 for these stiff, light-atom (H),
+strong-Coulomb systems: under NVE GPU water runs ~2000 K vs the CPU's ~550 K (dt-independent, not a
+forces bug), so water never coheres into a droplet. Until a mixed-precision integrator lands,
+molecular runs on the CPU where it's correct — so **every GPU compute matches the CPU**. The shared
+deterministic **`engine/buildSystem.ts`** (lock-step tested) still backs both engines.
 
 ---
 
