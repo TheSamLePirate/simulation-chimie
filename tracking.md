@@ -39,6 +39,8 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P30** | Cell-list GPU O(N) RÉPARÉ (tri-particules) ⇒ 16k atomes monoatomiques à ~87 FPS | ✅ |
 | **P31** | Cell-list pour le moléculaire (avec exclusions) ⇒ 4000 molécules d'eau (12k atomes) à 120 FPS | ✅ |
 | **P32** | Correction GPU==CPU : le GPU ne fait QUE le monoatomique (vérifié identique au CPU) ; moléculaire → CPU (dérive float32) | ✅ |
+| **P33** | Nouvelles forces : champ électrique (q·E) + thermostat de Langevin/mouvement brownien (CPU + GPU) + démos | ✅ |
+| **P34** | Nouvelles forces : dièdres (Ryckaert-Bellemans, L9 alcane) + liaisons de Morse (L10 dissociation) (CPU) + démos | ✅ |
 
 ---
 
@@ -596,6 +598,38 @@ comparaison force par force CPU↔GPU **aux positions identiques**) :
 moléculaires (L4–L8) repassent sur **CPU** (corrects, forment des gouttelettes). « Chaque calcul GPU
 == CPU » est donc vrai. Les kernels moléculaires GPU restent dans le code (forces correctes) pour un
 futur intégrateur en précision mixte. **74 tests + 7 e2e.**
+
+---
+
+## P33 / P34 — Nouvelles forces : champ électrique, Langevin, dièdres, Morse ✅
+
+Demande : « implémente 1-2-3-4 en y incluant les démos (CPU et GPU), best quality, AAA » — les 4
+forces proposées précédemment.
+
+**P33 (champ électrique + Langevin, CPU + GPU)** :
+1. **Champ électrique** `F = q·E` (+x, dépend de la charge), ajouté dans le kick velocity-Verlet
+   (CPU : VV + chemin rigide SHAKE ; GPU : kernels de kick) + slider live « Champ électrique ».
+   Démo **Électrophorèse** : Na⁺/Cl⁻ migrent vers des parois opposées.
+2. **Thermostat de Langevin** (friction + bruit par atome, étape « O » de BAOAB) : vraie NVT QUI
+   produit aussi le **mouvement brownien**. CPU = gaussienne mulberry32 ; GPU = **hash PCG entier**
+   de (atome, pas, composante) — variance exacte 1/12 vérifiée hors-ligne (le `hash` TSL intégré est
+   du bruit lisse → coups cohérents → faux). Démo **Mouvement brownien**. Le Langevin sert aussi à
+   l'électrophorèse (vitesse de dérive terminale = mobilité ; dissipe le travail aux parois ⇒ stable
+   sur GPU là où un Berendsen retardé surchaufferait). Brownien CPU = 300 K exact, GPU ≈ 225 K (perte
+   d'intégration float32 que le thermostat stochastique équilibre — le MOUVEMENT est correct).
+
+**P34 (dièdres + Morse, CPU — moléculaire)** :
+3. **Dièdres** i–j–k–l, potentiel Ryckaert-Bellemans `V(φ)=Σ cₙ cosⁿφ`, gradient GROMACS conservant
+   la quantité de mouvement. Niveau **L9 « Alcane (dièdres) »** : chaînes d'alcane united-atom qui
+   basculent trans/gauche et se replient.
+4. **Liaisons de Morse** `V=Dₑ(1−e^(−a·dr))²`, `Dₑ=k/(2a²)` : la force s'annule à r→∞ ⇒ la liaison
+   se ROMPT (impossible avec un ressort harmonique). Niveau **L10 « Dissociation »** : diatomiques à
+   puits peu profond (~25 kJ/mol) chauffées à 1000–1200 K ⇒ les liaisons cassent.
+
+Chaque force est **vérifiée contre le gradient numérique de l'énergie** (chaque coordonnée) +
+conservation de la quantité de mouvement + comportements physiques (trans<cis, profondeur Dₑ,
+dissociation). **89 tests unitaires (+15) + 7 e2e.** GPU gardé identique au CPU (monoatomique) ;
+dièdres/Morse sont moléculaires donc CPU. Commits P33 `1ac83f7`, P34 `4b5a0f7`.
 
 ---
 

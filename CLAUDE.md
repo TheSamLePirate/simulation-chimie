@@ -55,9 +55,21 @@ engine is the performance path and must match it. Physics changes go in `core/` 
 Each level switches on one more interaction. This is the project's backbone:
 `L0` ideal gas · `L1` WCA soft spheres · `L2` Lennard-Jones · `L3` + Coulomb (Wolf DSF) ions ·
 `L4` atomistic water (SPC/Fw, flexible) · `L5` rigid water (SHAKE) · `L6` oil/water mixture
-(hydrophobic demixing) · `L7` water droplet (surface tension) · `L8` salt dissolution.
+(hydrophobic demixing) · `L7` water droplet (surface tension) · `L8` salt dissolution ·
+`L9` alkane chains (RB **dihedrals** ⇒ trans/gauche conformations) · `L10` **Morse** dissociation
+(anharmonic bonds break when heated).
 Adding a level = add to `ACCURACY_LEVELS`, the Zod enum, `makeForceModel`/`configure` in CpuEngine,
 `setLevel`, and a scene.
+
+### Forces & ensembles beyond the ladder
+- **External fields** (in the integrator kick, CPU + GPU): gravity (−y accel) and a uniform
+  **electric field** `F = q·E` (+x, charge-dependent) — drives the "Électrophorèse" demo.
+- **Bonded** (`forces/molecular.ts`, CPU): harmonic/**Morse** bonds, harmonic angles, **RB
+  dihedrals** — each verified against the numerical energy gradient (`dihedralMorse.test.ts`).
+- **Thermostats** (`core/thermostats`): `none`/`berendsen`/`csvr`/**`langevin`**. Langevin =
+  per-atom friction + random kick (Brownian motion + true NVT). On the GPU the random kick uses an
+  explicit integer **PCG hash** of (atom, step, component) — a real per-element RNG; the built-in
+  TSL `hash` is smooth value-noise and gives coherent (wrong) kicks, so don't use it here.
 
 ---
 
