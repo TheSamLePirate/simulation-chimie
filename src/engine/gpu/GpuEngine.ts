@@ -831,7 +831,7 @@ export class GpuEngine {
    * but reuses the validated CPU SHAKE algorithm. Fixed iteration count (no early exit on GPU).
    */
   private buildSettle(): Kernel {
-    const ITERS = 6;
+    const ITERS = 50;
     return kernel(
       () => {
         const a = this.waterAtoms(instanceIndex);
@@ -864,7 +864,7 @@ export class GpuEngine {
 
   /** Rigid water velocity correction by per-molecule RATTLE (race-free, one thread per molecule). */
   private buildRattle(): Kernel {
-    const ITERS = 4;
+    const ITERS = 30;
     return kernel(
       () => {
         const a = this.waterAtoms(instanceIndex);
@@ -1058,8 +1058,9 @@ export class GpuEngine {
       Math.max(0, (1 - c1 * c1) * BOLTZMANN_KJ_PER_MOL_K * config.temperature),
     );
 
-    // Electrostatics (Wolf DSF), active for L3. Pre-compute the cutoff-shift constants.
-    const useCoulomb = config.level === "L3";
+    // Electrostatics (Wolf DSF), active for L3 ions AND all molecular levels (water H-bonds,
+    // ions). Without it, water has no cohesion ⇒ no droplet. Pre-compute the cutoff-shift consts.
+    const useCoulomb = config.level === "L3" || this.molecular;
     this.uUseCoulomb.value = useCoulomb ? 1 : 0;
     this.uUseShift.value = config.level === "L2" || config.level === "L3" ? 1 : 0;
     const alpha = 2.5;
@@ -1122,8 +1123,10 @@ export class GpuEngine {
     const cpa = Math.floor(L / rcCell);
     // O(N) sorted-particle cell list for periodic systems with ≥3 cells/axis (so the 27-cell
     // stencil maps to distinct cells under the mod wrap). Reflective walls keep brute (the cell
-    // grid assumes periodic wrapping). Molecular uses the exclusion-aware variant.
-    this.cellsEnabled = this.config.boundary === "periodic" && cpa >= 3;
+    // grid assumes periodic wrapping). MOLECULAR stays on the brute O(N²) path: it is the verified
+    // one (the molecular cell variant drops neighbours ⇒ zero forces ⇒ water never coheres), and
+    // molecular systems are small (hundreds of atoms) so O(N²) is cheap.
+    this.cellsEnabled = this.config.boundary === "periodic" && cpa >= 3 && !this.molecular;
     const usedCpa = Math.max(1, cpa);
     this.uCellsPerAxis.value = usedCpa;
     this.uCellSize.value = L / usedCpa;
@@ -1323,6 +1326,13 @@ export class GpuEngine {
     const renderer = this.renderer;
     if (!renderer) return new Float32Array(this.atomCount * 3);
     return new Float32Array(await renderer.getArrayBufferAsync(this.forces.value));
+  }
+
+  /** Read the current velocities back to the CPU (for parity checks). */
+  async readVelocities(): Promise<Float32Array> {
+    const renderer = this.renderer;
+    if (!renderer) return new Float32Array(this.atomCount * 3);
+    return new Float32Array(await renderer.getArrayBufferAsync(this.velocities.value));
   }
 
   setLevel(level: AccuracyLevel): void {

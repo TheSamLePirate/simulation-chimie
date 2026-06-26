@@ -281,23 +281,28 @@ class GpuDriver implements SimDriver {
  * boundaries (no charges, no molecules, no walls). Every other scene must run on the CPU.
  */
 export function gpuSupportsConfig(config: SimConfig): boolean {
-  // The GPU runs ONLY what it reproduces bit-for-physics identically to the CPU oracle: monatomic
-  // LJ/WCA/Coulomb (L0–L3), periodic or reflective, no barostat. Its forces match the CPU to
-  // float32 precision (verified) and the per-step thermostat matches too, so GPU == CPU here, and
-  // the O(N) cell list scales it to ~16k atoms.
-  //
-  // Molecular levels (L4–L8: atomistic water/oil/ions) are CPU-ONLY. The GPU molecular FORCES are
-  // correct (LJ + Wolf-DSF Coulomb + bonds/angles + SHAKE/RATTLE, all verified against the CPU),
-  // but the float32 velocity-Verlet does not conserve energy like the CPU's float64 for these
-  // stiff, light-atom (H), strong-Coulomb systems — it runs hot, so water never settles into a
-  // droplet. Until that's solved (mixed-precision accumulation), molecular runs on the CPU where
-  // it is correct, so "every GPU compute matches the CPU" holds.
-  const monatomic =
+  // The GPU runs what it reproduces faithfully against the CPU oracle:
+  //  • Monatomic L0–L3 (LJ/WCA/Coulomb): forces match to float32, the O(N) cell list scales it to
+  //    ~16k atoms.
+  //  • Molecular L4–L8 (atomistic water/oil/ions): forces match to float32 AND the dynamics now
+  //    track the CPU — the droplet coheres, dissolution dissolves, T sits within ~10% of the CPU
+  //    (thermostat-controlled). Three fixes unlocked this: enable Wolf-DSF Coulomb for molecular
+  //    (H-bond cohesion), keep molecular on the brute O(N²) nonbonded path (the molecular cell-list
+  //    variant dropped neighbours ⇒ zero forces), and run SHAKE/RATTLE to convergence (50/30 iters,
+  //    not 6/4 — water's coupled H–H constraint converges slowly; under-convergence injects energy).
+  // L9/L10 (alkane dihedrals, Morse dissociation) stay CPU-only — no GPU dihedral/Morse kernels.
+  // Barostat (NPT) needs a device-side virial reduction ⇒ still CPU-only.
+  const supported =
     config.level === "L0" ||
     config.level === "L1" ||
     config.level === "L2" ||
-    config.level === "L3";
-  return monatomic && config.barostat === "none";
+    config.level === "L3" ||
+    config.level === "L4" ||
+    config.level === "L5" ||
+    config.level === "L6" ||
+    config.level === "L7" ||
+    config.level === "L8";
+  return supported && config.barostat === "none";
 }
 
 /** Build the driver for the configured backend; GPU falls back to CPU when unsupported. */
