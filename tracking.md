@@ -41,6 +41,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P32** | Correction GPU==CPU : le GPU ne fait QUE le monoatomique (vérifié identique au CPU) ; moléculaire → CPU (dérive float32) | ✅ |
 | **P33** | Nouvelles forces : champ électrique (q·E) + thermostat de Langevin/mouvement brownien (CPU + GPU) + démos | ✅ |
 | **P34** | Nouvelles forces : dièdres (Ryckaert-Bellemans, L9 alcane) + liaisons de Morse (L10 dissociation) (CPU) + démos | ✅ |
+| **P35** | Moléculaire sur GPU : la gouttelette (L4–L8) tourne sur WebGPU et correspond au CPU (3 bugs corrigés, pas un problème de précision) | ✅ |
 
 ---
 
@@ -630,6 +631,30 @@ Chaque force est **vérifiée contre le gradient numérique de l'énergie** (cha
 conservation de la quantité de mouvement + comportements physiques (trans<cis, profondeur Dₑ,
 dissociation). **89 tests unitaires (+15) + 7 e2e.** GPU gardé identique au CPU (monoatomique) ;
 dièdres/Morse sont moléculaires donc CPU. Commits P33 `1ac83f7`, P34 `4b5a0f7`.
+
+---
+
+## P35 — Moléculaire sur GPU : la gouttelette d'eau (retour utilisateur « le bouton GPU est grisé ») ✅
+
+L'utilisateur demande un **intégrateur en précision mixte** pour que la gouttelette tourne sur GPU.
+Diagnostic : **ce n'était PAS un problème de float32**. Une comparaison **un pas** GPU↔CPU depuis un
+état identique divergeait de 0,0014 nm / 1,44 nm·ps⁻¹ (1000× le plancher float32 ⇒ pas de la
+précision) et une lecture propre des forces montrait le GPU calculant **zéro force** pour la
+gouttelette. **Trois vrais bugs**, tous corrigés :
+1. **Coulomb désactivé** pour le moléculaire (`useCoulomb = level === "L3"` ⇒ eau sans liaisons H ⇒
+   aucune cohésion). → `=== "L3" || molecular`.
+2. Le **kernel cell-list moléculaire** perdait tous les voisins ⇒ zéro force (la gouttelette L7
+   boîte 3,2 emprunte le chemin cell-list ; L5 boîte 1,7 = brute, d'où l'illusion que L5 marchait).
+   → le moléculaire utilise toujours le chemin **brute O(N²)** (systèmes petits, vérifié).
+3. **SHAKE/RATTLE sous-convergés** à 6/4 itérations (la contrainte H–H couplée de l'eau converge
+   lentement) ⇒ travail net des contraintes ⇒ injection d'énergie (L5 NVE ~1750 K). → **50/30**
+   itérations ⇒ L5 NVE ~338 K (CPU ~550), énergie conservée.
+
+Résultat : la gouttelette GPU **se sphérifie** depuis le départ froid, la dissolution solvate, et T
+suit le CPU à ~10 % près (L4–L8). `gpuSupportsConfig` autorise désormais L0–L8 ; L9/L10
+(dièdres/Morse) restent CPU (pas de kernels GPU). **89 tests + 7 e2e.** Commit P35 `f80773c`.
+**Leçon** : quand le GPU « chauffe / ne cohère pas », diffère UN pas contre le CPU et lis les forces
+AVANT d'accuser la précision.
 
 ---
 

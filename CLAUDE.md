@@ -110,23 +110,30 @@ Headless WebGPU here **does not composite the canvas into screenshots** and **ne
 - Quick GPU sanity = read the temperature metric headed: a physical T (~target) means it works; a
   number like `1e40 K` means the kernel is broken.
 
-GPU support today (the rule: **the GPU runs only what it reproduces identically to the CPU oracle**):
-**monatomic L0–L3** (multi-species LJ + Coulomb), periodic or reflective, no barostat. There it is
-verified to match the CPU — lj-liquid 90 K, NaCl ~300 K, crystallise 35 K all track the CPU — and the
-**O(N) sorted-particle cell list** (counting sort: clear → count → exclusive prefix-sum → scatter
-into a sorted array → 27-cell traversal with a dynamic per-cell loop — no fixed capacity, so no
-phantom pairs) scales it to **~16k atoms @ ~87 FPS**. `gpuSupportsConfig()` returns
-`monatomic && barostat==="none"`.
+GPU support today (the rule: **the GPU runs only what it reproduces faithfully against the CPU oracle**):
+- **Monatomic L0–L3** (multi-species LJ + Coulomb), periodic or reflective: lj-liquid 90 K, NaCl
+  ~300 K, crystallise 35 K all track the CPU. The **O(N) sorted-particle cell list** (counting sort:
+  clear → count → exclusive prefix-sum → scatter into a sorted array → 27-cell traversal with a
+  dynamic per-cell loop — no fixed capacity, so no phantom pairs) scales it to **~16k atoms @ ~87 FPS**.
+- **Molecular L4–L8** (atomistic water/oil/ions) now run on the GPU too and **match the CPU**: the
+  droplet (L7) coheres into a sphere, dissolution solvates, and T sits within ~10% of the CPU
+  (thermostat-controlled). Forces use an **i32 quantised accumulator** (WebGPU has no f32 atomics) +
+  intramolecular `moleculeId` exclusions + per-molecule SHAKE/RATTLE.
 
-**Molecular levels (L4–L8) are CPU-only.** The GPU molecular kernels exist and are *correct* — their
-forces (LJ + Wolf-DSF Coulomb + bonds/angles via an **i32 quantised force accumulator** since WebGPU
-has no f32 atomics + intramolecular `moleculeId` exclusions + per-molecule SHAKE/RATTLE) match the
-CPU to **float32 precision** (verified force-by-force at identical positions). BUT the float32
-velocity-Verlet doesn't conserve energy like the CPU's float64 for these stiff, light-atom (H),
-strong-Coulomb systems: under NVE GPU water runs ~2000 K vs the CPU's ~550 K (dt-independent, not a
-forces bug), so water never coheres into a droplet. Until a mixed-precision integrator lands,
-molecular runs on the CPU where it's correct — so **every GPU compute matches the CPU**. The shared
-deterministic **`engine/buildSystem.ts`** (lock-step tested) still backs both engines.
+`gpuSupportsConfig()` = `(L0–L8) && barostat==="none"`. **L9/L10** (alkane RB dihedrals, Morse
+dissociation) stay **CPU-only** — no GPU dihedral/Morse kernels yet. NPT stays CPU (needs a
+device-side virial reduction). The shared deterministic **`engine/buildSystem.ts`** (lock-step
+tested) backs both engines.
+
+⚠️ **The P32→P35 lesson (do not re-learn the hard way).** GPU molecular looked like a "float32 can't
+conserve energy" problem and was gated off for many phases. It was **three ordinary bugs**, found by
+a *one-step* GPU-vs-CPU comparison from an identical state (diverged 1000× the float32 floor ⇒ not
+precision) and a *clean force readback* (GPU forces were literally **zero**): (1) Coulomb was gated to
+L3 only, so molecular water had no H-bonds; (2) the molecular **cell-list** nonbonded kernel dropped
+all neighbours ⇒ zero forces — molecular now uses the **brute O(N²)** path (small systems, verified);
+(3) **SHAKE/RATTLE under-converged** at 6/4 iters (water's coupled H–H converges slowly) ⇒ constraint
+forces did net work ⇒ heating — raised to **50/30**. When the GPU "runs hot / won't cohere", diff one
+step against the CPU and read the forces *before* blaming precision.
 
 ---
 
