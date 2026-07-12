@@ -1087,9 +1087,29 @@ Le réel Ewald, l'auto-énergie, Yeh–Berkowitz et le transfert site M→atomes
 
 ---
 
+## P57 — Énergie et viriel réciproques PME WebGPU ✅
+
+**Objectif (DoD) :** produire les deux scalaires thermodynamiques à partir du même spectre que les
+forces, afin que test-area et pression mécanique ne reposent pas sur une reconstruction différente.
+
+**Livré :** facteur viriel par mode partagé CPU/GPU, stockage de ½G(k)|ρ(k)|² avant convolution,
+viriel réciproque associé et readback/sommation Float64. L'origine k=0 reste exactement nulle et les
+spectres conjugués sont testés. Le harnais compare simultanément force, énergie et viriel.
+
+**Vérifications :** **1 nouveau test** spectral. En navigateur réel : sur 8×8×16, erreurs relatives
+force/énergie/viriel = **3,81×10⁻⁵ / 6,61×10⁻⁶ / 2,25×10⁻⁵** ; sur 16×16×32 =
+**7,67×10⁻⁵ / 5,03×10⁻⁶ / 1,93×10⁻⁵**. Toutes les composantes sont finies et les seuils e2e
+headed sont 5×10⁻³ (force) et 5×10⁻⁴ (énergie/viriel).
+
+**Déviations au plan :** la somme finale est faite après readback pour l'observable de validation ;
+les forces restent 100 % device-side. Une réduction hiérarchique GPU ne devient utile que si la
+mesure d'énergie à chaque pas est requise, ce qui n'est pas le protocole de production.
+
+---
+
 ## Bilan
 
-**Phases P0–P56 livrées** (**159 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P57 livrées** (**160 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

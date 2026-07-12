@@ -182,6 +182,7 @@ async function pmeReciprocalParity(nx = 16, ny = 16, nz = 32) {
   const renderer = sharedRenderer();
   await gpu.compute(renderer);
   const gpuForces = await gpu.readForces(renderer);
+  const gpuReciprocal = await gpu.readReciprocalEnergyVirial(renderer);
   // PME's exact periodic force has no translation mode; apply the same projection as the CPU path.
   for (let component = 0; component < 3; component++) {
     let total = 0;
@@ -189,7 +190,7 @@ async function pmeReciprocalParity(nx = 16, ny = 16, nz = 32) {
     const correction = total / charges.length;
     for (let i = 0; i < charges.length; i++) gpuForces[3 * i + component] -= correction;
   }
-  const reference = computeSmoothPme(
+  const cpu = computeSmoothPme(
     {
       count: charges.length,
       positions: Float64Array.from(positions),
@@ -197,13 +198,25 @@ async function pmeReciprocalParity(nx = 16, ny = 16, nz = 32) {
     },
     box,
     { alpha, grid, realCutoff: 0.2 },
-  ).forces;
+  );
+  const reference = cpu.forces;
   return {
     nx,
     ny,
     nz,
     gpu: finiteDiagnostics(gpuForces),
     cpu: finiteDiagnostics(reference),
+    energy: {
+      gpu: gpuReciprocal.energy,
+      cpu: cpu.reciprocalEnergy,
+      relative:
+        Math.abs(gpuReciprocal.energy - cpu.reciprocalEnergy) / Math.abs(cpu.reciprocalEnergy),
+    },
+    virial: {
+      gpu: gpuReciprocal.virial,
+      cpu: cpu.virial,
+      relative: Math.abs(gpuReciprocal.virial - cpu.virial) / Math.abs(cpu.virial),
+    },
     ...maxAbsDiff(gpuForces, reference),
   };
 }

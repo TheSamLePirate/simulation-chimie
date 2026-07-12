@@ -98,5 +98,7 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     const raw = await page.getByTestId("gpu-pme-parity").textContent({ timeout: 60_000 });
     const r = JSON.parse(raw ?? "null");
     expect(r.maxRel).toBeLessThan(5e-3);
+    expect(r.energy.relative).toBeLessThan(5e-4);
+    expect(r.virial.relative).toBeLessThan(5e-4);
   });
 });

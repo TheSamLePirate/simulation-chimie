@@ -19,7 +19,7 @@ import {
   vec3,
 } from "three/tsl";
 import type { WebGPURenderer } from "three/webgpu";
-import { buildPmeInfluenceGrid } from "../../core/forces/pme";
+import { buildPmeInfluenceGrid, buildPmeVirialFactorGrid } from "../../core/forces/pme";
 import type { Box } from "../../core/types";
 import { GpuFft3d } from "./GpuFft";
 
@@ -45,9 +45,12 @@ const uv = (value: unknown) => uint(value as never);
 const kernel = (body: () => void, count: number): Kernel =>
   compute(Fn(body)() as never, count, WORKGROUP);
 
-function scalarPairs(values: Float32Array): Float32Array {
+function scalarPairs(values: Float32Array, second?: Float32Array): Float32Array {
   const pairs = new Float32Array(2 * values.length);
-  for (let i = 0; i < values.length; i++) pairs[2 * i] = values[i];
+  for (let i = 0; i < values.length; i++) {
+    pairs[2 * i] = values[i];
+    pairs[2 * i + 1] = second?.[i] ?? 0;
+  }
   return pairs;
 }
 
@@ -88,6 +91,7 @@ export class GpuPmeReciprocal {
   private readonly meshChargeQ: ReturnType<typeof uintArray>;
   private readonly contributions: ReturnType<typeof vec3Array>;
   private readonly forces: ReturnType<typeof vec3Array>;
+  private readonly energyVirial: ReturnType<typeof vec2Array>;
   private readonly kClear: Kernel;
   private readonly kAssign: Kernel;
   private readonly kDequantize: Kernel;
@@ -112,11 +116,15 @@ export class GpuPmeReciprocal {
     this.positions = vec3Array(positions);
     this.charges = vec2Array(scalarPairs(charges));
     this.influence = vec2Array(
-      scalarPairs(Float32Array.from(buildPmeInfluenceGrid(box, grid, alpha))),
+      scalarPairs(
+        Float32Array.from(buildPmeInfluenceGrid(box, grid, alpha)),
+        Float32Array.from(buildPmeVirialFactorGrid(box, grid, alpha)),
+      ),
     );
     this.meshChargeQ = uintArray(new Uint32Array(gridPoints)).toAtomic();
     this.contributions = vec3Array(new Float32Array(3 * count * SUPPORT_POINTS));
     this.forces = vec3Array(new Float32Array(3 * count));
+    this.energyVirial = vec2Array(new Float32Array(2 * gridPoints));
     this.fft = new GpuFft3d(new Float32Array(2 * gridPoints), nx, ny, nz);
 
     this.kClear = kernel(() => {
@@ -158,7 +166,14 @@ export class GpuPmeReciprocal {
     }, gridPoints);
 
     this.kInfluence = kernel(() => {
-      this.fft.data.element(instanceIndex).mulAssign(this.influence.element(instanceIndex).x);
+      const rho = this.fft.data.element(instanceIndex).toVar();
+      const coefficient = this.influence.element(instanceIndex);
+      const energy = rho
+        .dot(rho)
+        .mul(coefficient.x)
+        .mul(0.5 / gridPoints);
+      this.energyVirial.element(instanceIndex).assign(vec2(energy, energy.mul(coefficient.y)));
+      this.fft.data.element(instanceIndex).assign(rho.mul(coefficient.x));
     }, gridPoints);
 
     this.kInterpolate = kernel(() => {
@@ -248,5 +263,18 @@ export class GpuPmeReciprocal {
       packed[3 * i + 2] = raw[4 * i + 2];
     }
     return packed;
+  }
+
+  async readReciprocalEnergyVirial(
+    renderer: WebGPURenderer,
+  ): Promise<{ energy: number; virial: number }> {
+    const terms = new Float32Array(await renderer.getArrayBufferAsync(this.energyVirial.value));
+    let energy = 0;
+    let virial = 0;
+    for (let i = 0; i < terms.length; i += 2) {
+      energy += terms[i];
+      virial += terms[i + 1];
+    }
+    return { energy, virial };
   }
 }

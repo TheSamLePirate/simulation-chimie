@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createBoxXYZ } from "../box";
 import { computeEwald3d, ewaldKBounds } from "./ewald";
-import { computeSmoothPme } from "./pme";
+import { buildPmeInfluenceGrid, buildPmeVirialFactorGrid, computeSmoothPme } from "./pme";
 
 const box = createBoxXYZ(2.4, 2.6, 3.2, "periodic");
 const sites = {
@@ -14,6 +14,18 @@ const sites = {
 };
 
 describe("smooth particle-mesh Ewald", () => {
+  it("builds conjugate-symmetric influence and virial spectra with a zero origin", () => {
+    const grid = [8, 8, 16] as const;
+    const influence = buildPmeInfluenceGrid(box, grid, 3.5);
+    const virial = buildPmeVirialFactorGrid(box, grid, 3.5);
+    expect(influence[0]).toBe(0);
+    expect(virial[0]).toBe(0);
+    expect(influence[1]).toBeCloseTo(influence[7], 12);
+    expect(virial[1]).toBeCloseTo(virial[7], 12);
+    expect(influence[8 * 8]).toBeCloseTo(influence[8 * 8 * 15], 12);
+    expect(virial[8 * 8]).toBeCloseTo(virial[8 * 8 * 15], 12);
+  });
+
   it("matches the converged direct Ewald energy and force oracle", () => {
     const alpha = 3.5;
     const bounds = ewaldKBounds(box, 2 * alpha * Math.sqrt(-Math.log(1e-11)));

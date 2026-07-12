@@ -112,6 +112,34 @@ export function buildPmeInfluenceGrid(
   return influence;
 }
 
+/** Per-mode reciprocal virial multiplier used with the mesh energy term. */
+export function buildPmeVirialFactorGrid(
+  box: Box,
+  grid: readonly [number, number, number],
+  alpha: number,
+): Float64Array {
+  const [lx, ly, lz] = box.lengths;
+  const [nx, ny, nz] = grid;
+  const alpha2 = alpha * alpha;
+  const factors = new Float64Array(nx * ny * nz);
+  for (let iz = 0; iz < nz; iz++) {
+    const mz = iz <= nz / 2 ? iz : iz - nz;
+    const kz = (2 * Math.PI * mz) / lz;
+    for (let iy = 0; iy < ny; iy++) {
+      const my = iy <= ny / 2 ? iy : iy - ny;
+      const ky = (2 * Math.PI * my) / ly;
+      for (let ix = 0; ix < nx; ix++) {
+        const mx = ix <= nx / 2 ? ix : ix - nx;
+        if (mx === 0 && my === 0 && mz === 0) continue;
+        const kx = (2 * Math.PI * mx) / lx;
+        const k2 = kx * kx + ky * ky + kz * kz;
+        factors[ix + nx * (iy + ny * iz)] = 1 - k2 / (2 * alpha2);
+      }
+    }
+  }
+  return factors;
+}
+
 function wrapIndex(index: number, length: number): number {
   const value = index % length;
   return value < 0 ? value + length : value;
@@ -208,12 +236,11 @@ export function computeSmoothPme(
   let reciprocalEnergy = 0;
   let reciprocalVirial = 0;
   const influenceGrid = buildPmeInfluenceGrid(box, options.grid, alpha);
+  const virialFactors = buildPmeVirialFactorGrid(box, options.grid, alpha);
   for (let iz = 0; iz < nz; iz++) {
     const mz = iz <= nz / 2 ? iz : iz - nz;
-    const kz = (2 * Math.PI * mz) / lz;
     for (let iy = 0; iy < ny; iy++) {
       const my = iy <= ny / 2 ? iy : iy - ny;
-      const ky = (2 * Math.PI * my) / ly;
       for (let ix = 0; ix < nx; ix++) {
         const mx = ix <= nx / 2 ? ix : ix - nx;
         const index = ix + nx * (iy + ny * iz);
@@ -222,15 +249,13 @@ export function computeSmoothPme(
           mesh[2 * index + 1] = 0;
           continue;
         }
-        const kx = (2 * Math.PI * mx) / lx;
-        const k2 = kx * kx + ky * ky + kz * kz;
         const re = mesh[2 * index];
         const im = mesh[2 * index + 1];
         const potentialScale = influenceGrid[index];
         const influence = potentialScale / gridPoints;
         const energyTerm = 0.5 * influence * (re * re + im * im);
         reciprocalEnergy += energyTerm;
-        reciprocalVirial += energyTerm * (1 - k2 / (2 * alpha2));
+        reciprocalVirial += energyTerm * virialFactors[index];
         mesh[2 * index] = potentialScale * re;
         mesh[2 * index + 1] = potentialScale * im;
       }
