@@ -114,6 +114,8 @@ export interface GpuPmeReciprocalInput {
   readonly grid: readonly [number, number, number];
   readonly realCutoff?: number;
   readonly slabCorrection?: boolean;
+  /** Equal ids omit that pair from real space; the reciprocal exclusion is applied externally. */
+  readonly exclusionGroups?: Uint32Array;
 }
 
 /** GPU smooth-PME reciprocal mesh path (order-6 assignment and analytic force interpolation). */
@@ -121,8 +123,21 @@ export class GpuPmeReciprocal {
   readonly count: number;
   readonly fft: GpuFft3d;
 
+  get positionStorage() {
+    return this.positions;
+  }
+
+  get chargeStorage() {
+    return this.charges;
+  }
+
+  get forceStorage() {
+    return this.forces;
+  }
+
   private readonly positions: ReturnType<typeof vec3Array>;
   private readonly charges: ReturnType<typeof vec2Array>;
+  private readonly exclusionGroups: ReturnType<typeof uintArray>;
   private readonly influence: ReturnType<typeof vec2Array>;
   private readonly meshChargeQ: ReturnType<typeof uintArray>;
   private readonly contributions: ReturnType<typeof vec3Array>;
@@ -148,6 +163,9 @@ export class GpuPmeReciprocal {
     if (positions.length !== 3 * count || charges.length !== count) {
       throw new RangeError("GPU PME charge-site buffers do not match count");
     }
+    if (input.exclusionGroups && input.exclusionGroups.length !== count) {
+      throw new RangeError("GPU PME exclusion groups do not match count");
+    }
     let netCharge = 0;
     for (const charge of charges) netCharge += charge;
     if (Math.abs(netCharge) > 1e-5) throw new Error("GPU PME requires a neutral charge set");
@@ -166,6 +184,9 @@ export class GpuPmeReciprocal {
     this.count = count;
     this.positions = vec3Array(positions);
     this.charges = vec2Array(scalarPairs(charges));
+    this.exclusionGroups = uintArray(
+      input.exclusionGroups ?? Uint32Array.from({ length: count }, (_, index) => index),
+    );
     this.influence = vec2Array(
       scalarPairs(
         Float32Array.from(buildPmeInfluenceGrid(box, grid, alpha)),
@@ -308,35 +329,43 @@ export class GpuPmeReciprocal {
       const force = vec3(0).toVar();
       const energy = float(0).toVar();
       const virial = float(0).toVar();
+      const group = this.exclusionGroups.element(particle);
       Loop(count, ({ i: j }: { i: Node }) => {
         const other = uv(j);
         const delta = position.sub(this.positions.element(other)).toVar();
         const boxVector = vec3(lx, ly, lz);
         delta.assign(delta.sub(boxVector.mul(roundVec(delta.div(boxVector)))));
         const r2 = delta.dot(delta).toVar();
-        If(r2.greaterThan(float(1e-12)), () => {
-          If(r2.lessThan(realCutoff * realCutoff), () => {
-            const r = sqrt(r2);
-            const qq = charge.mul(this.charges.element(other).x);
-            const erfcR = erfcApprox(r.mul(alpha));
-            const expR = exp(r2.mul(-alpha * alpha));
-            const fOverR = qq.mul(COULOMB_CONSTANT).mul(
-              erfcR.div(r2.mul(r)).add(
-                float(TWO_OVER_SQRT_PI * alpha)
-                  .mul(expR)
-                  .div(r2),
-              ),
-            );
-            force.addAssign(delta.mul(fOverR));
-            energy.addAssign(
-              qq
-                .mul(COULOMB_CONSTANT * 0.5)
-                .mul(erfcR)
-                .div(r),
-            );
-            virial.addAssign(fOverR.mul(r2).mul(0.5));
+        const addRealPair = () => {
+          If(r2.greaterThan(float(1e-12)), () => {
+            If(r2.lessThan(realCutoff * realCutoff), () => {
+              const r = sqrt(r2);
+              const qq = charge.mul(this.charges.element(other).x);
+              const erfcR = erfcApprox(r.mul(alpha));
+              const expR = exp(r2.mul(-alpha * alpha));
+              const fOverR = qq.mul(COULOMB_CONSTANT).mul(
+                erfcR.div(r2.mul(r)).add(
+                  float(TWO_OVER_SQRT_PI * alpha)
+                    .mul(expR)
+                    .div(r2),
+                ),
+              );
+              force.addAssign(delta.mul(fOverR));
+              energy.addAssign(
+                qq
+                  .mul(COULOMB_CONSTANT * 0.5)
+                  .mul(erfcR)
+                  .div(r),
+              );
+              virial.addAssign(fOverR.mul(r2).mul(0.5));
+            });
           });
-        });
+        };
+        if (input.exclusionGroups) {
+          If(group.notEqual(this.exclusionGroups.element(other)), addRealPair);
+        } else {
+          addRealPair();
+        }
       });
       if (slabCorrection) {
         const dipoleZ = this.dipoleSlab.element(uint(0)).x;

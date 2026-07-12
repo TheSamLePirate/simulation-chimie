@@ -1,11 +1,20 @@
 import type { WebGPURenderer } from "three/webgpu";
 import { createBoxXYZ } from "../core/box";
 import { computeSmoothPme } from "../core/forces/pme";
+import { Tip4p2005EwaldForce } from "../core/forces/tip4p2005Ewald";
 import { fft1d, fft3d } from "../core/math/fft";
+import { Rng } from "../core/rng";
+import {
+  buildTip4p2005System,
+  redistributeTip4pVirtualForce,
+  TIP4P_2005,
+  tip4pVirtualPositionInBox,
+} from "../core/tip4p2005";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
 import { GpuFft1d, GpuFft3d } from "../engine/gpu/GpuFft";
 import { GpuPmeReciprocal } from "../engine/gpu/GpuPmeReciprocal";
+import { GpuTip4pPme } from "../engine/gpu/GpuTip4pPme";
 import type { SimConfig } from "../engine/types";
 
 /**
@@ -268,15 +277,102 @@ async function pmeFullParity(nx = 8, ny = 8, nz = 16) {
     energy: {
       gpu: gpuThermodynamics.energy,
       cpu: cpu.potentialEnergy,
+      absolute: Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy),
       relative:
         Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy) / Math.abs(cpu.potentialEnergy),
+      scaled:
+        Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy) /
+        Math.max(1, Math.abs(cpu.potentialEnergy)),
     },
     virial: {
       gpu: gpuThermodynamics.virial,
       cpu: cpu.virial,
+      absolute: Math.abs(gpuThermodynamics.virial - cpu.virial),
       relative: Math.abs(gpuThermodynamics.virial - cpu.virial) / Math.abs(cpu.virial),
+      scaled: Math.abs(gpuThermodynamics.virial - cpu.virial) / Math.max(1, Math.abs(cpu.virial)),
     },
     ...maxAbsDiff(gpuForces, cpu.forces),
+  };
+}
+
+/** TIP4P exclusions, M-site force redistribution, energy and virial vs the CPU model. */
+async function tip4pPmeParity(nx = 8, ny = 8, nz = 16) {
+  const molecules = 4;
+  const box = createBoxXYZ(2.4, 2.6, 3.2, "periodic");
+  const system = buildTip4p2005System(molecules, box, 300, new Rng(20250713));
+  for (let i = 0; i < system.state.positions.length; i++) {
+    system.state.positions[i] = Math.fround(system.state.positions[i]);
+  }
+  const sitePositions = new Float32Array(9 * molecules);
+  const charges = new Float32Array(3 * molecules);
+  for (let molecule = 0; molecule < molecules; molecule++) {
+    const oxygen = 3 * molecule;
+    const o = system.state.positions.subarray(3 * oxygen, 3 * oxygen + 3);
+    const h1 = system.state.positions.subarray(3 * (oxygen + 1), 3 * (oxygen + 1) + 3);
+    const h2 = system.state.positions.subarray(3 * (oxygen + 2), 3 * (oxygen + 2) + 3);
+    sitePositions.set(h1, 9 * molecule);
+    sitePositions.set(h2, 9 * molecule + 3);
+    sitePositions.set(tip4pVirtualPositionInBox(o, h1, h2, box), 9 * molecule + 6);
+    charges[3 * molecule] = TIP4P_2005.chargeH;
+    charges[3 * molecule + 1] = TIP4P_2005.chargeH;
+    charges[3 * molecule + 2] = TIP4P_2005.chargeM;
+  }
+  const grid = [nx, ny, nz] as const;
+  const gpu = new GpuTip4pPme({
+    molecules,
+    positions: sitePositions,
+    charges,
+    box,
+    alpha: 3.5,
+    grid,
+    slabCorrection: true,
+  });
+  const renderer = sharedRenderer();
+  await gpu.compute(renderer);
+  const gpuSite = await gpu.readSiteForces(renderer);
+  const gpuAtomic = await gpu.readAtomicForces(renderer);
+  const gpuThermodynamics = await gpu.readEnergyVirial(renderer);
+
+  const cpuModel = new Tip4p2005EwaldForce({ alpha: 3.5, pmeGrid: grid, slabCorrection: true });
+  cpuModel.compute(system.state, box, system.species);
+  const cpu = cpuModel.lastEwald;
+  if (!cpu) throw new Error("CPU TIP4P Ewald diagnostics unavailable");
+  const cpuAtomic = new Float64Array(9 * molecules);
+  for (let molecule = 0; molecule < molecules; molecule++) {
+    const base = 3 * molecule;
+    const mForce = cpu.forces.subarray(3 * (base + 2), 3 * (base + 3));
+    const distributed = redistributeTip4pVirtualForce(mForce);
+    cpuAtomic.set(distributed.oxygen, 3 * base);
+    for (let component = 0; component < 3; component++) {
+      cpuAtomic[3 * (base + 1) + component] =
+        cpu.forces[3 * base + component] + distributed.hydrogen1[component];
+      cpuAtomic[3 * (base + 2) + component] =
+        cpu.forces[3 * (base + 1) + component] + distributed.hydrogen2[component];
+    }
+  }
+  return {
+    nx,
+    ny,
+    nz,
+    siteForces: maxAbsDiff(gpuSite, cpu.forces),
+    atomicForces: maxAbsDiff(gpuAtomic, cpuAtomic),
+    energy: {
+      gpu: gpuThermodynamics.energy,
+      cpu: cpu.potentialEnergy,
+      absolute: Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy),
+      relative:
+        Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy) / Math.abs(cpu.potentialEnergy),
+      scaled:
+        Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy) /
+        Math.max(1, Math.abs(cpu.potentialEnergy)),
+    },
+    virial: {
+      gpu: gpuThermodynamics.virial,
+      cpu: cpu.virial,
+      absolute: Math.abs(gpuThermodynamics.virial - cpu.virial),
+      relative: Math.abs(gpuThermodynamics.virial - cpu.virial) / Math.abs(cpu.virial),
+      scaled: Math.abs(gpuThermodynamics.virial - cpu.virial) / Math.max(1, Math.abs(cpu.virial)),
+    },
   };
 }
 
@@ -289,6 +385,7 @@ export interface MdHarness {
   fft3dParity: typeof fft3dParity;
   pmeReciprocalParity: typeof pmeReciprocalParity;
   pmeFullParity: typeof pmeFullParity;
+  tip4pPmeParity: typeof tip4pPmeParity;
 }
 
 declare global {
@@ -308,6 +405,7 @@ export function installGpuHarness(): void {
     fft3dParity,
     pmeReciprocalParity,
     pmeFullParity,
+    tip4pPmeParity,
   };
 
   const installReadback = (testId: string, run: () => Promise<unknown>) => {
@@ -359,5 +457,11 @@ export function installGpuHarness(): void {
     const dimensions = requestedFullPme.split("x").map(Number);
     const [nx = 8, ny = 8, nz = 16] = dimensions;
     installReadback("gpu-pme-full-parity", () => pmeFullParity(nx, ny, nz));
+  }
+  const requestedTip4p = params.get("gpu-tip4p");
+  if (requestedTip4p !== null) {
+    const dimensions = requestedTip4p.split("x").map(Number);
+    const [nx = 8, ny = 8, nz = 16] = dimensions;
+    installReadback("gpu-tip4p-parity", () => tip4pPmeParity(nx, ny, nz));
   }
 }

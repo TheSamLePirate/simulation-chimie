@@ -110,4 +110,14 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     expect(r.energy.relative).toBeLessThan(5e-4);
     expect(r.virial.relative).toBeLessThan(5e-4);
   });
+
+  test("TIP4P exclusions and M-site redistribution match the CPU oracle", async ({ page }) => {
+    await page.goto("/?gpu-tip4p=32x32x64");
+    const raw = await page.getByTestId("gpu-tip4p-parity").textContent({ timeout: 60_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.siteForces.maxRel).toBeLessThan(5e-3);
+    expect(r.atomicForces.maxRel).toBeLessThan(5e-3);
+    expect(r.energy.scaled).toBeLessThan(5e-3);
+    expect(r.virial.scaled).toBeLessThan(5e-3);
+  });
 });

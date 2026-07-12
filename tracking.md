@@ -1128,9 +1128,31 @@ chemin moléculaire GPU déjà validé pour les petits systèmes. Une cell-list 
 
 ---
 
+## P59 — Exclusions TIP4P et transfert du site virtuel WebGPU ✅
+
+**Objectif (DoD) :** reproduire les conventions moléculaires TIP4P/2005 après Ewald : aucune
+interaction H1–H2/H1–M/H2–M interne et force M redistribuée exactement vers O/H/H.
+
+**Livré :** groupes d'exclusion du réel PME, correction réciproque stable `erf(αr)/r` (algébriquement
+équivalente à `erfc + réciproque − 1/r`, sans annulation catastrophique Float32), minimum-image,
+énergie/viriel exclus séparés et transposée du Jacobien affine du site M. Nouveau wrapper
+`GpuTip4pPme` qui expose forces de sites et forces atomiques ; harnais `?gpu-tip4p=…`.
+
+**Vérifications :** **1 nouveau test** de contrat TIP4P. Étude de convergence headed : erreur de
+force atomique 1,60 % (8×8×16), 0,83 % (16×16×32), puis **9,93×10⁻⁴** sur 32×32×64 ; sites et
+atomes donnent le même ratio, validant le transfert M. À 32×32×64, erreurs absolues énergie/viriel
+= **9,20×10⁻⁴ / 2,10×10⁻³ kJ·mol⁻¹**. Critère scalaire mixte `|Δ|/max(1,|ref|)` <5×10⁻³,
+adapté aux totaux proches de zéro par annulation. Lint, typecheck, tests, build et e2e verts.
+
+**Déviations au plan :** une grille minimale 32×32×64 est imposée par la précision TIP4P ; la grille
+L11 réelle (aperçu ≈32×32×128, référence 64×64×256 selon la boîte) est au moins aussi fine. La
+construction dynamique des sites depuis les positions atomiques doit encore être intégrée au moteur.
+
+---
+
 ## Bilan
 
-**Phases P0–P58 livrées** (**160 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P59 livrées** (**161 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
