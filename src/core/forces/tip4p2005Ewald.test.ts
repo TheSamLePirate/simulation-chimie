@@ -74,4 +74,29 @@ describe("TIP4P/2005 periodic Ewald force", () => {
     expect(Number.isFinite(b.virial)).toBe(true);
     expect(slab.lastEwald?.slabEnergy).not.toBe(0);
   });
+
+  it("reproduces the molecular direct-Ewald oracle with smooth PME", () => {
+    const { box, sys } = periodicDimer();
+    const direct = new Tip4p2005EwaldForce({
+      ...OPTIONS,
+      kMax: [12, 12, 12],
+      slabCorrection: true,
+    });
+    const pme = new Tip4p2005EwaldForce({
+      alpha: OPTIONS.alpha,
+      pmeGrid: [64, 64, 64],
+      slabCorrection: true,
+    });
+    const a = direct.compute(sys.state, box, TIP4P_2005_SPECIES);
+    const directForces = sys.state.forces.slice();
+    const b = pme.compute(sys.state, box, TIP4P_2005_SPECIES);
+    let squaredError = 0;
+    let squaredReference = 0;
+    for (let i = 0; i < directForces.length; i++) {
+      squaredError += (sys.state.forces[i] - directForces[i]) ** 2;
+      squaredReference += directForces[i] ** 2;
+    }
+    expect(Math.sqrt(squaredError / squaredReference)).toBeLessThan(1e-5);
+    expect(Math.abs(b.virial - a.virial) / Math.max(1, Math.abs(a.virial))).toBeLessThan(1e-5);
+  });
 });

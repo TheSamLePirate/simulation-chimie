@@ -1,6 +1,8 @@
 import { redistributeTip4pVirtualForce, TIP4P_2005, tip4pVirtualPositionInBox } from "../tip4p2005";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
+import { COULOMB_CONSTANT } from "../units";
 import { computeEwald3d, type EwaldOptions, type EwaldResult, ewaldKBounds } from "./ewald";
+import { computeSmoothPme } from "./pme";
 
 const DEFAULT_ALPHA = 3.5;
 const DEFAULT_RECIPROCAL_TOLERANCE = 1e-7;
@@ -10,6 +12,8 @@ export interface Tip4p2005EwaldOptions {
   readonly kMax?: readonly [number, number, number];
   readonly realImages?: readonly [number, number, number];
   readonly slabCorrection?: boolean;
+  /** When provided, use smooth PME on this grid instead of the direct reciprocal oracle. */
+  readonly pmeGrid?: readonly [number, number, number];
 }
 
 /**
@@ -17,10 +21,12 @@ export interface Tip4p2005EwaldOptions {
  * This is correct but intentionally expensive; smooth PME will reproduce it for production.
  */
 export class Tip4p2005EwaldForce implements ForceModel {
-  readonly name = "TIP4P/2005 + direct Ewald";
+  readonly name: string;
   lastEwald: EwaldResult | null = null;
 
-  constructor(private readonly options: Tip4p2005EwaldOptions = {}) {}
+  constructor(private readonly options: Tip4p2005EwaldOptions = {}) {
+    this.name = options.pmeGrid ? "TIP4P/2005 + smooth PME" : "TIP4P/2005 + direct Ewald";
+  }
 
   compute(state: SimState, box: Box, _species: readonly Species[]): ForceResult {
     if (box.boundary !== "periodic")
@@ -64,11 +70,48 @@ export class Tip4p2005EwaldForce implements ForceModel {
       realImages: this.options.realImages ?? [1, 1, 1],
       slabCorrection: this.options.slabCorrection ?? false,
     };
-    const ewald = computeEwald3d(
-      { count: 3 * molecules, positions: chargePositions, charges },
-      box,
-      ewaldOptions,
-    );
+    const chargeSites = { count: 3 * molecules, positions: chargePositions, charges };
+    const rawEwald = this.options.pmeGrid
+      ? computeSmoothPme(chargeSites, box, {
+          alpha,
+          grid: this.options.pmeGrid,
+          slabCorrection: this.options.slabCorrection ?? false,
+        })
+      : computeEwald3d(chargeSites, box, ewaldOptions);
+    // Ewald contains every charge pair. TIP4P/2005 excludes H1–H2, H1–M and H2–M
+    // within one molecule, so subtract their complete same-cell 1/r interaction.
+    let excludedEnergy = 0;
+    let excludedVirial = 0;
+    for (let m = 0; m < molecules; m++) {
+      for (const [a, b] of [
+        [0, 1],
+        [0, 2],
+        [1, 2],
+      ] as const) {
+        const i = 3 * m + a;
+        const j = 3 * m + b;
+        const dx = chargePositions[3 * i] - chargePositions[3 * j];
+        const dy = chargePositions[3 * i + 1] - chargePositions[3 * j + 1];
+        const dz = chargePositions[3 * i + 2] - chargePositions[3 * j + 2];
+        const r2 = dx * dx + dy * dy + dz * dz;
+        const r = Math.sqrt(r2);
+        const pairEnergy = (COULOMB_CONSTANT * charges[i] * charges[j]) / r;
+        const fOverR = pairEnergy / r2;
+        rawEwald.forces[3 * i] -= fOverR * dx;
+        rawEwald.forces[3 * i + 1] -= fOverR * dy;
+        rawEwald.forces[3 * i + 2] -= fOverR * dz;
+        rawEwald.forces[3 * j] += fOverR * dx;
+        rawEwald.forces[3 * j + 1] += fOverR * dy;
+        rawEwald.forces[3 * j + 2] += fOverR * dz;
+        excludedEnergy += pairEnergy;
+        excludedVirial += pairEnergy;
+      }
+    }
+    const ewald: EwaldResult = {
+      ...rawEwald,
+      potentialEnergy: rawEwald.potentialEnergy - excludedEnergy,
+      virial: rawEwald.virial - excludedVirial,
+    };
     this.lastEwald = ewald;
 
     // H forces are direct sites; M forces are redistributed with the exact virtual-site Jacobian.

@@ -62,6 +62,20 @@ underflow/overflow et réévalue γ sur des blocs complets pour estimer l'erreur
 balayé en production : assez petit pour rester dans le régime linéaire, mais assez grand pour que le
 signal dépasse le bruit numérique.
 
+### Smooth PME CPU validé
+
+Le chemin accéléré assigne les charges sur une grille par B-splines cardinales d'ordre 6, applique
+une FFT 3D Float64, déconvolue la fonction d'assignation puis interpole le potentiel. Les forces
+proviennent de la dérivée analytique des mêmes poids ; le très petit mode de translation résiduel du
+maillage est projeté pour imposer ΣF = 0. L'espace réel conserve erfc(αr)/r, l'auto-énergie et la
+correction Yeh–Berkowitz. Les interactions H1–H2/H1–M/H2–M intramoléculaires sont soustraites
+explicitement, comme l'exige TIP4P/2005.
+
+Sur le golden state anisotrope actuel (grille 64×64×128), l'erreur RMS relative des forces face à
+Ewald direct est ≈ 1,6×10⁻⁶ et l'erreur relative du viriel ≈ 4,5×10⁻⁷. Ces valeurs valident le noyau
+numérique, mais pas encore la performance à 1 024 molécules : la partie réelle et LJ doivent passer
+par une liste de cellules avant activation de l'expérience.
+
 ## Critères d'acceptation
 
 - Forces du site virtuel et forces réciproques conformes au gradient numérique.

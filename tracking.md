@@ -867,9 +867,32 @@ modifie donc aucun chemin physique de production.
 
 ---
 
+## P46 — Smooth PME CPU validé contre Ewald direct ✅
+
+**Objectif (DoD) :** remplacer la somme réciproque directe par un chemin maillé rapide sans perdre
+la précision énergie/forces/viriel de l'oracle.
+
+**Livré :** smooth PME Float64, B-splines cardinales d'ordre 6, assignation/dérivée analytique,
+déconvolution, FFT 3D, espace réel erfc, auto-énergie, viriel et correction Yeh–Berkowitz. Projection
+du minuscule mode de translation du maillage pour ΣF=0. Le raccord TIP4P/2005 soustrait désormais
+exactement les trois paires de charges intramoléculaires exclues. Ewald/PME utilisent une `erfc`
+par série et fraction continue quasi machine-précision, cohérente avec la dérivée analytique ; Wolf
+conserve son approximation rapide bornée à ≈1,2×10⁻⁷ pour ne pas ralentir les scènes temps réel.
+
+**Vérifications :** golden state anisotrope PME 64×64×128 ↔ Ewald convergé : erreur RMS relative de
+force ≈ **1,6×10⁻⁶** (critère ≤10⁻⁵), erreur relative du viriel ≈ **4,5×10⁻⁷**, énergie absolue
+≈ 7,1×10⁻⁶ kJ·mol⁻¹ et force totale nulle. Gradient numérique PME et gradient moléculaire avec
+exclusions verts ; références `erfc` de x=0 à 5 et dérivée analytique testées.
+
+**Déviations au plan :** PME est scientifiquement validé mais pas encore activé en scène : les
+sommes réelles PME et LJ sont toujours O(N²). Une liste de cellules sans exclusions manquées est
+requise avant le système de 1 024 molécules.
+
+---
+
 ## Bilan
 
-**Phases P0–P45 livrées et commitées** (**123 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P46 livrées et commitées** (**136 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

@@ -1,4 +1,4 @@
-import { erfc } from "../math/erf";
+import { erfcAccurate as erfc } from "../math/erf";
 import type { Box, Vec3 } from "../types";
 import { COULOMB_CONSTANT } from "../units";
 
