@@ -45,6 +45,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P36** | Panneau « État » : forces & modèles actifs | ✅ |
 | **P37** | Distribution des vitesses Maxwell-Boltzmann | ✅ |
 | **P38** | Atlas HTML interactif des modèles physiques | ✅ |
+| **P39** | Approfondissement expert de l'atlas physique | ✅ |
 
 ---
 
@@ -724,9 +725,28 @@ canvas haute densité, contrôles interactifs et zéro erreur JavaScript.
 
 ---
 
+## P39 — Approfondissement expert de l'atlas physique ✅
+
+**Objectif (DoD) :** expliquer chaque modèle beaucoup plus en détail sans dégrader la lecture
+grand public ni transformer la page en mur de texte.
+
+**Livré :** une couche expert repliable pour chacun des 11 niveaux L0→L10 avec : déroulé exact de
+l'algorithme, constantes réellement utilisées, preuves issues des tests et interprétations à ne pas
+faire. Ajout d'une dérivation complète de Velocity-Verlet (quatre opérations, ordre, caractère
+symplectique, critère de pas de temps) et d'un comparatif technique CPU↔GPU (Float64/Float32,
+cell-lists, accumulateur i32 quantifié, SHAKE/RATTLE, chemins de repli).
+
+**Vérifications :** 13 panneaux d'approfondissement, 44 formules KaTeX, contrôle d'ouverture au
+clavier/souris, rendu desktop 1280 px et mobile 390 px sans débordement, zéro avertissement ou
+erreur navigateur ; lint/typecheck/tests/build/e2e verts.
+
+**Déviations au plan :** aucune (hors plan — demande utilisateur directe).
+
+---
+
 ## Bilan
 
-**Phases P0–P38 livrées et commitées** (**92 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P39 livrées et commitées** (**92 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

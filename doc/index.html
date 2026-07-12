@@ -895,6 +895,168 @@
         background: linear-gradient(90deg, var(--cyan), var(--violet));
       }
 
+      .deep-dive {
+        grid-column: 1 / -1;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: color-mix(in srgb, var(--panel-solid) 72%, transparent);
+      }
+
+      .global-deep {
+        margin-top: 16px;
+      }
+
+      .deep-dive summary {
+        display: flex;
+        min-height: 58px;
+        padding: 0 18px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        cursor: pointer;
+        list-style: none;
+        font-weight: 700;
+      }
+
+      .deep-dive summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .deep-dive summary::after {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--cyan);
+        content: "+";
+        font-family: "DM Mono", monospace;
+        transition: transform 160ms ease;
+      }
+
+      .deep-dive[open] summary {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .deep-dive[open] summary::after {
+        content: "−";
+        transform: rotate(180deg);
+      }
+
+      .deep-summary-copy {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .deep-summary-copy small {
+        color: var(--muted);
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        font-weight: 400;
+        text-transform: uppercase;
+      }
+
+      .deep-content {
+        display: grid;
+        padding: 24px;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px 30px;
+      }
+
+      .deep-section h4 {
+        margin: 0 0 12px;
+        font-size: 14px;
+        letter-spacing: -0.015em;
+      }
+
+      .deep-section p,
+      .deep-section li {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .deep-list {
+        margin: 0;
+        padding: 0 0 0 20px;
+      }
+
+      .deep-list li {
+        padding: 0 0 9px 5px;
+      }
+
+      .deep-list li::marker {
+        color: var(--cyan);
+        font-family: "DM Mono", monospace;
+      }
+
+      .parameter-table {
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+      }
+
+      .parameter-row {
+        display: grid;
+        grid-template-columns: minmax(105px, 0.7fr) 1fr;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .parameter-row:last-child {
+        border-bottom: 0;
+      }
+
+      .parameter-row span,
+      .parameter-row strong {
+        padding: 9px 11px;
+        font-size: 11px;
+      }
+
+      .parameter-row span {
+        color: var(--muted);
+      }
+
+      .parameter-row strong {
+        border-left: 1px solid var(--line);
+        font-family: "DM Mono", monospace;
+        font-weight: 400;
+      }
+
+      .evidence-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .evidence-list li {
+        position: relative;
+        padding: 0 0 10px 22px;
+      }
+
+      .evidence-list li::before {
+        position: absolute;
+        top: 1px;
+        left: 0;
+        color: var(--green);
+        content: "✓";
+        font-family: "DM Mono", monospace;
+      }
+
+      .deep-caution {
+        padding: 14px 16px;
+        border-left: 2px solid var(--amber);
+        border-radius: 0 10px 10px 0;
+        background: color-mix(in srgb, var(--amber) 8%, transparent);
+      }
+
+      .deep-caution p:last-child {
+        margin-bottom: 0;
+      }
+
       .lab-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr);
@@ -1350,9 +1512,20 @@
         }
 
         .formula-box,
-        .precision-line {
+        .precision-line,
+        .deep-dive {
           grid-column: 1;
           grid-template-columns: 1fr;
+        }
+
+        .deep-content {
+          grid-template-columns: 1fr;
+        }
+
+        .deep-summary-copy {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 2px;
         }
 
         .formula-note {
@@ -1514,6 +1687,56 @@
             <p>Second demi-pas de vitesse, puis thermostat et barostat éventuels.</p>
           </article>
         </div>
+
+        <details class="deep-dive global-deep reveal" open>
+          <summary>
+            <span class="deep-summary-copy">
+              <span>Dérivation d’un pas Velocity-Verlet</span>
+              <small>Ordre 2 · symplectique · réversible</small>
+            </span>
+          </summary>
+          <div class="deep-content">
+            <section class="deep-section">
+              <h4>Les quatre opérations</h4>
+              <div class="formula">\(v^{n+1/2}=v^n+\frac{\Delta t}{2}\frac{F(x^n)}m\)</div>
+              <div class="formula">\(x^{n+1}=x^n+\Delta t\,v^{n+1/2}\)</div>
+              <div class="formula">\(F^{n+1}=F(x^{n+1})\)</div>
+              <div class="formula">\(v^{n+1}=v^{n+1/2}+\frac{\Delta t}{2}\frac{F^{n+1}}m\)</div>
+            </section>
+            <section class="deep-section">
+              <h4>Pourquoi deux demi-kicks ?</h4>
+              <p>
+                La première moitié utilise la force connue au début du pas ; la seconde utilise la
+                force à la position d’arrivée. Ce centrage temporel rend l’erreur globale
+                \(O(\Delta t^2)\) et évite la dérive systématique d’énergie d’un Euler explicite.
+              </p>
+              <p>
+                « Symplectique » ne signifie pas énergie parfaitement constante à chaque instant :
+                l’énergie oscille dans une enveloppe bornée si le pas est suffisamment petit.
+              </p>
+            </section>
+            <section class="deep-section">
+              <h4>Grandeurs accumulées</h4>
+              <ul class="evidence-list">
+                <li>Énergie cinétique : \(E_k=\sum_i \frac12m_iv_i^2\).</li>
+                <li>Énergie potentielle : somme de chaque paire et de chaque terme lié.</li>
+                <li>Viriel : \(W=\sum_{i&lt;j}r_{ij}\cdot F_{ij}\), utilisé pour la pression.</li>
+                <li>Impulsion murale : somme des changements de quantité de mouvement aux rebonds.</li>
+              </ul>
+            </section>
+            <section class="deep-section">
+              <h4>Quand diminuer Δt ?</h4>
+              <div class="deep-caution">
+                <p>
+                  Si l’énergie NVE dérive, si la température explose ou si une liaison traverse son
+                  minimum en un seul pas. L’eau flexible exige 0.5 fs ; supprimer ses vibrations par
+                  SHAKE/RATTLE permet 2 fs. La précision dépend donc autant du modèle le plus raide
+                  que de l’intégrateur.
+                </p>
+              </div>
+            </section>
+          </div>
+        </details>
       </section>
 
       <section class="section" id="modeles">
@@ -1685,6 +1908,56 @@
             </tbody>
           </table>
         </div>
+
+        <details class="deep-dive global-deep reveal">
+          <summary>
+            <span class="deep-summary-copy">
+              <span>CPU oracle ↔ WebGPU : ce qui est réellement différent</span>
+              <small>Même modèle physique · arithmétique et parallélisme différents</small>
+            </span>
+          </summary>
+          <div class="deep-content">
+            <section class="deep-section">
+              <h4>Chemin CPU de référence</h4>
+              <ul class="deep-list">
+                <li>Positions, vitesses, forces et énergies en Float64.</li>
+                <li>Ordre de sommation déterministe, RNG Mulberry32 à graine explicite.</li>
+                <li>LJ L2 accéléré par linked-cell ; repli exhaustif si la grille est trop petite.</li>
+                <li>Moléculaire non lié par cell-list avec exclusion des atomes d’une même molécule.</li>
+                <li>SHAKE/RATTLE itératif jusqu’à tolérance 10⁻¹⁰, au plus 100 passages.</li>
+              </ul>
+            </section>
+            <section class="deep-section">
+              <h4>Chemin WebGPU de performance</h4>
+              <ul class="deep-list">
+                <li>État dynamique en Float32, résidant sur le GPU et directement lu par le rendu.</li>
+                <li>L0–L3 : comptage, préfixe exclusif, scatter puis parcours des 27 cellules voisines.</li>
+                <li>L4–L8 : non-lié exhaustif O(N²), choisi car le kernel cell-list moléculaire perdait des voisins.</li>
+                <li>Forces liées accumulées en entier signé avec facteur 16 384 : résolution ≈ 6×10⁻⁵ et plage ≈ ±1.3×10⁵ kJ·mol⁻¹·nm⁻¹.</li>
+                <li>Contraintes par molécule sans course : 50 passages SHAKE puis 30 RATTLE.</li>
+              </ul>
+            </section>
+            <section class="deep-section">
+              <h4>Contrat de fidélité</h4>
+              <ul class="evidence-list">
+                <li>Le builder partagé reproduit le même état initial atome par atome.</li>
+                <li>Les forces sont comparées à l’oracle à partir de positions identiques.</li>
+                <li>Les scènes moléculaires doivent conserver cohésion et température, pas seulement compiler.</li>
+                <li>Une configuration non couverte repasse automatiquement sur CPU.</li>
+              </ul>
+            </section>
+            <section class="deep-section">
+              <h4>Limites GPU assumées</h4>
+              <div class="deep-caution">
+                <p>
+                  L9/L10 n’ont pas de kernels dièdre/Morse. Le barostat NPT requiert une réduction
+                  virielle device et reste CPU. Les histogrammes g(r), vitesse et snapshots ne sont
+                  pas publiés depuis le GPU sans readback ; l’état reste volontairement résident.
+                </p>
+              </div>
+            </section>
+          </div>
+        </details>
       </section>
 
       <section class="section" id="ensembles">
@@ -1855,16 +2128,255 @@
         }
       ];
 
+      const deepDetails = {
+        L0: {
+          algorithm: [
+            "Placer N particules sur un réseau cubique simple afin d'éviter tout recouvrement initial.",
+            "Tirer chaque composante de vitesse dans une gaussienne de variance kBT/m, retirer la vitesse du centre de masse, puis ajuster toutes les vitesses pour obtenir exactement la température demandée.",
+            "Écrire zéro dans toutes les composantes de force et transporter les particules avec Velocity-Verlet.",
+            "Appliquer soit l'enveloppe périodique, soit le rebond spéculaire et cumuler l'impulsion transmise aux parois.",
+          ],
+          parameters: [
+            ["Force", "F = 0"],
+            ["Degrés de liberté", "3N − 3"],
+            ["Vitesse initiale", "σv = √(kBT/m)"],
+            ["Énergie potentielle", "0 exactement"],
+          ],
+          evidence: [
+            "Température initiale égale à la cible à 10⁻⁶ K près dans le test d'équipartition.",
+            "Énergie cinétique et température invariantes pendant 500 pas NVE à la précision machine.",
+            "Pression mesurée par impulsion murale compatible avec PV = NkBT à environ 10 % sur 40 000 pas.",
+          ],
+          limits: "Il n'existe ni collision, ni volume propre, ni transition de phase. Le modèle est exact uniquement dans la limite classique, diluée et non-interagissante du gaz idéal.",
+        },
+        L1: {
+          algorithm: [
+            "Énumérer chaque paire i < j ; sur GPU, utiliser la liste de cellules triée pour ne visiter que les 27 cellules voisines.",
+            "Calculer la séparation par image minimale si la boîte est périodique.",
+            "Mélanger les espèces avec σij = (σi + σj)/2 et εij = √(εiεj).",
+            "Si r < 2^(1/6)σij, ajouter la force répulsive aux deux particules avec des signes opposés et accumuler énergie et viriel.",
+          ],
+          parameters: [
+            ["Cutoff", "1.122462 σ"],
+            ["Minimum", "V(rc) = 0"],
+            ["Force au cutoff", "F(rc) = 0"],
+            ["Complexité CPU", "O(N²)"],
+          ],
+          evidence: [
+            "Force analytique comparée à −dV/dr par différence centrée, accord à quatre décimales.",
+            "Action-réaction vérifiée composante par composante.",
+            "Énergie totale NVE bornée à moins de 1 % crête-à-crête dans le test Velocity-Verlet.",
+          ],
+          limits: "WCA représente le cœur répulsif et l'encombrement stérique, pas la dispersion attractive. Un fluide WCA ne peut donc pas condenser spontanément en une goutte cohésive.",
+        },
+        L2: {
+          algorithm: [
+            "Construire une linked-cell list CPU si chaque axe contient au moins trois cellules ; sinon reprendre l'énumération exhaustive O(N²).",
+            "Pour chaque paire candidate, calculer le potentiel 12–6 et sa dérivée radiale.",
+            "Soustraire la force calculée à rc et translater l'énergie de façon cohérente : énergie et force rejoignent zéro sans saut.",
+            "Appliquer crossScale uniquement entre espèces différentes lorsqu'une attraction croisée réduite est demandée.",
+          ],
+          parameters: [
+            ["Cutoff", "rc = 2.5 σij"],
+            ["Minimum brut", "r = 2^(1/6)σ"],
+            ["Profondeur brute", "−ε"],
+            ["Recherche CPU", "cell-list / brute"],
+          ],
+          evidence: [
+            "Force décalée vérifiée contre le gradient numérique à quatre décimales.",
+            "Force et énergie tendent vers zéro au voisinage de 2.5σ.",
+            "Cell-list et calcul exhaustif diffèrent de moins de 10⁻⁶ sur les forces testées.",
+            "Énergie NVE d'argon liquide bornée à moins de 2 % crête-à-crête sur 1 500 pas.",
+          ],
+          limits: "Le 12–6 est un potentiel effectif isotrope. Il décrit bien l'argon et les mécanismes génériques de cohésion, mais ignore directionnalité chimique, polarisabilité et interactions à plusieurs corps.",
+        },
+        L3: {
+          algorithm: [
+            "Calculer d'abord le cœur Lennard–Jones avec force décalée pour empêcher la superposition des ions.",
+            "Évaluer erfc(αr)/r pour chaque paire chargée située dans le cutoff Coulomb.",
+            "Soustraire la valeur et la pente au cutoff grâce au terme S, de sorte que V(rc) et F(rc) soient continus.",
+            "Limiter rc à 0.49 fois le plus petit côté de la boîte afin qu'une particule ne voie jamais simultanément un voisin et son image.",
+          ],
+          parameters: [
+            ["Constante ke", "138.935458 kJ mol⁻¹ nm e⁻²"],
+            ["Amortissement", "α = 2.5 nm⁻¹"],
+            ["Cutoff Coulomb", "min(1.0 nm, 0.49 Lmin)"],
+            ["Charges Na / Cl", "+1e / −1e"],
+          ],
+          evidence: [
+            "Attraction des charges opposées et répulsion des charges identiques testées explicitement.",
+            "Erreur relative de force inférieure à 10⁻³ face au gradient numérique du potentiel DSF.",
+            "Énergie exactement nulle au-delà du cutoff et interaction nulle avec un partenaire neutre.",
+            "Cristal NaCl initialisé avec alternance rock-salt pour éviter les contacts artificiels entre charges identiques.",
+          ],
+          limits: "Wolf DSF remplace la somme électrostatique périodique complète par une approximation locale amortie. Très efficace dans le navigateur, elle n'offre pas les garanties de PME/Ewald pour toutes les interfaces ou tous les systèmes fortement polaires.",
+        },
+        L4: {
+          algorithm: [
+            "Construire chaque H₂O avec un site O et deux sites H, une orientation aléatoire rigide initiale et des vitesses Maxwell–Boltzmann.",
+            "Exclure toutes les paires appartenant à la même molécule du calcul non lié.",
+            "Calculer LJ seulement lorsqu'un couple possède ε > 0 — dans SPC/Fw, cela rend LJ essentiellement O–O — et Wolf DSF entre toutes les charges intermoléculaires.",
+            "Ajouter deux forces de liaison harmoniques O–H et le gradient analytique de l'angle H–O–H avant les deux kicks de l'intégrateur.",
+          ],
+          parameters: [
+            ["Géométrie", "rOH = 0.1012 nm · θ = 113.24°"],
+            ["Charges", "qO = −0.82e · qH = +0.41e"],
+            ["Ressort O–H", "443153 kJ mol⁻¹ nm⁻²"],
+            ["Ressort angle", "317.5656 kJ mol⁻¹ rad⁻²"],
+            ["Pas de scène", "0.0005 ps = 0.5 fs"],
+          ],
+          evidence: [
+            "Chaque terme lié est vérifié coordonnée par coordonnée contre −∂V/∂x.",
+            "Les molécules conservent une longueur O–H moyenne dans la fenêtre physique testée 0.085–0.125 nm.",
+            "Le système reste fini et thermostaté dans la fenêtre 150–500 K du test de stabilité.",
+            "La construction commune CPU/GPU produit positions, vitesses, espèces et topologie identiques à la précision de stockage.",
+          ],
+          limits: "SPC/Fw est flexible mais non polarisable : ses charges ne répondent pas au champ local. Il reproduit un modèle d'eau classique paramétré, pas la densité électronique ni la création/rupture de liaisons covalentes O–H.",
+        },
+        L5: {
+          algorithm: [
+            "Supprimer les ressorts O–H et H–O–H : seules les forces intermoléculaires LJ + DSF restent dans le champ de force.",
+            "Après la dérive, appliquer SHAKE sur O–H₁, O–H₂ puis H₁–H₂ en redistribuant chaque correction selon les masses inverses.",
+            "Réinjecter la correction de position dans les vitesses via Δr/Δt.",
+            "Après le second kick, appliquer RATTLE jusqu'à annuler la vitesse relative projetée sur chaque liaison contrainte.",
+          ],
+          parameters: [
+            ["Contraintes", "2 × O–H + 1 × H–H / molécule"],
+            ["Distance H–H", "2 rOH sin(θ/2)"],
+            ["CPU", "tol = 10⁻¹⁰ · 100 itérations max"],
+            ["GPU", "SHAKE 50 · RATTLE 30 itérations"],
+            ["Pas de scène", "0.002 ps = 2 fs"],
+          ],
+          evidence: [
+            "Erreurs maximales O–H et H–H inférieures à 10⁻⁴ nm après une trajectoire testée.",
+            "RATTLE supprime la composante de vitesse le long de chaque contrainte.",
+            "Les 50/30 itérations GPU ont remplacé 6/4, insuffisantes et responsables d'une injection artificielle d'énergie.",
+            "Température et cohésion GPU suivent l'oracle CPU à environ 10 % sous thermostat pour L4–L8.",
+          ],
+          limits: "La rigidification autorise un pas quatre fois plus grand mais élimine volontairement les vibrations O–H et la flexion H–O–H. Le modèle ne convient donc pas à l'étude du spectre vibrationnel intramoléculaire.",
+        },
+        L6: {
+          algorithm: [
+            "Répartir de façon déterministe les molécules d'eau et d'huile sur une grille adaptée à une boîte verticale de dimensions L × 2.5L × L.",
+            "Représenter l'eau par SPC rigide et l'huile par une molécule propane-like CH₃–CH₂–CH₃ flexible à trois sites united-atom.",
+            "Exclure les interactions non liées à l'intérieur de chaque molécule ; ajouter les liaisons et l'angle de l'huile, les contraintes de l'eau, puis LJ + DSF entre molécules.",
+            "Ajouter éventuellement la gravité au kick ; la différence de densité et l'immiscibilité conduisent alors à la stratification.",
+          ],
+          parameters: [
+            ["Huile", "CH₃–CH₂–CH₃"],
+            ["Liaison C–C", "0.154 nm · k = 200000"],
+            ["Angle C–C–C", "114° · kθ = 519.6"],
+            ["Charges huile", "0e"],
+            ["Boîte", "L × 2.5L × L"],
+          ],
+          evidence: [
+            "Le builder vérifie 3 sites par molécule, quatre espèces, deux liaisons et un angle par huile, trois contraintes par eau.",
+            "Les forces de liaison et d'angle moléculaires sont comparées au gradient numérique de l'énergie.",
+            "Le paramètre d'ordre distingue un mélange 50/50 aléatoire autour de 0.5 de domaines séparés au-dessus de 0.9.",
+            "La scène huile/eau publie en E2E un paramètre de démixtion valide entre 0 et 1.",
+          ],
+          limits: "L'huile L6 est du propane united-atom : elle ne possède ni hydrogènes explicites ni dièdre, puisqu'elle n'a que trois sites. Elle illustre l'effet hydrophobe et la stratification, pas la rhéologie quantitative d'une huile réelle complexe.",
+        },
+        L7: {
+          algorithm: [
+            "Construire l'eau rigide comme en L5, mais placer les oxygènes sur un cube compact centré avec un espacement de 0.31 nm.",
+            "Laisser du vide entre l'agrégat et les bords de la boîte afin de créer une véritable interface liquide–vide.",
+            "Démarrer froid et thermostater vers une température liquide : la mobilité augmente pendant que LJ + électrostatique conservent la cohésion.",
+            "La géométrie se réorganise jusqu'à réduire l'aire interfaciale ; aucune force artificielle de sphérification n'est appliquée.",
+          ],
+          parameters: [
+            ["Espacement initial", "0.31 nm"],
+            ["Molécules scène", "170 H₂O"],
+            ["Boîte scène", "3.2 nm"],
+            ["Températures", "80 K → 235 K"],
+            ["Pas", "2 fs"],
+          ],
+          evidence: [
+            "Même validation des forces, contraintes et intégration que L5.",
+            "Vérification headed : la goutte froide et cubique reste cohésive puis s'arrondit sur CPU et GPU.",
+            "Une comparaison à état initial identique a servi à détecter puis corriger les forces moléculaires GPU nulles.",
+          ],
+          limits: "La sphérification valide qualitativement la tension de surface, mais γ n'est pas calculé. Une mesure quantitative nécessiterait le tenseur de pression ou le profil de pression normal/tangent et une moyenne statistique longue.",
+        },
+        L8: {
+          algorithm: [
+            "Créer un cube rock-salt d'ions espacés de 0.29 nm et retirer les ions majoritaires de bord jusqu'à obtenir une charge totale nulle.",
+            "Remplir le reste de la boîte avec de l'eau rigide espacée d'environ 0.34 nm, en conservant une zone sans recouvrement autour du cristal.",
+            "Traiter chaque ion comme un site libre et chaque eau comme une molécule contrainte ; toutes les paires intermoléculaires utilisent LJ + Wolf DSF.",
+            "L'orientation des dipôles d'eau stabilise progressivement les ions arrachés à la surface du réseau.",
+          ],
+          parameters: [
+            ["Réseau ionique", "0.29 nm"],
+            ["Réseau eau", "0.34 nm"],
+            ["Espèces", "O · H · Na⁺ · Cl⁻"],
+            ["Température scène", "370 K"],
+            ["Cristal scène", "≈ 3³ ions, neutralisé"],
+          ],
+          evidence: [
+            "La neutralisation de la charge est construite explicitement avant la simulation.",
+            "Les positions initiales d'eau évitent les recouvrements LJ avec le cristal.",
+            "La même topologie est produite indépendamment pour l'oracle CPU et le moteur GPU.",
+            "Vérification headed : hydratation des ions de surface et dispersion progressive sans explosion thermique.",
+          ],
+          limits: "La trajectoire montre le mécanisme de solvatation, mais ni une énergie libre de dissolution ni une solubilité d'équilibre. Le petit cristal, la température élevée et le cutoff DSF accélèrent et simplifient fortement le phénomène.",
+        },
+        L9: {
+          algorithm: [
+            "Construire chaque chaîne en zigzag all-trans de neuf sites carbone united-atom, puis lui appliquer une rotation et une position déterministes par la graine.",
+            "Calculer les huit liaisons C–C, les sept angles C–C–C et les six quadruplets dièdres par chaîne.",
+            "Former les normales aux plans i–j–k et j–k–l, obtenir cosφ et sinφ signés, puis dériver le polynôme RB.",
+            "Distribuer les quatre forces avec le gradient de type GROMACS afin que leur somme soit nulle.",
+          ],
+          parameters: [
+            ["Chaîne", "9 sites · 8 liaisons · 7 angles · 6 dièdres"],
+            ["C–C", "0.154 nm · k = 200000"],
+            ["C–C–C", "114° · kθ = 519.6"],
+            ["Coefficients RB", "9.279, −12.156, −13.12, 3.06, 26.24, 31.495"],
+            ["Backend", "CPU uniquement"],
+          ],
+          evidence: [
+            "Les douze composantes de force d'un dièdre concordent avec le gradient numérique à quatre décimales.",
+            "La somme des forces des quatre sites est nulle à huit décimales dans le test.",
+            "L'énergie trans est proche de zéro et inférieure à l'énergie cis.",
+            "Une trajectoire thermostatée quitte effectivement le bassin trans et visite une conformation non-trans.",
+          ],
+          limits: "United-atom fusionne chaque groupe CH₂/CH₃ en un site. Le modèle capture les conformations de chaîne mais pas les vibrations C–H, la polarisation ou la chimie de réaction. Aucun kernel GPU dièdre n'existe encore.",
+        },
+        L10: {
+          algorithm: [
+            "Placer des molécules diatomiques d'orientation aléatoire avec une distance initiale r₀.",
+            "Évaluer e = exp[−a(r−r₀)], l'énergie De(1−e)² et la dérivée radiale −2Deae(1−e).",
+            "Choisir k = 2Dea² afin que la courbure près du minimum coïncide avec celle d'un ressort harmonique de même raideur locale.",
+            "Chauffer le système : lorsqu'une paire franchit le plateau énergétique De, la force de liaison devient négligeable et les sites restent dissociés.",
+          ],
+          parameters: [
+            ["Distance r₀", "0.14 nm"],
+            ["Largeur a", "18 nm⁻¹"],
+            ["Profondeur De", "25 kJ mol⁻¹"],
+            ["Courbure k", "16200 kJ mol⁻¹ nm⁻²"],
+            ["Backend", "CPU uniquement"],
+          ],
+          evidence: [
+            "Force Morse comparée à −dV/dr par différence centrée.",
+            "Force exactement nulle au minimum r₀.",
+            "Énergie à grande distance proche de De et force lointaine inférieure à 10⁻³.",
+            "Le test de trajectoire chauffée observe au moins une liaison étirée au-delà du seuil de rupture choisi.",
+          ],
+          limits: "La topologie conserve l'identité de la paire après rupture et aucune nouvelle liaison ne peut se former avec un autre atome. C'est un potentiel dissociable classique de démonstration, pas un moteur réactif ni quantique.",
+        },
+      };
+
       const modelRail = document.getElementById("modelRail");
       const modelStack = document.getElementById("modelStack");
       const search = document.getElementById("modelSearch");
 
       function renderModels(query = "") {
         const term = query.trim().toLocaleLowerCase("fr");
-        const filtered = models.filter((m) => [m.id, m.title, m.subtitle, m.vulgar, m.calc, m.precision, ...m.tags].join(" ").toLocaleLowerCase("fr").includes(term));
+        const filtered = models.filter((m) => [m.id, m.title, m.subtitle, m.vulgar, m.calc, m.precision, ...m.tags, JSON.stringify(deepDetails[m.id])].join(" ").toLocaleLowerCase("fr").includes(term));
         modelRail.innerHTML = filtered.map((m, i) => `<button class="rail-link" type="button" data-target="model-${m.id}" aria-current="${i === 0}"><span class="rail-id">${m.id}</span><span><strong>${m.title}</strong><small>${m.subtitle}</small></span></button>`).join("");
         modelStack.innerHTML = filtered.length ? filtered.map((m) => {
           const backendClass = m.backend === "CPU" ? "cpu" : "gpu";
+          const deep = deepDetails[m.id];
           return `<article class="model-card reveal visible" id="model-${m.id}" data-model="${m.id}">
             <header class="model-header"><span class="model-badge">${m.id}</span><div class="model-title"><h3>${m.title}</h3><p>${m.subtitle}</p></div><div class="tag-row"><span class="tag ${backendClass}">${m.backend}</span>${m.tags.map((t) => `<span class="tag">${t}</span>`).join("")}</div></header>
             <div class="model-body">
@@ -1872,6 +2384,15 @@
               <div class="explain-box"><span class="box-label">Ce que calcule le moteur</span><p>${m.calc}</p></div>
               <div class="formula-box"><div class="formula">\\(${m.formula}\\)</div><div class="formula-note">${m.note}</div></div>
               <div class="explain-box" style="grid-column:1/-1"><span class="box-label">Précision & domaine de validité</span><p>${m.precision}</p></div>
+              <details class="deep-dive">
+                <summary><span class="deep-summary-copy"><span>Approfondir ${m.id}</span><small>Algorithme · constantes · validation · limites</small></span></summary>
+                <div class="deep-content">
+                  <section class="deep-section"><h4>Déroulé exact d'un calcul</h4><ol class="deep-list">${deep.algorithm.map((step) => `<li>${step}</li>`).join("")}</ol></section>
+                  <section class="deep-section"><h4>Constantes utilisées</h4><div class="parameter-table">${deep.parameters.map(([label, value]) => `<div class="parameter-row"><span>${label}</span><strong>${value}</strong></div>`).join("")}</div></section>
+                  <section class="deep-section"><h4>Preuves dans la suite de tests</h4><ul class="evidence-list">${deep.evidence.map((item) => `<li>${item}</li>`).join("")}</ul></section>
+                  <section class="deep-section"><h4>Ce qu'il ne faut pas conclure</h4><div class="deep-caution"><p>${deep.limits}</p></div></section>
+                </div>
+              </details>
             </div></article>`;
         }).join("") : `<div class="panel"><h3>Aucun modèle trouvé</h3><p class="section-intro">Essayez « charge », « eau », « rupture » ou « GPU ».</p></div>`;
         renderMath(modelStack);
