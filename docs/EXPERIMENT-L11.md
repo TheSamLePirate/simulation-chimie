@@ -75,9 +75,18 @@ Sur le golden state anisotrope actuel (grille 64×64×128), l'erreur RMS relativ
 Ewald direct est ≈ 1,6×10⁻⁶ et l'erreur relative du viriel ≈ 4,5×10⁻⁷. Ces valeurs valident le noyau
 numérique. L'espace réel et LJ utilisent désormais une liste de cellules qui reste correcte avec
 seulement une ou deux cellules périodiques par axe (déduplication explicite). Un calcul complet de
-forces pour 1 024 molécules sur grille 64×64×256 prend environ 0,82 s sur la machine de développement :
-adapté au batch CPU, pas au temps réel. L'aperçu interactif devra donc rester réduit jusqu'au portage
-GPU FFT/PME.
+forces pour 1 024 molécules sur grille 64×64×256 prend environ 0,82 s sur la machine de développement.
+Cela convient aux golden states et aux validations courtes, mais **pas** à une trajectoire de plusieurs
+nanosecondes (plusieurs jours CPU). Production batch et aperçu interactif attendent donc le portage
+GPU FFT/PME ; l'UI ne devra jamais présenter un run CPU court comme une mesure convergée.
+
+### État initial du slab
+
+Le builder dédié calcule l'épaisseur liquide depuis la masse moléculaire et la densité cible :
+Lliq = N·M·1,6605390666/(ρ·Lx·Ly). Pour N=1 024, Lx=Ly=3,2 nm et ρ=997 kg·m⁻³,
+Lliq≈3,00 nm dans une boîte Lz=10 nm. Les oxygènes sont initialisés sur un réseau BCC factorisé
+suivant les dimensions du slab, les orientations sont uniformes dans SO(3), puis SHAKE/RATTLE
+maintient rOH et rHH. Cette structure initiale ordonnée doit être fondue et équilibrée avant mesure.
 
 ## Critères d'acceptation
 

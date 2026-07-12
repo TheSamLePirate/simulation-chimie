@@ -905,14 +905,33 @@ des grilles à 8, 2 et 1 cellule(s), vérifient l'absence de doublons, un site h
 Parité Ewald/PME et gradient moléculaire inchangés. Benchmark informatif local : **≈0,82 s** pour un
 calcul de forces 1 024 eaux, grille 64×64×256, toutes valeurs finies.
 
-**Déviations au plan :** le batch CPU devient praticable mais pas interactif à 1 024 molécules. La
-scène devra distinguer explicitement aperçu réduit et production batch ; le temps réel attend PME GPU.
+**Déviations au plan :** le CPU accéléré reste un oracle de golden states : 0,82 s/force implique
+plusieurs jours par ns. La scène devra distinguer explicitement aperçu réduit et production ; les
+trajectoires convergées et le temps réel attendent PME GPU.
+
+---
+
+## P48 — Builder reproductible du slab eau–vapeur ✅
+
+**Objectif (DoD) :** produire l'état initial exact de l'expérience, avec densité, vide, géométrie
+rigide et graines contrôlés, indépendamment de l'UI.
+
+**Livré :** `buildTip4p2005Slab` calcule l'épaisseur depuis N, la masse TIP4P/2005, Lx·Ly et ρ cible,
+factorise un réseau d'oxygènes BCC adapté aux dimensions, centre la couche sur z et conserve les
+orientations SO(3), vitesses de Maxwell, contraintes et render bonds du builder validé.
+
+**Vérifications :** **2 nouveaux tests** sur 1 024 molécules : densité exactement 997 kg·m⁻³,
+épaisseur ≈3,00 nm, vide centré, 1 024 géométries O–H intactes ; rejet des comptes impairs, densités
+invalides et slabs ne tenant pas dans la boîte.
+
+**Déviations au plan :** l'état BCC est volontairement un packing initial sans recouvrement, pas un
+liquide déjà équilibré. Le protocole impose une fusion/équilibration avant toute collecte.
 
 ---
 
 ## Bilan
 
-**Phases P0–P47 livrées et commitées** (**140 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P48 livrées et commitées** (**142 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

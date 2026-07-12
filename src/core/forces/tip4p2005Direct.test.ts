@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createBox } from "../box";
+import { createBox, createBoxXYZ } from "../box";
 import { totalMomentum } from "../observables";
 import { Rng } from "../rng";
 import {
+  buildTip4p2005Slab,
   buildTip4p2005System,
   redistributeTip4pVirtualForce,
   TIP4P_2005,
+  TIP4P_2005_H,
   TIP4P_2005_HH,
+  TIP4P_2005_O,
   TIP4P_2005_SPECIES,
   tip4pVirtualPosition,
 } from "../tip4p2005";
@@ -56,6 +59,36 @@ describe("TIP4P/2005 geometry and virtual site", () => {
     for (let c = 0; c < 3; c++) {
       expect(to[c] + th1[c] + th2[c]).toBeCloseTo(torqueM[c], 15);
     }
+  });
+});
+
+describe("TIP4P/2005 liquid slab", () => {
+  it("builds 1024 waters at the requested density with centred vacuum", () => {
+    const box = createBoxXYZ(3.2, 3.2, 10, "periodic");
+    const slab = buildTip4p2005Slab(1024, box, 300, new Rng(91), 997);
+    const molecularMass = TIP4P_2005_O.mass + 2 * TIP4P_2005_H.mass;
+    const density =
+      (1024 * molecularMass * 1.6605390666) /
+      (box.lengths[0] * box.lengths[1] * slab.liquidThickness);
+    expect(density).toBeCloseTo(997, 12);
+    expect(slab.liquidThickness).toBeCloseTo(3, 2);
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let molecule = 0; molecule < 1024; molecule++) {
+      const oxygen = 3 * molecule;
+      minZ = Math.min(minZ, slab.state.positions[3 * oxygen + 2]);
+      maxZ = Math.max(maxZ, slab.state.positions[3 * oxygen + 2]);
+      expect(distance(slab.state.positions, oxygen, oxygen + 1)).toBeCloseTo(TIP4P_2005.rOH, 12);
+    }
+    expect(minZ).toBeGreaterThan(-slab.liquidThickness / 2);
+    expect(maxZ).toBeLessThan(slab.liquidThickness / 2);
+  });
+
+  it("rejects impossible slab specifications", () => {
+    expect(() => buildTip4p2005Slab(3, createBox(2), 300, new Rng(1))).toThrow(/even/);
+    expect(() => buildTip4p2005Slab(1024, createBoxXYZ(1, 1, 1), 300, new Rng(1))).toThrow(
+      /does not fit/,
+    );
   });
 });
 

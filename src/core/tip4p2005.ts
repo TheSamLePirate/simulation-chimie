@@ -57,6 +57,11 @@ export interface Tip4p2005System {
   readonly renderBonds: { readonly i: Int32Array; readonly j: Int32Array };
 }
 
+export interface Tip4p2005SlabSystem extends Tip4p2005System {
+  readonly liquidThickness: number;
+  readonly targetDensityKgPerM3: number;
+}
+
 type MutableVec3 = [number, number, number];
 
 /** Uniform random SO(3) rotation from a seeded unit quaternion. */
@@ -168,6 +173,77 @@ export function buildTip4p2005System(
     constraints: { i: ci, j: cj, d0 },
     renderBonds: { i: bi, j: bj },
   };
+}
+
+/**
+ * Build a centred liquid slab at an exact target mass density on a BCC oxygen lattice.
+ * The vacuum lies along z. An even molecule count is required because each unit cell
+ * contributes two oxygen sites.
+ */
+export function buildTip4p2005Slab(
+  molecules: number,
+  box: Box,
+  temperatureK: number,
+  rng: Rng,
+  targetDensityKgPerM3 = 997,
+): Tip4p2005SlabSystem {
+  if (!Number.isInteger(molecules) || molecules < 2 || molecules % 2 !== 0) {
+    throw new RangeError("TIP4P/2005 slab requires a positive even molecule count");
+  }
+  if (!(targetDensityKgPerM3 > 0)) throw new RangeError("target density must be positive");
+  const [lx, ly, lz] = box.lengths;
+  const molecularMassU = TIP4P_2005_O.mass + 2 * TIP4P_2005_H.mass;
+  const kgPerM3PerUNm3 = 1.6605390666;
+  const liquidVolume = (molecules * molecularMassU * kgPerM3PerUNm3) / targetDensityKgPerM3;
+  const liquidThickness = liquidVolume / (lx * ly);
+  if (!(liquidThickness < lz)) {
+    throw new RangeError("the target-density slab does not fit inside the simulation box");
+  }
+
+  const cells = molecules / 2;
+  let best: readonly [number, number, number] | null = null;
+  let bestCost = Infinity;
+  for (let nx = 1; nx <= cells; nx++) {
+    if (cells % nx !== 0) continue;
+    const yz = cells / nx;
+    for (let ny = 1; ny <= yz; ny++) {
+      if (yz % ny !== 0) continue;
+      const nz = yz / ny;
+      const spacings = [lx / nx, ly / ny, liquidThickness / nz];
+      const cost = Math.max(...spacings) / Math.min(...spacings);
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = [nx, ny, nz];
+      }
+    }
+  }
+  if (!best) throw new Error("unable to factor slab lattice");
+
+  const system = buildTip4p2005System(molecules, box, temperatureK, rng);
+  const [nx, ny, nz] = best;
+  let molecule = 0;
+  for (let iz = 0; iz < nz; iz++) {
+    for (let iy = 0; iy < ny; iy++) {
+      for (let ix = 0; ix < nx; ix++) {
+        for (const basis of [0.25, 0.75]) {
+          const oxygen = 3 * molecule;
+          const oldO = system.state.positions.slice(3 * oxygen, 3 * oxygen + 3);
+          const target = [
+            -lx / 2 + ((ix + basis) * lx) / nx,
+            -ly / 2 + ((iy + basis) * ly) / ny,
+            -liquidThickness / 2 + ((iz + basis) * liquidThickness) / nz,
+          ];
+          for (let atom = oxygen; atom < oxygen + 3; atom++) {
+            for (let component = 0; component < 3; component++) {
+              system.state.positions[3 * atom + component] += target[component] - oldO[component];
+            }
+          }
+          molecule++;
+        }
+      }
+    }
+  }
+  return { ...system, liquidThickness, targetDensityKgPerM3 };
 }
 
 export function tip4pVirtualPosition(
