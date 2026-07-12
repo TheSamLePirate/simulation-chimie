@@ -10,57 +10,94 @@ export const ACCURACY_LEVELS = {
     id: "L0",
     label: "L0 · Gaz parfait",
     description: "Aucune interaction",
+    forces: ["Vol libre (aucune force)"],
   },
   L1: {
     id: "L1",
     label: "L1 · Sphères molles",
     description: "Répulsion WCA à courte portée",
+    forces: ["WCA (répulsion 2^{1/6}σ)"],
   },
   L2: {
     id: "L2",
     label: "L2 · Lennard-Jones",
     description: "Van der Waals : cohésion + condensation",
+    forces: ["Lennard-Jones (force décalée, 2.5σ)", "Mélange Lorentz-Berthelot"],
   },
   L3: {
     id: "L3",
     label: "L3 · Électrostatique",
     description: "LJ + Coulomb (Wolf DSF) : ions, charges partielles",
+    forces: ["Lennard-Jones", "Coulomb (Wolf DSF)"],
   },
   L4: {
     id: "L4",
     label: "L4 · Eau atomistique",
     description: "Eau SPC/Fw : molécules O+2H, liaisons H, charges (CPU)",
+    forces: [
+      "Eau SPC/Fw (flexible)",
+      "Liaisons O–H harmoniques",
+      "Angles H–O–H harmoniques",
+      "LJ O–O",
+      "Coulomb (Wolf DSF)",
+    ],
   },
   L5: {
     id: "L5",
     label: "L5 · Eau rigide",
     description: "Eau rigide (contraintes SHAKE/RATTLE), grand pas de temps (CPU)",
+    forces: ["Eau SPC rigide", "Contraintes SHAKE/RATTLE", "LJ O–O", "Coulomb (Wolf DSF)"],
   },
   L6: {
     id: "L6",
     label: "L6 · Mélange moléculaire",
     description: "Eau atomistique + huile (alcane) : démixtion hydrophobe réelle (CPU)",
+    forces: [
+      "Eau rigide (SHAKE/RATTLE)",
+      "Alcane : liaisons + angles harmoniques",
+      "Lennard-Jones (Lorentz-Berthelot)",
+      "Coulomb (Wolf DSF)",
+    ],
   },
   L7: {
     id: "L7",
     label: "L7 · Tension de surface",
     description: "Gouttelette d'eau dans le vide : la cohésion forme une sphère (CPU)",
+    forces: [
+      "Eau SPC rigide (goutte initiale)",
+      "Contraintes SHAKE/RATTLE",
+      "LJ O–O",
+      "Coulomb (Wolf DSF)",
+    ],
   },
   L8: {
     id: "L8",
     label: "L8 · Dissolution",
     description: "Cristal de sel (NaCl) dans l'eau : les ions se solvatent et se dissolvent (CPU)",
+    forces: ["Ions Na⁺/Cl⁻ + eau rigide (SHAKE/RATTLE)", "Lennard-Jones", "Coulomb (Wolf DSF)"],
   },
   L9: {
     id: "L9",
     label: "L9 · Alcane (dièdres)",
     description:
       "Chaînes d'alcane : torsions dièdres ⇒ conformations trans/gauche, repliement (CPU)",
+    forces: [
+      "Liaisons + angles harmoniques",
+      "Dièdres Ryckaert-Bellemans",
+      "Lennard-Jones",
+      "Coulomb (Wolf DSF)",
+    ],
   },
   L10: {
     id: "L10",
     label: "L10 · Dissociation",
     description: "Molécules à liaison de Morse : chauffées, les liaisons se rompent (CPU)",
+    forces: [
+      "Liaisons de Morse (dissociables)",
+      "Angles harmoniques",
+      "Lennard-Jones",
+      "Coulomb (Wolf DSF)",
+    ],
   },
 } as const;
 

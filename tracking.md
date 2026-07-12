@@ -658,6 +658,25 @@ AVANT d'accuser la précision.
 
 ---
 
+## P36 — Panneau « État » : forces & modèles actifs ✅
+
+**Objectif (DoD) :** l'utilisateur veut voir, pour chaque niveau de physique, quelles forces et
+quels modèles tournent — directement dans le panneau « État ».
+
+**Livré :** chaque entrée d'`ACCURACY_LEVELS` (`engine/types.ts`) porte désormais une liste
+`forces` (les termes réellement calculés à ce niveau : WCA, LJ force-décalée, Coulomb Wolf DSF,
+liaisons/angles harmoniques, SHAKE/RATTLE, dièdres RB, Morse…). `ObservablesPanel` affiche sous les
+métriques un bloc « Physique · <niveau> » en puces (`data-testid="physics-forces"`), complété par
+les termes **dépendant de la config courante** : gravité, champ électrique, thermostat
+(Berendsen/CSVR/Langevin), barostat NPT.
+
+**Vérifications :** lint + typecheck + 89 tests + 7 e2e verts ; captures en navigateur réel (headed)
+sur L1, L7 (chips eau rigide + SHAKE + thermostat Berendsen) et L9 (chips dièdres RB + CSVR).
+
+**Déviations au plan :** aucune (hors plan — demande utilisateur directe).
+
+---
+
 ## Bilan
 
 **Phases P0–P16 livrées et commitées** (**64 tests unitaires/golden + 7 e2e**, lint/typecheck verts).

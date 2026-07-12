@@ -263,6 +263,39 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Physics (active forces & models) ─────────────────────────────── */
+
+.physics {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.physics__title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.physics__forces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.physics__force {
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
 /* ── Charts ───────────────────────────────────────────────────────── */
 
 .chart + .chart {

@@ -1,3 +1,4 @@
+import { ACCURACY_LEVELS } from "../../engine/types";
 import { useAppStore } from "../../state/store";
 
 interface Metric {
@@ -6,11 +7,31 @@ interface Metric {
   value: string;
 }
 
+const THERMOSTAT_LABELS: Record<string, string> = {
+  berendsen: "Thermostat Berendsen",
+  csvr: "Thermostat CSVR",
+  langevin: "Thermostat Langevin (brownien)",
+};
+
 export function ObservablesPanel() {
   const observables = useAppStore((s) => s.observables);
   const fps = useAppStore((s) => s.fps);
   const demixing = useAppStore((s) => s.demixing);
   const particleCount = useAppStore((s) => s.config.particleCount);
+  const level = useAppStore((s) => s.config.level);
+  const thermostat = useAppStore((s) => s.config.thermostat);
+  const barostat = useAppStore((s) => s.config.barostat);
+  const gravity = useAppStore((s) => s.config.gravity);
+  const electricField = useAppStore((s) => s.config.electricField);
+
+  // Forces intrinsèques au niveau + champs/ensembles actifs dans la config courante.
+  const levelInfo = ACCURACY_LEVELS[level];
+  const forces: string[] = [...levelInfo.forces];
+  if (gravity > 0) forces.push("Gravité (−y)");
+  if (electricField) forces.push("Champ électrique (+x)");
+  const thermostatLabel = THERMOSTAT_LABELS[thermostat];
+  if (thermostatLabel) forces.push(thermostatLabel);
+  if (barostat === "berendsen") forces.push("Barostat Berendsen (NPT)");
 
   const metrics: Metric[] = [
     { id: "fps", label: "FPS", value: fps.toFixed(0) },
@@ -70,6 +91,16 @@ export function ObservablesPanel() {
           </div>
         ))}
       </dl>
+      <div className="physics">
+        <h3 className="physics__title">Physique · {levelInfo.label}</h3>
+        <ul className="physics__forces" data-testid="physics-forces">
+          {forces.map((f) => (
+            <li className="physics__force" key={f}>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
