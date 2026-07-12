@@ -47,6 +47,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P38** | Atlas HTML interactif des modèles physiques | ✅ |
 | **P39** | Approfondissement expert de l'atlas physique | ✅ |
 | **P40** | Fondations scientifiques L11 : tenseurs, densité, incertitude | ✅ |
+| **P41** | TIP4P/2005 : géométrie rigide et site virtuel exact | ✅ |
 
 ---
 
@@ -766,9 +767,30 @@ n'existe pas et que sa parité n'est pas démontrée.
 
 ---
 
+## P41 — TIP4P/2005 : géométrie rigide et site virtuel exact ✅
+
+**Objectif (DoD) :** implémenter le modèle moléculaire cible sans exposer prématurément une scène
+périodique utilisant une électrostatique tronquée.
+
+**Livré :** constantes TIP4P/2005 de la publication originale, builder déterministe à orientations
+uniformes SO(3), géométrie rigide O–H/H–H, espèces O/H massives et site négatif M sans masse. Le site
+M est une combinaison affine de O/H ; la redistribution de sa force utilise la transposée exacte du
+Jacobien et conserve donc force et couple. Un oracle de dimère isolé calcule LJ O–O complet +
+Coulomb direct H/H/M. Il refuse explicitement les boîtes périodiques : L11 attend Ewald.
+
+**Vérifications :** lint + typecheck + **103 tests** (30 fichiers) + build + **7 e2e** verts.
+Nouveaux tests : géométrie à 12 décimales, neutralité, impulsion initiale, distance OM, conservation
+force/couple à 15 décimales, gradient numérique sur les 18 coordonnées avec erreur relative
+< 2×10⁻⁷, conservation de la force totale et garde-fou périodique.
+
+**Déviations au plan :** aucune. Le modèle n'est volontairement pas ajouté à `SimConfig`/UI avant
+la livraison de l'oracle Ewald périodique.
+
+---
+
 ## Bilan
 
-**Phases P0–P40 livrées et commitées** (**99 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P41 livrées et commitées** (**103 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
