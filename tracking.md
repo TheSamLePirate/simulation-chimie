@@ -829,9 +829,30 @@ par la scène de production tant que smooth PME n'a pas démontré sa parité é
 
 ---
 
+## P44 — Route thermodynamique test-area ✅
+
+**Objectif (DoD) :** mesurer γ par une dérivée d'énergie libre indépendante d'un tenseur de viriel
+de contraintes, sans déformer les molécules rigides.
+
+**Livré :** perturbations symétriques A±δA à volume constant, appliquées uniquement aux centres de
+masse moléculaires après reconstruction PBC ; les coordonnées internes restent intactes. Calcul de
+ΔF± par moyenne exponentielle log-sum-exp stable, dérivée centrale avec nombre d'interfaces
+explicite, estimation par blocs et erreur standard. Le protocole et sa formule sont détaillés dans
+`docs/EXPERIMENT-L11.md`.
+
+**Vérifications :** lint + typecheck et **7 nouveaux tests** : conservation du volume, aire cible,
+géométrie rigide, molécule traversant une face périodique, dérivée analytique exacte, stabilité
+numérique, blocs incomplets, absence de mutation et perturbations réelles avec TIP4P/2005/Ewald.
+
+**Déviations au plan :** la route mécanique n'est pas déclarée complète : son tenseur réciproque et
+le viriel des contraintes rigides doivent encore être dérivés et testés. Test-area fournit entre-
+temps la première route quantitative scientifiquement fermée.
+
+---
+
 ## Bilan
 
-**Phases P0–P43 livrées et commitées** (**112 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P44 livrées et commitées** (**119 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

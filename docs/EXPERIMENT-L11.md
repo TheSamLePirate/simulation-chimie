@@ -49,6 +49,19 @@ mode batch et la convergence statistique.
 
 Conversion : 1 kJ·mol⁻¹·nm⁻² = 1,660539067 mN·m⁻¹.
 
+### Estimateur test-area implémenté
+
+Pour chaque configuration non perturbée d'aire A = Lx·Ly, deux états virtuels sont construits avec
+A± = A(1±ε), Lx,y± = Lx,y√(1±ε) et Lz± = Lz/(1±ε). Le volume est donc strictement inchangé. La
+transformation ne dilate pas les atomes : elle agit uniquement sur le centre de masse de chaque
+molécule, après reconstruction par image minimale, puis réinjecte les coordonnées internes intactes.
+
+Les différences d'énergie ΔU± = U(A±)−U(A) donnent ΔF± = −kBT ln⟨exp(−βΔU±)⟩. Pour n interfaces,
+la dérivée centrale est γ = (ΔF+−ΔF−)/(2 n δA). L'implémentation utilise log-sum-exp pour éviter
+underflow/overflow et réévalue γ sur des blocs complets pour estimer l'erreur standard. ε devra être
+balayé en production : assez petit pour rester dans le régime linéaire, mais assez grand pour que le
+signal dépasse le bruit numérique.
+
 ## Critères d'acceptation
 
 - Forces du site virtuel et forces réciproques conformes au gradient numérique.
