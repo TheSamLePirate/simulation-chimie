@@ -15,7 +15,8 @@ expérience quantitative reproductible.
 - Velocity-Verlet, pas 2 fs, contraintes SETTLE ou SHAKE/RATTLE convergées.
 - Électrostatique : Ewald direct comme oracle CPU, puis smooth PME validé contre cet oracle.
 - Géométrie de slab : correction électrostatique Yeh–Berkowitz.
-- Dispersion : LJ-PME ou correction longue portée inhomogène, validée par convergence en cutoff.
+- Dispersion : correction longue portée inhomogène de Janeček sur ρ(z), validée par convergence en
+  cutoff ; LJ-PME reste l'alternative GPU future.
 - Production NVT avec CSVR faible ; l'équilibration de densité exige un barostat canonique, pas
   Berendsen.
 
@@ -26,6 +27,8 @@ Références primaires :
 - Essmann et al., smooth PME, DOI 10.1063/1.470117.
 - Yeh & Berkowitz, Ewald en géométrie slab, DOI 10.1063/1.479595.
 - Alejandre & Chapela, dispersion Ewald et taille finie, DOI 10.1063/1.3279128.
+- Janeček, correction longue portée planaire, DOI 10.1021/jp056344z.
+- Lishchuk & Fischer, terme de force complet, DOI 10.1063/1.5048925.
 - IAPWS R1-76(2014), tension de surface de l'eau ordinaire.
 
 ## Géométrie de référence
@@ -80,6 +83,17 @@ Cela convient aux golden states et aux validations courtes, mais **pas** à une 
 nanosecondes (plusieurs jours CPU). Production batch et aperçu interactif attendent donc le portage
 GPU FFT/PME ; l'UI ne devra jamais présenter un run CPU court comme une mesure convergée.
 
+### Dispersion longue portée du slab
+
+Le LJ O–O explicite utilise jusqu'à 5σ lorsque la boîte le permet. Au-delà, le profil instantané de
+densité numérique des oxygènes est convolué avec le noyau planaire analytique de Janeček. L'énergie
+par site emploie
+8πε[σ¹²/(10R¹⁰)−σ⁶/(4R⁴)], R=max(rc,|Δz|). La force normale ajoute la dérivée pour |Δz|>rc et le
+terme de surface −2πu(rc)∫ρ(z₂)Δz dz₂ pour |Δz|≤rc, terme nécessaire que la dérivée naïve de
+l'énergie omet. Les copies périodiques du profil sont sommées sur huit couches et la contribution du
+site lui-même est retirée. La même correction est recalculée dans A±δA : elle contribue donc à la
+dérivée test-area au lieu d'être ajoutée après coup.
+
 ### État initial du slab
 
 Le builder dédié calcule l'épaisseur liquide depuis la masse moléculaire et la densité cible :
@@ -120,6 +134,7 @@ laisser l'énergie du réseau initial porter T à des valeurs non physiques.
 - Conservation exacte de la force et du couple lors de la redistribution du site M.
 - Géométrie rigide à moins de 10⁻⁶ nm.
 - Ewald direct ↔ PME : erreur RMS relative de force ≤ 10⁻⁵ sur les golden states.
+- Correction LJ planaire : énergie bulk analytique à moins de 2 % pour rc=0,8/0,9/1,1 nm et ΣFz=0.
 - Densité TIP4P/2005 à 300 K / 1 bar à moins de 0,2 % de la référence du modèle.
 - Route mécanique ↔ test-area : écart ≤ 2 mN·m⁻¹.
 - Incertitude statistique finale ≤ 2 mN·m⁻¹.

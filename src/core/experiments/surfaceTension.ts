@@ -112,6 +112,7 @@ export class SurfaceTensionExperiment {
       alpha: config.alphaNmInverse,
       pmeGrid: config.pmeGrid,
       slabCorrection: true,
+      dispersionTailBins: config.densityBins,
     });
     this.last = this.force.compute(this.state, this.box, this.species);
   }

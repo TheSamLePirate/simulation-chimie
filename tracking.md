@@ -990,9 +990,27 @@ mécanique complète et convergence de taille) sont affichés comme limites, jam
 
 ---
 
+## P52 — Correction de dispersion inhomogène du slab ✅
+
+**Objectif (DoD) :** supprimer le biais dominant du cutoff LJ sur γ sans appliquer une correction
+bulk homogène invalide à une interface.
+
+**Livré :** correction Janeček basée sur le profil instantané ρO(z) : énergie, force normale complète
+(dérivée + terme de surface au cutoff), viriel, auto-exclusion et huit images périodiques. Le chemin
+L11 utilise LJ brut jusqu'à min(5σ, 0,49Lmin), puis cette queue ; A±δA la recalcule automatiquement.
+
+**Vérifications :** **3 nouveaux tests** : limite énergétique bulk à moins de 2 % pour rc=0,8/0,9/
+1,1 nm, ΣFz≈0, forces des deux faces orientées vers le cœur dense, invariance sous translation d'une
+maille. Runner/PME/gradient legacy restent verts ; aperçu 256 à 20 pas : T≈298,6 K, énergies finies.
+
+**Déviations au plan :** correction de profil CPU plutôt que dispersion PME. Elle est adaptée au slab
+planaire visé ; le portage GPU pourra choisir la même convolution 1D ou LJ-PME après parité.
+
+---
+
 ## Bilan
 
-**Phases P0–P51 livrées et commitées** (**148 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P52 livrées et commitées** (**151 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

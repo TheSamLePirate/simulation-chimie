@@ -3,6 +3,7 @@ import { redistributeTip4pVirtualForce, TIP4P_2005, tip4pVirtualPositionInBox } 
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
 import { COULOMB_CONSTANT } from "../units";
 import { computeEwald3d, type EwaldOptions, type EwaldResult, ewaldKBounds } from "./ewald";
+import { planarLennardJonesTailCorrection } from "./planarDispersionTail";
 import { computeSmoothPme } from "./pme";
 
 const DEFAULT_ALPHA = 3.5;
@@ -15,6 +16,8 @@ export interface Tip4p2005EwaldOptions {
   readonly slabCorrection?: boolean;
   /** When provided, use smooth PME on this grid instead of the direct reciprocal oracle. */
   readonly pmeGrid?: readonly [number, number, number];
+  /** Enable Janeček planar LJ long-range corrections with this many density bins. */
+  readonly dispersionTailBins?: number;
 }
 
 /**
@@ -24,6 +27,7 @@ export interface Tip4p2005EwaldOptions {
 export class Tip4p2005EwaldForce implements ForceModel {
   readonly name: string;
   lastEwald: EwaldResult | null = null;
+  lastDispersionTailEnergy = 0;
 
   constructor(private readonly options: Tip4p2005EwaldOptions = {}) {
     this.name = options.pmeGrid ? "TIP4P/2005 + smooth PME" : "TIP4P/2005 + direct Ewald";
@@ -138,9 +142,14 @@ export class Tip4p2005EwaldForce implements ForceModel {
       }
     }
 
-    // Shifted-force O–O Lennard-Jones, capped below the minimum-image limit.
+    // O–O Lennard-Jones, capped below the minimum-image limit. L11 uses a longer raw
+    // cutoff plus Janeček's inhomogeneous tail; legacy oracle tests retain shifted force.
     const [lx, ly, lz] = box.lengths;
-    const cutoff = Math.min(2.5 * TIP4P_2005.sigmaO, 0.49 * Math.min(lx, ly, lz));
+    const tailEnabled = this.options.dispersionTailBins !== undefined;
+    const cutoff = Math.min(
+      (tailEnabled ? 5 : 2.5) * TIP4P_2005.sigmaO,
+      0.49 * Math.min(lx, ly, lz),
+    );
     const cutoff2 = cutoff * cutoff;
     const sigma2 = TIP4P_2005.sigmaO ** 2;
     const c2 = sigma2 / cutoff2;
@@ -163,7 +172,7 @@ export class Tip4p2005EwaldForce implements ForceModel {
       const inv6 = inv2 * inv2 * inv2;
       const inv12 = inv6 * inv6;
       const fRadial = (24 * TIP4P_2005.epsilonO * (2 * inv12 - inv6)) / r;
-      const fOverR = (fRadial - fAtCutoff) / r;
+      const fOverR = (fRadial - (tailEnabled ? 0 : fAtCutoff)) / r;
       const fx = fOverR * dx;
       const fy = fOverR * dy;
       const fz = fOverR * dz;
@@ -173,9 +182,28 @@ export class Tip4p2005EwaldForce implements ForceModel {
       forces[3 * oj] -= fx;
       forces[3 * oj + 1] -= fy;
       forces[3 * oj + 2] -= fz;
-      ljEnergy += 4 * TIP4P_2005.epsilonO * (inv12 - inv6) - vAtCutoff + (r - cutoff) * fAtCutoff;
+      ljEnergy += tailEnabled
+        ? 4 * TIP4P_2005.epsilonO * (inv12 - inv6)
+        : 4 * TIP4P_2005.epsilonO * (inv12 - inv6) - vAtCutoff + (r - cutoff) * fAtCutoff;
       ljVirial += fOverR * r2;
     });
+    this.lastDispersionTailEnergy = 0;
+    if (this.options.dispersionTailBins) {
+      const tail = planarLennardJonesTailCorrection(
+        oxygenPositions,
+        box,
+        TIP4P_2005.sigmaO,
+        TIP4P_2005.epsilonO,
+        cutoff,
+        this.options.dispersionTailBins,
+      );
+      this.lastDispersionTailEnergy = tail.potentialEnergy;
+      ljEnergy += tail.potentialEnergy;
+      ljVirial += tail.virial;
+      for (let molecule = 0; molecule < molecules; molecule++) {
+        forces[9 * molecule + 2] += tail.forcesZ[molecule];
+      }
+    }
     return {
       potentialEnergy: ewald.potentialEnergy + ljEnergy,
       virial: ewald.virial + ljVirial,

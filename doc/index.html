@@ -2133,7 +2133,7 @@
         {
           id: "L11", title: "Interface quantitative · TIP4P/2005", subtitle: "Mesurer γ, pas seulement voir une goutte", backend: "CPU",
           vulgar: "On place une tranche d'eau entre deux zones de vide. Puis on imagine deux copies presque identiques : l'une offre un peu plus de surface, l'autre un peu moins. L'énergie nécessaire pour créer cette surface révèle sa tension, comme le travail nécessaire pour étirer une peau élastique.",
-          calc: "Chaque eau rigide possède deux H positifs et un site négatif M sans masse. LJ agit entre oxygènes ; smooth PME additionne les charges à longue portée et Yeh–Berkowitz retire l'artefact du slab. Pour chaque configuration, les centres de masse sont déformés à volume constant vers A±δA, sans étirer les molécules, puis ΔF± est obtenu par moyenne exponentielle.",
+          calc: "Chaque eau rigide possède deux H positifs et un site négatif M sans masse. LJ O–O reçoit une correction longue portée calculée depuis ρ(z) ; smooth PME additionne les charges et Yeh–Berkowitz retire l'artefact du slab. Pour chaque configuration, les centres de masse sont déformés à volume constant vers A±δA, sans étirer les molécules, puis ΔF± est obtenu par moyenne exponentielle.",
           precision: "Forces PME ↔ Ewald direct : 1,6×10⁻⁶ RMS relatif ; viriel : 4,5×10⁻⁷. Le tableau de bord 256 molécules reste un aperçu. Une mesure exige 1 024 molécules, ≥200 ps d'équilibration, 2–5 ns, cinq graines, blocs de 100–200 ps et convergence 512/1 024/2 048.",
           formula: "\\gamma=\\frac{\\Delta F_+-\\Delta F_-}{2n_{int}\\,\\delta A},\\qquad \\Delta F_\\pm=-k_BT\\ln\\langle e^{-\\beta\\Delta U_\\pm}\\rangle", note: "Avec deux interfaces périodiques, n_int = 2 et le dénominateur devient 4δA.", tags: ["TIP4P/2005", "PME", "test-area", "GPU à venir"]
         }
@@ -2378,7 +2378,7 @@
         L11: {
           algorithm: [
             "Construire 1 024 eaux TIP4P/2005 dans un slab centré à la densité cible ; choisir BCC/FCC pour éviter les recouvrements, puis fondre et équilibrer au moins 200 ps.",
-            "À chaque pas de 2 fs, placer le site virtuel M, calculer LJ O–O par cell-list, la partie réelle erfc, la grille B-spline d'ordre 6, la FFT 3D, l'influence réciproque et la correction Yeh–Berkowitz.",
+            "À chaque pas de 2 fs, placer le site virtuel M, calculer LJ O–O par cell-list et sa correction Janeček issue de ρ(z), puis la partie réelle erfc, la grille B-spline d'ordre 6, la FFT 3D, l'influence réciproque et Yeh–Berkowitz.",
             "Redistribuer exactement la force de M sur O/H, intégrer par Velocity-Verlet, projeter les trois distances par SHAKE/RATTLE et thermostater par CSVR avec 6N−3 degrés de liberté.",
             "À intervalles espacés, construire A+δA et A−δA en déplaçant uniquement les centres de masse à volume constant ; calculer ΔU±, puis ΔF± par log-sum-exp.",
             "Estimer γ sur chaque bloc indépendant, publier moyenne, erreur standard, profil ρ(z), cinq graines et convergence en taille.",
@@ -2389,6 +2389,7 @@
             ["LJ oxygène", "σ 0.31589 nm · ε 0.7749 kJ mol⁻¹"],
             ["Référence", "1 024 H₂O · 3.2×3.2×10 nm · 997 kg m⁻³"],
             ["PME", "α 3.5 nm⁻¹ · grille 64×64×256 · B-spline ordre 6"],
+            ["Dispersion", "jusqu'à 5σ · correction ρ(z) Janeček · 100 bins"],
             ["Protocole", "200 ps équilibre · 2–5 ns production · 5 graines"],
           ],
           evidence: [
@@ -2396,6 +2397,7 @@
             "Ewald direct : gradient, invariance par translation, indépendance de α et correction slab analytique.",
             "PME 64×64×128 : erreur RMS relative de force ≈1.6×10⁻⁶ et erreur relative du viriel ≈4.5×10⁻⁷.",
             "Test-area : volume et géométrie interne conservés, dérivée analytique exacte, log-mean-exp stable et incertitude par blocs.",
+            "Correction de dispersion : limite bulk à moins de 2 % pour trois cutoffs, force normale totale nulle, invariance par translation périodique.",
             "Runner : trajectoire déterministe, T initiale exacte avec 6N−3 ddl, contraintes à 10⁻⁶ nm et profil de masse conservatif.",
           ],
           limits: "Le chemin CPU demande environ une seconde par évaluation de force à 1 024 molécules : il valide les golden states mais ne produit pas encore plusieurs nanosecondes en temps raisonnable. L'aperçu 256 et ses premiers échantillons ne sont jamais une valeur publiée. PME GPU, route mécanique tensorielle complète, dispersion longue portée inhomogène et campagnes 512/1 024/2 048 restent nécessaires pour satisfaire tous les critères finaux.",
