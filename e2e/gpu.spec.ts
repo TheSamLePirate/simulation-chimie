@@ -76,4 +76,12 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     const r = await page.evaluate(() => window.__md?.determinism(undefined, 200));
     expect(r?.identical).toBe(true);
   });
+
+  test("FFT matches the Float64 oracle and round-trips", async ({ page }) => {
+    await page.goto("/?gpu-fft=64");
+    const raw = await page.getByTestId("gpu-fft-parity").textContent({ timeout: 30_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.forward.maxRel).toBeLessThan(1e-5);
+    expect(r.roundTrip.maxAbs).toBeLessThan(1e-5);
+  });
 });

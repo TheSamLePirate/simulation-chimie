@@ -1027,9 +1027,29 @@ Ils valent zéro en moyenne par symétrie du slab, mais ne sont pas déclarés i
 
 ---
 
+## P54 — Fondation FFT radix-2 WebGPU ✅
+
+**Objectif (DoD) :** isoler et valider la primitive numérique la plus risquée du futur smooth PME
+GPU avant de l'intégrer aux forces moléculaires.
+
+**Livré :** FFT complexe Float32 radix-2 sur buffers GPU (permutation bit-reversal, passes papillon
+séparées, transformée inverse normalisée), harnais de parité avec l'oracle FFT Float64 et point de
+lecture DOM opt-in `?gpu-fft=N` pour les navigateurs dont le contexte d'inspection est isolé.
+
+**Vérifications :** **2 nouveaux tests** de topologie/validation. Dans un vrai navigateur WebGPU,
+N=64 donne une erreur relative aller de **5,01×10⁻⁸** et un aller-retour de **2,03×10⁻⁷** ; N=256
+donne respectivement **6,99×10⁻⁸** et **3,00×10⁻⁷**, sans erreur shader. Lint, typecheck et build
+verts ; le test readback reste explicitement ignoré en headless, conformément à la limite `mapAsync`.
+
+**Déviations au plan :** cette phase valide la brique 1D seulement. La FFT 3D batchée, l'assignation
+B-spline, la fonction d'influence et l'interpolation des forces seront ajoutées et comparées au CPU
+avant d'autoriser L11 sur GPU.
+
+---
+
 ## Bilan
 
-**Phases P0–P53 livrées et commitées** (**155 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P54 livrées** (**157 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

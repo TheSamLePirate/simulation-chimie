@@ -1,6 +1,8 @@
 import type { WebGPURenderer } from "three/webgpu";
+import { fft1d } from "../core/math/fft";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
+import { GpuFft1d } from "../engine/gpu/GpuFft";
 import type { SimConfig } from "../engine/types";
 
 /**
@@ -122,11 +124,28 @@ async function determinism(config: SimConfig = TEST_CONFIG, steps = 200) {
   return { identical, n: config.particleCount };
 }
 
+/** GPU radix-2 FFT vs the Float64 CPU transform, including an inverse round-trip. */
+async function fftParity(length = 64) {
+  const input = new Float32Array(2 * length);
+  for (let i = 0; i < input.length; i++) input[i] = Math.sin(0.37 * i) + 0.03 * i;
+  const reference = Float64Array.from(input);
+  fft1d(reference);
+  const gpu = new GpuFft1d(input.slice());
+  const renderer = sharedRenderer();
+  await gpu.transform(renderer);
+  const transformed = await gpu.read(renderer);
+  const forward = maxAbsDiff(transformed, reference);
+  await gpu.transform(renderer, true);
+  const roundTrip = await gpu.read(renderer);
+  return { length, forward, roundTrip: maxAbsDiff(roundTrip, input) };
+}
+
 export interface MdHarness {
   forceParity: typeof forceParity;
   stepParity: typeof stepParity;
   energyDrift: typeof energyDrift;
   determinism: typeof determinism;
+  fftParity: typeof fftParity;
 }
 
 declare global {
@@ -137,5 +156,34 @@ declare global {
 
 /** Attach the harness to `window.__md` (called once at startup; harmless in normal use). */
 export function installGpuHarness(): void {
-  window.__md = { forceParity, stepParity, energyDrift, determinism };
+  window.__md = { forceParity, stepParity, energyDrift, determinism, fftParity };
+
+  const requestedFftLength = new URLSearchParams(window.location.search).get("gpu-fft");
+  if (requestedFftLength !== null) {
+    const output = document.createElement("pre");
+    output.dataset.testid = "gpu-fft-parity";
+    output.hidden = true;
+    document.body.append(output);
+
+    const length = Number(requestedFftLength) || 64;
+    const startedAt = performance.now();
+    const runWhenRendererIsReady = () => {
+      if ((window as unknown as { __mdRenderer?: WebGPURenderer }).__mdRenderer) {
+        void fftParity(length)
+          .then((result) => {
+            output.textContent = JSON.stringify(result);
+          })
+          .catch((error: unknown) => {
+            output.textContent = JSON.stringify({ error: String(error) });
+          });
+        return;
+      }
+      if (performance.now() - startedAt > 15_000) {
+        output.textContent = JSON.stringify({ error: "WebGPU renderer initialization timed out" });
+        return;
+      }
+      window.requestAnimationFrame(runWhenRendererIsReady);
+    };
+    window.requestAnimationFrame(runWhenRendererIsReady);
+  }
 }
