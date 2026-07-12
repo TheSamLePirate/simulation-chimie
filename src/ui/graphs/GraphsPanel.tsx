@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef } from "react";
 import { useAppStore } from "../../state/store";
+import { HistogramChart } from "./HistogramChart";
 import { TimeSeriesChart } from "./TimeSeriesChart";
 
 const CAPACITY = 240;
@@ -21,6 +22,7 @@ function pushCapped(array: number[], value: number): void {
 export function GraphsPanel() {
   const observables = useAppStore((s) => s.observables);
   const rdf = useAppStore((s) => s.rdf);
+  const speeds = useAppStore((s) => s.speeds);
   const historyRef = useRef<History>({
     temperature: [],
     kinetic: [],
@@ -72,6 +74,21 @@ export function GraphsPanel() {
         includeZero
         format={(v) => `${v.toFixed(0)} bar`}
       />
+      {speeds && speeds.v.length > 0 && (
+        <>
+          <HistogramChart
+            title="Distribution des vitesses |v| (nm/ps)"
+            x={speeds.v}
+            density={speeds.density}
+            theory={speeds.theory}
+            readout={`⟨|v|⟩ ${speeds.meanSpeed.toFixed(2)} nm/ps`}
+          />
+          <p className="chart__legend">
+            <span style={{ color: "#38bdf8" }}>■ Mesurée</span>{" "}
+            <span style={{ color: "#f59e0b" }}>— Maxwell-Boltzmann (T courante)</span>
+          </p>
+        </>
+      )}
       {rdf && rdf.g.length > 0 && (
         <TimeSeriesChart
           title="g(r) — structure (× r croissant)"

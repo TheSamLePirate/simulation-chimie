@@ -677,6 +677,30 @@ sur L1, L7 (chips eau rigide + SHAKE + thermostat Berendsen) et L9 (chips dièdr
 
 ---
 
+## P37 — Distribution des vitesses (Maxwell-Boltzmann) dans « Mesures en temps réel » ✅
+
+**Objectif (DoD) :** l'utilisateur veut un graphe temps réel de la distribution des vitesses des
+molécules dans le panneau « Mesures en temps réel ».
+
+**Livré :**
+- `core/observables/speedDistribution.ts` : histogramme de |v| normalisé en densité de probabilité
+  + la prédiction **Maxwell-Boltzmann exacte** à la T cinétique courante, **pondérée par espèce**
+  pour les mélanges (l'eau donne la forme bimodale O + queue H). Axe = 3× la vitesse la plus
+  probable de l'espèce la plus légère. 3 tests unitaires (histogramme ≈ analytique sur des vitesses
+  MB échantillonnées, ⟨|v|⟩ = √(8kT/πm), mélange pondéré, état vide).
+- `SimDriver.speedDistribution()` : CPU calcule (48 bins), GPU rend `null` (vitesses résidentes
+  device — même contrat que g(r)/démixtion). Publié via `publishAnalysis` (cadence 500 ms).
+- `HistogramChart` (canvas, sans dépendance) : barres mesurées + courbe analytique en surimpression,
+  légende « Mesurée / Maxwell-Boltzmann (T courante) », readout ⟨|v|⟩.
+
+**Vérifications :** lint + typecheck + **92 tests** + 7 e2e verts ; captures headed : argon L1 colle
+à la courbe MB (⟨|v|⟩ 0,39 nm/ps à 290 K = √(8kT/πm) ✓), gouttelette L7 bimodale (O lent + H rapide)
+suivie par la courbe pondérée.
+
+**Déviations au plan :** aucune (hors plan — demande utilisateur directe).
+
+---
+
 ## Bilan
 
 **Phases P0–P16 livrées et commitées** (**64 tests unitaires/golden + 7 e2e**, lint/typecheck verts).

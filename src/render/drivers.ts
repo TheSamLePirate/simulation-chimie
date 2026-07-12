@@ -1,6 +1,7 @@
 import * as THREE from "three/webgpu";
 import { demixingOrderParameter } from "../core/observables/demixing";
 import { type RadialDistribution, radialDistribution } from "../core/observables/rdf";
+import { type SpeedDistribution, speedDistribution } from "../core/observables/speedDistribution";
 import type { Vec3 } from "../core/types";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
@@ -61,6 +62,8 @@ export interface SimDriver {
   sample(): Observables;
   /** Radial distribution g(r), or null when positions aren't CPU-readable (GPU). */
   radialDistribution(): RadialDistribution | null;
+  /** Speed distribution f(|v|) + MB theory, or null when velocities aren't CPU-readable (GPU). */
+  speedDistribution(): SpeedDistribution | null;
   /** Demixing order parameter for binary mixtures, or null (single species / GPU). */
   demixing(): number | null;
   /** Capture a restorable state snapshot, or null when state isn't CPU-readable (GPU). */
@@ -131,6 +134,13 @@ class CpuDriver implements SimDriver {
     return radialDistribution(this.engine.state, this.engine.box, {
       bins: 60,
       rMax,
+    });
+  }
+
+  speedDistribution(): SpeedDistribution {
+    const t = this.engine.observables().temperature;
+    return speedDistribution(this.engine.state, this.engine.species, t, {
+      bins: 48,
     });
   }
 
@@ -234,6 +244,11 @@ class GpuDriver implements SimDriver {
 
   radialDistribution(): RadialDistribution | null {
     // Positions are GPU-resident; g(r) would need a (headless-blocked) readback.
+    return null;
+  }
+
+  speedDistribution(): SpeedDistribution | null {
+    // Velocities are GPU-resident; the histogram would need a readback.
     return null;
   }
 

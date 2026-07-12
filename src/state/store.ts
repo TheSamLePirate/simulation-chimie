@@ -1,6 +1,7 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { RadialDistribution } from "../core/observables/rdf";
+import type { SpeedDistribution } from "../core/observables/speedDistribution";
 import type { AccuracyLevel, EngineKind, Observables, SimConfig } from "../engine/types";
 
 /** Particle colouring mode (view-only, not part of the physics config). */
@@ -36,6 +37,7 @@ export interface AppState {
   substeps: number;
   observables: Observables | null;
   rdf: RadialDistribution | null;
+  speeds: SpeedDistribution | null;
   demixing: number | null;
   fps: number;
   colorMode: ColorMode;
@@ -53,7 +55,11 @@ export interface AppState {
   requestStep: () => void;
   requestReset: () => void;
   publishSample: (observables: Observables, fps: number) => void;
-  publishAnalysis: (rdf: RadialDistribution | null, demixing: number | null) => void;
+  publishAnalysis: (
+    rdf: RadialDistribution | null,
+    demixing: number | null,
+    speeds: SpeedDistribution | null,
+  ) => void;
   setColorMode: (colorMode: ColorMode) => void;
   setRenderStyle: (renderStyle: RenderStyle) => void;
 }
@@ -64,6 +70,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   substeps: 5,
   observables: null,
   rdf: null,
+  speeds: null,
   demixing: null,
   fps: 0,
   colorMode: "species",
@@ -80,7 +87,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   requestStep: () => set({ stepNonce: get().stepNonce + 1 }),
   requestReset: () => set({ resetNonce: get().resetNonce + 1 }),
   publishSample: (observables, fps) => set({ observables, fps }),
-  publishAnalysis: (rdf, demixing) => set({ rdf, demixing }),
+  publishAnalysis: (rdf, demixing, speeds) => set({ rdf, demixing, speeds }),
   setColorMode: (colorMode) => set({ colorMode }),
   setRenderStyle: (renderStyle) => set({ renderStyle }),
 }));

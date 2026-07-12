@@ -225,7 +225,13 @@ export class SimulationView {
 
     if (this.driver && now - this.lastRdfAt >= RDF_INTERVAL_MS) {
       this.lastRdfAt = now;
-      appStore.getState().publishAnalysis(this.driver.radialDistribution(), this.driver.demixing());
+      appStore
+        .getState()
+        .publishAnalysis(
+          this.driver.radialDistribution(),
+          this.driver.demixing(),
+          this.driver.speedDistribution(),
+        );
     }
   }
 
