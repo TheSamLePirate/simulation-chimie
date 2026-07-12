@@ -1,8 +1,11 @@
 import type { WebGPURenderer } from "three/webgpu";
+import { createBoxXYZ } from "../core/box";
+import { computeSmoothPme } from "../core/forces/pme";
 import { fft1d, fft3d } from "../core/math/fft";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
 import { GpuFft1d, GpuFft3d } from "../engine/gpu/GpuFft";
+import { GpuPmeReciprocal } from "../engine/gpu/GpuPmeReciprocal";
 import type { SimConfig } from "../engine/types";
 
 /**
@@ -48,6 +51,12 @@ function maxAbsDiff(a: Float32Array | Float64Array, b: Float32Array | Float64Arr
     refMax = Math.max(refMax, Math.abs(b[i]));
   }
   return { maxAbs, refMax, maxRel: refMax > 0 ? maxAbs / refMax : 0 };
+}
+
+function finiteDiagnostics(values: Float32Array | Float64Array) {
+  let finite = 0;
+  for (const value of values) if (Number.isFinite(value)) finite++;
+  return { finite, length: values.length, sample: Array.from(values.slice(0, 9)) };
 }
 
 async function freshGpu(config: SimConfig): Promise<GpuEngine> {
@@ -159,6 +168,46 @@ async function fft3dParity(nx = 8, ny = 4, nz = 4) {
   return { nx, ny, nz, forward, roundTrip: maxAbsDiff(roundTrip, input) };
 }
 
+/** Order-6 charge assignment → reciprocal mesh → analytic interpolation vs CPU smooth PME. */
+async function pmeReciprocalParity(nx = 16, ny = 16, nz = 32) {
+  const positions = Float32Array.from([
+    -0.71, 0.12, -0.55, -0.23, -0.62, 0.81, 0.18, 0.43, -0.91, 0.57, -0.31, 0.22, 0.82, 0.71, 1.03,
+    -0.49, 0.83, -0.17,
+  ]);
+  const charges = Float32Array.from([0.75, -0.5, 0.25, -0.75, 0.5, -0.25]);
+  const box = createBoxXYZ(2.4, 2.6, 3.2, "periodic");
+  const alpha = 3.5;
+  const grid = [nx, ny, nz] as const;
+  const gpu = new GpuPmeReciprocal({ count: charges.length, positions, charges, box, alpha, grid });
+  const renderer = sharedRenderer();
+  await gpu.compute(renderer);
+  const gpuForces = await gpu.readForces(renderer);
+  // PME's exact periodic force has no translation mode; apply the same projection as the CPU path.
+  for (let component = 0; component < 3; component++) {
+    let total = 0;
+    for (let i = 0; i < charges.length; i++) total += gpuForces[3 * i + component];
+    const correction = total / charges.length;
+    for (let i = 0; i < charges.length; i++) gpuForces[3 * i + component] -= correction;
+  }
+  const reference = computeSmoothPme(
+    {
+      count: charges.length,
+      positions: Float64Array.from(positions),
+      charges: Float64Array.from(charges),
+    },
+    box,
+    { alpha, grid, realCutoff: 0.2 },
+  ).forces;
+  return {
+    nx,
+    ny,
+    nz,
+    gpu: finiteDiagnostics(gpuForces),
+    cpu: finiteDiagnostics(reference),
+    ...maxAbsDiff(gpuForces, reference),
+  };
+}
+
 export interface MdHarness {
   forceParity: typeof forceParity;
   stepParity: typeof stepParity;
@@ -166,6 +215,7 @@ export interface MdHarness {
   determinism: typeof determinism;
   fftParity: typeof fftParity;
   fft3dParity: typeof fft3dParity;
+  pmeReciprocalParity: typeof pmeReciprocalParity;
 }
 
 declare global {
@@ -176,7 +226,15 @@ declare global {
 
 /** Attach the harness to `window.__md` (called once at startup; harmless in normal use). */
 export function installGpuHarness(): void {
-  window.__md = { forceParity, stepParity, energyDrift, determinism, fftParity, fft3dParity };
+  window.__md = {
+    forceParity,
+    stepParity,
+    energyDrift,
+    determinism,
+    fftParity,
+    fft3dParity,
+    pmeReciprocalParity,
+  };
 
   const installReadback = (testId: string, run: () => Promise<unknown>) => {
     const output = document.createElement("pre");
@@ -215,5 +273,11 @@ export function installGpuHarness(): void {
     const dimensions = requestedFft3d.split("x").map(Number);
     const [nx = 8, ny = 4, nz = 4] = dimensions;
     installReadback("gpu-fft3d-parity", () => fft3dParity(nx, ny, nz));
+  }
+  const requestedPme = params.get("gpu-pme");
+  if (requestedPme !== null) {
+    const dimensions = requestedPme.split("x").map(Number);
+    const [nx = 16, ny = 16, nz = 32] = dimensions;
+    installReadback("gpu-pme-parity", () => pmeReciprocalParity(nx, ny, nz));
   }
 }

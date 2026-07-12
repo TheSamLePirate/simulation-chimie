@@ -75,6 +75,43 @@ function splineAssignmentModulus(mode: number, gridSize: number): number {
   return Math.hypot(re, im);
 }
 
+/** Reciprocal-space potential influence, including the inverse-FFT normalization convention. */
+export function buildPmeInfluenceGrid(
+  box: Box,
+  grid: readonly [number, number, number],
+  alpha: number,
+): Float64Array {
+  const [lx, ly, lz] = box.lengths;
+  const volume = lx * ly * lz;
+  const [nx, ny, nz] = grid;
+  const gridPoints = nx * ny * nz;
+  const alpha2 = alpha * alpha;
+  const influence = new Float64Array(gridPoints);
+  for (let iz = 0; iz < nz; iz++) {
+    const mz = iz <= nz / 2 ? iz : iz - nz;
+    const kz = (2 * Math.PI * mz) / lz;
+    const bz = splineAssignmentModulus(mz, nz);
+    for (let iy = 0; iy < ny; iy++) {
+      const my = iy <= ny / 2 ? iy : iy - ny;
+      const ky = (2 * Math.PI * my) / ly;
+      const by = splineAssignmentModulus(my, ny);
+      for (let ix = 0; ix < nx; ix++) {
+        const mx = ix <= nx / 2 ? ix : ix - nx;
+        const index = ix + nx * (iy + ny * iz);
+        if (mx === 0 && my === 0 && mz === 0) continue;
+        const kx = (2 * Math.PI * mx) / lx;
+        const k2 = kx * kx + ky * ky + kz * kz;
+        const weight = Math.exp(-k2 / (4 * alpha2)) / k2;
+        const bx = splineAssignmentModulus(mx, nx);
+        const assignmentFactor2 = (bx * by * bz) ** 2;
+        influence[index] =
+          (gridPoints * COULOMB_CONSTANT * 4 * Math.PI * weight) / (volume * assignmentFactor2);
+      }
+    }
+  }
+  return influence;
+}
+
 function wrapIndex(index: number, length: number): number {
   const value = index % length;
   return value < 0 ? value + length : value;
@@ -170,14 +207,13 @@ export function computeSmoothPme(
 
   let reciprocalEnergy = 0;
   let reciprocalVirial = 0;
+  const influenceGrid = buildPmeInfluenceGrid(box, options.grid, alpha);
   for (let iz = 0; iz < nz; iz++) {
     const mz = iz <= nz / 2 ? iz : iz - nz;
     const kz = (2 * Math.PI * mz) / lz;
-    const bz = splineAssignmentModulus(mz, nz);
     for (let iy = 0; iy < ny; iy++) {
       const my = iy <= ny / 2 ? iy : iy - ny;
       const ky = (2 * Math.PI * my) / ly;
-      const by = splineAssignmentModulus(my, ny);
       for (let ix = 0; ix < nx; ix++) {
         const mx = ix <= nx / 2 ? ix : ix - nx;
         const index = ix + nx * (iy + ny * iz);
@@ -188,16 +224,13 @@ export function computeSmoothPme(
         }
         const kx = (2 * Math.PI * mx) / lx;
         const k2 = kx * kx + ky * ky + kz * kz;
-        const weight = Math.exp(-k2 / (4 * alpha2)) / k2;
-        const bx = splineAssignmentModulus(mx, nx);
-        const assignmentFactor2 = (bx * by * bz) ** 2;
         const re = mesh[2 * index];
         const im = mesh[2 * index + 1];
-        const influence = (COULOMB_CONSTANT * 4 * Math.PI * weight) / (volume * assignmentFactor2);
+        const potentialScale = influenceGrid[index];
+        const influence = potentialScale / gridPoints;
         const energyTerm = 0.5 * influence * (re * re + im * im);
         reciprocalEnergy += energyTerm;
         reciprocalVirial += energyTerm * (1 - k2 / (2 * alpha2));
-        const potentialScale = gridPoints * influence;
         mesh[2 * index] = potentialScale * re;
         mesh[2 * index + 1] = potentialScale * im;
       }

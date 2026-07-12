@@ -92,4 +92,11 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     expect(r.forward.maxRel).toBeLessThan(1e-5);
     expect(r.roundTrip.maxAbs).toBeLessThan(1e-5);
   });
+
+  test("smooth-PME reciprocal forces match the Float64 CPU oracle", async ({ page }) => {
+    await page.goto("/?gpu-pme=16x16x32");
+    const raw = await page.getByTestId("gpu-pme-parity").textContent({ timeout: 60_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.maxRel).toBeLessThan(5e-3);
+  });
 });

@@ -1066,9 +1066,30 @@ shader. Lint, typecheck, tests, build et e2e verts.
 
 ---
 
+## P56 — Chemin réciproque smooth-PME WebGPU ✅
+
+**Objectif (DoD) :** reproduire sur le GPU la chaîne réciproque d'ordre 6, depuis les sites chargés
+jusqu'aux forces interpolées, et la comparer directement à l'oracle Float64.
+
+**Livré :** assignation B-spline 6×6×6 avec atomiques i32 à point fixe (résolution <6×10⁻⁸ e),
+déquantification, FFT 3D, fonction d'influence partagée avec le CPU, FFT inverse, différentiation
+analytique des mêmes splines et réduction déterministe des 216 contributions par site. Le readback
+retire explicitement le padding vec3 WebGPU. Harnais opt-in `?gpu-pme=Nx×Ny×Nz` avec diagnostics.
+
+**Vérifications :** **1 nouveau test** de contrat/neutralité ; le refactoring de l'influence conserve
+les goldens PME/direct-Ewald. En navigateur WebGPU réel, l'erreur relative des forces réciproques est
+**3,81×10⁻⁵** sur 8×8×16 et **7,67×10⁻⁵** sur 16×16×32 (18/18 composantes finies), très sous le
+seuil de parité 5×10⁻³. Lint, typecheck, tests, build et e2e verts.
+
+**Déviations au plan :** la phase couvre la force réciproque, pas encore sa réduction énergie/viriel.
+Le temps de première compilation TSL est élevé ; les dispatchs réutilisent ensuite les pipelines.
+Le réel Ewald, l'auto-énergie, Yeh–Berkowitz et le transfert site M→atomes restent à intégrer au moteur.
+
+---
+
 ## Bilan
 
-**Phases P0–P55 livrées** (**158 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P56 livrées** (**159 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
