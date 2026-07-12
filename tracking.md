@@ -850,9 +850,26 @@ temps la première route quantitative scientifiquement fermée.
 
 ---
 
+## P45 — Noyau FFT Float64 pour smooth PME ✅
+
+**Objectif (DoD) :** disposer d'une transformée 3D déterministe et testée, sans dépendance opaque,
+avant d'implémenter l'assignation B-spline et l'influence PME.
+
+**Livré :** FFT complexe radix-2 en place, permutation bit-reversal, transformée inverse normalisée
+et décomposition 3D séparable sur grilles rectangulaires x-fastest. Les dimensions et tailles de
+buffers invalides sont refusées explicitement.
+
+**Vérifications :** lint + typecheck et **4 nouveaux tests** : égalité à la DFT complexe directe,
+round-trip 1D, round-trip 3D non cubique et validations d'entrée.
+
+**Déviations au plan :** aucune. Ce noyau est une fondation ; il ne constitue pas encore PME et ne
+modifie donc aucun chemin physique de production.
+
+---
+
 ## Bilan
 
-**Phases P0–P44 livrées et commitées** (**119 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P45 livrées et commitées** (**123 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
