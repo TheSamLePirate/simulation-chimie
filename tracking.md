@@ -46,6 +46,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P37** | Distribution des vitesses Maxwell-Boltzmann | ✅ |
 | **P38** | Atlas HTML interactif des modèles physiques | ✅ |
 | **P39** | Approfondissement expert de l'atlas physique | ✅ |
+| **P40** | Fondations scientifiques L11 : tenseurs, densité, incertitude | ✅ |
 
 ---
 
@@ -744,9 +745,30 @@ erreur navigateur ; lint/typecheck/tests/build/e2e verts.
 
 ---
 
+## P40 — Fondations scientifiques L11 : tenseurs, densité, incertitude ✅
+
+**Objectif (DoD) :** démarrer l'expérience quantitative TIP4P/2005 par des primitives de mesure
+testées, avant d'ajouter un nouveau champ de force ou une UI qui pourrait donner une fausse
+impression de précision.
+
+**Livré :** contrat scientifique complet dans `docs/EXPERIMENT-L11.md` (géométrie, modèle,
+références primaires, protocole, critères d'acceptation et ordre d'implémentation). Nouvelles
+observables pures : tenseur cinétique symétrique, tenseur de pression à partir du viriel,
+γ mécanique d'un slab à deux interfaces, conversion exacte kJ·mol⁻¹·nm⁻² → mN·m⁻¹, moyennes par
+blocs avec erreur standard, et profil de densité massique ρ(z) avec conservation de la masse.
+
+**Vérifications :** lint + typecheck + **99 tests** (29 fichiers) + build + **7 e2e** verts. Les
+7 nouveaux tests couvrent chaque composante tensorielle, la formule de γ, la conversion d'unités,
+les blocs incomplets, les entrées invalides, le wrapping z et l'intégrale du profil de masse.
+
+**Déviations au plan :** L11 reste volontairement CPU-only tant que l'oracle TIP4P/2005/Ewald
+n'existe pas et que sa parité n'est pas démontrée.
+
+---
+
 ## Bilan
 
-**Phases P0–P39 livrées et commitées** (**92 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P40 livrées et commitées** (**99 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
