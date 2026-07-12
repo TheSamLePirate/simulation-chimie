@@ -8,6 +8,8 @@ export interface Scene {
   config: SimConfig;
   /** View colouring auto-applied on load so the effect reads immediately (default "species"). */
   colorMode?: ColorMode;
+  /** Optional playback override for expensive scenes. */
+  substeps?: number;
 }
 
 const make = (overrides: Partial<SimConfig>): SimConfig => ({
@@ -136,6 +138,26 @@ export const SCENES: readonly Scene[] = [
       thermostat: "berendsen",
       thermostatTau: 0.3,
     }),
+  },
+  {
+    id: "surface-tension-lab",
+    label: "Laboratoire γ(T) · TIP4P/2005",
+    description:
+      "Aperçu réduit d'un slab eau–vapeur avec TIP4P/2005, smooth PME, correction de slab et protocole test-area (L11, CPU)",
+    config: make({
+      level: "L11",
+      speciesName: "WATER_O",
+      particleCount: 256,
+      boxLength: 1.8,
+      boundary: "periodic",
+      temperature: 300,
+      timestep: 0.002,
+      thermostat: "csvr",
+      thermostatTau: 1,
+      engineKind: "cpu",
+    }),
+    colorMode: "species",
+    substeps: 1,
   },
   {
     id: "nacl",

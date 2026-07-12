@@ -949,14 +949,36 @@ du réseau initial et confirme le besoin des ≥200 ps d'équilibration. Le runn
 
 ---
 
+## P50 — Niveau L11 et laboratoire quantitatif interactif ✅
+
+**Objectif (DoD) :** rendre la nouvelle expérience accessible dans l'application sans confondre une
+animation courte avec une mesure convergée.
+
+**Livré :** registre/Zod/CpuEngine étendus à L11, boîte anisotrope, scène 256 molécules et oracle
+1 024. Tableau de bord dédié : phase et progression 200 ps, préréglages 280–340 K, T, γ±SEM,
+référence IAPWS, formule test-area, profil ρ(z) lissé, historiques, collecte ΔU±, tailles aperçu/oracle
+et critères d'intégrité. Le packing choisit BCC/FCC (distance O–O aperçu >0,31 nm) et un calendrier
+CSVR fort→faible stabilise la fusion sans contaminer la production.
+
+**Vérifications :** **3 nouveaux tests unitaires** (IAPWS, packing aperçu, contrat CpuEngine L11),
+**148 tests** totaux, build vert. Nouveau e2e L11 : chargement, canvas ρ(z), T stable 250–450 K,
+zéro exception. Inspection navigateur réel 1 280×720 : T≈319–334 K pendant les premiers pas,
+aucun overflow ; deux collectes donnent bien un estimateur γ et l'interface reste réactive.
+
+**Déviations au plan :** la valeur γ initiale (non équilibrée) peut être très loin d'IAPWS et reste
+étiquetée exploratoire. L'oracle 1 024 est chargeable mais volontairement en pause/CPU lent.
+
+---
+
 ## Bilan
 
-**Phases P0–P49 livrées et commitées** (**145 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P50 livrées et commitées** (**148 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
-**Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
+**Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
 atomistique (Coulomb-Wolf)**, **eau atomistique flexible (SPC/Fw)**, **eau rigide (SHAKE/RATTLE)**,
 huile/eau, tension de surface, dissolution, dièdres d'alcane et dissociation de Morse.
+L11 ajoute la tension de surface quantitative TIP4P/2005/PME/test-area avec incertitudes.
 **Ensembles NVE / NVT (Berendsen, CSVR) / NPT (Berendsen).** **Gravité** (CPU + GPU). Démixtion huile/eau,
 ions NaCl, mouvement Brownien, transitions de phase.
 

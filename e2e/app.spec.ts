@@ -122,3 +122,27 @@ test("oil/water scene reports a valid demixing order parameter", async ({ page }
     .toBeGreaterThanOrEqual(0);
   expect(Number(await demix.textContent())).toBeLessThanOrEqual(1);
 });
+
+test("L11 surface-tension laboratory loads a stable quantitative preview", async ({ page }) => {
+  test.setTimeout(30_000);
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.goto("/");
+  await expect(page.getByTestId("engine-status")).toBeVisible();
+  await page.getByRole("button", { name: /Laboratoire γ\(T\)/ }).click();
+  await expect(page.getByTestId("surface-tension-lab")).toBeVisible();
+  await expect(page.getByRole("img", { name: /Profil de densité/ })).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        Number((await page.getByTestId("lab-temperature").textContent())?.replace(" K", "")),
+      { timeout: 10_000 },
+    )
+    .toBeGreaterThan(250);
+  const temperature = Number(
+    (await page.getByTestId("lab-temperature").textContent())?.replace(" K", ""),
+  );
+  expect(temperature).toBeLessThan(450);
+  await expect(page.getByTestId("lab-sample-count")).toHaveText("0 configurations");
+  expect(pageErrors, pageErrors.join("\n")).toEqual([]);
+});

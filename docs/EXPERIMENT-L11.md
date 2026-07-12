@@ -101,6 +101,19 @@ Sanity check 1 024 molécules : T(0)=300,000 K, énergie potentielle initiale fi
 premier pas pendant la relaxation du packing. Aucune donnée ne doit donc être collectée avant la
 phase d'équilibration spécifiée.
 
+### Laboratoire interactif L11
+
+L11 est enregistré dans l'échelle de précision et possède une scène dédiée. L'aperçu affiche 256
+molécules dans 1,8×1,8×8 nm avec une grille PME 32×32×128 et un pas par image ; l'oracle charge la
+géométrie 1 024/64×64×256 en pause. Le tableau de bord montre phase/temps d'équilibration, T,
+γ test-area ± erreur, référence IAPWS à la température choisie, ρ(z), historiques T/γ et nombre de
+configurations. Le bouton d'échantillonnage est explicitement **exploratoire** avant 200 ps.
+
+Le packing choisit automatiquement BCC ou FCC pour maximiser la distance O–O selon la géométrie :
+l'aperçu FCC reste >0,31 nm. Pendant la fusion initiale, CSVR couple à τ=Δt jusqu'à 1 ps, puis relâche
+progressivement vers τ=1 ps à 50 ps ; la production utilise ainsi le couplage faible prévu sans
+laisser l'énergie du réseau initial porter T à des valeurs non physiques.
+
 ## Critères d'acceptation
 
 - Forces du site virtuel et forces réciproques conformes au gradient numérique.

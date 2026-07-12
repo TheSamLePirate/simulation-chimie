@@ -6,6 +6,7 @@ export function ScenePicker() {
   const patchConfig = useAppStore((s) => s.patchConfig);
   const setPlaying = useAppStore((s) => s.setPlaying);
   const setColorMode = useAppStore((s) => s.setColorMode);
+  const setSubsteps = useAppStore((s) => s.setSubsteps);
   const activeSeed = useAppStore((s) => s.config.seed);
   const activeSpecies = useAppStore((s) => s.config.speciesName);
 
@@ -26,6 +27,7 @@ export function ScenePicker() {
               onClick={() => {
                 patchConfig(scene.config);
                 setColorMode(scene.colorMode ?? "species");
+                if (scene.substeps) setSubsteps(scene.substeps);
                 setPlaying(true);
               }}
             >

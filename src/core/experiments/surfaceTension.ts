@@ -4,6 +4,7 @@ import { rattle, shake } from "../constraints";
 import { Tip4p2005EwaldForce } from "../forces/tip4p2005Ewald";
 import { kineticEnergy } from "../observables";
 import { type DensityProfile, massDensityProfileZ } from "../observables/densityProfile";
+import { surfaceTensionToMilliNewtonPerMeter } from "../observables/tensor";
 import {
   type BlockedTestAreaEstimate,
   blockTestAreaSurfaceTension,
@@ -51,12 +52,21 @@ export interface SurfaceTensionInstantaneous {
   readonly totalEnergy: number;
 }
 
+export interface SurfaceTensionAnalysis {
+  readonly densityProfile: DensityProfile;
+  readonly liquidThickness: number;
+  readonly sampleCount: number;
+  readonly gammaMilliNewtonPerMeter: number | null;
+  readonly standardErrorMilliNewtonPerMeter: number | null;
+}
+
 /** Deterministic CPU oracle runner for short L11 validations and golden-state generation. */
 export class SurfaceTensionExperiment {
   readonly config: SurfaceTensionExperimentConfig;
   readonly box: Box;
   readonly state: SimState;
   readonly species: readonly Species[];
+  readonly renderBonds: { readonly i: Int32Array; readonly j: Int32Array };
   readonly liquidThickness: number;
   readonly testAreaSamples: TestAreaSample[] = [];
 
@@ -68,6 +78,8 @@ export class SurfaceTensionExperiment {
   private last: ForceResult;
   private stepCount = 0;
   private elapsedPs = 0;
+  private targetTemperatureK: number;
+  private timestepPs: number;
 
   constructor(config: SurfaceTensionExperimentConfig = REFERENCE_SURFACE_TENSION_CONFIG) {
     this.config = config;
@@ -82,7 +94,10 @@ export class SurfaceTensionExperiment {
     this.state = system.state;
     this.species = system.species;
     this.constraints = system.constraints;
+    this.renderBonds = system.renderBonds;
     this.liquidThickness = system.liquidThickness;
+    this.targetTemperatureK = config.temperatureK;
+    this.timestepPs = config.timestepPs;
     this.inverseMass = new Float64Array(this.state.count);
     for (let atom = 0; atom < this.state.count; atom++) {
       this.inverseMass[atom] = 1 / this.species[this.state.typeIds[atom]].mass;
@@ -107,8 +122,7 @@ export class SurfaceTensionExperiment {
 
   private rescaleToTargetTemperature(): void {
     const kinetic = kineticEnergy(this.state, this.species);
-    const target =
-      0.5 * this.degreesOfFreedom() * BOLTZMANN_KJ_PER_MOL_K * this.config.temperatureK;
+    const target = 0.5 * this.degreesOfFreedom() * BOLTZMANN_KJ_PER_MOL_K * this.targetTemperatureK;
     if (kinetic <= 0) return;
     const scale = Math.sqrt(target / kinetic);
     for (let i = 0; i < this.state.velocities.length; i++) this.state.velocities[i] *= scale;
@@ -117,7 +131,7 @@ export class SurfaceTensionExperiment {
   step(steps = 1): void {
     if (!Number.isInteger(steps) || steps < 0) throw new RangeError("steps must be non-negative");
     for (let iteration = 0; iteration < steps; iteration++) {
-      const dt = this.config.timestepPs;
+      const dt = this.timestepPs;
       const halfDt = 0.5 * dt;
       const { positions, velocities, forces, count } = this.state;
       this.referencePositions.set(positions);
@@ -142,13 +156,23 @@ export class SurfaceTensionExperiment {
       rattle(this.state, this.constraints, this.inverseMass, this.box);
       const currentKinetic = kineticEnergy(this.state, this.species);
       const dof = this.degreesOfFreedom();
-      const targetKinetic = 0.5 * dof * BOLTZMANN_KJ_PER_MOL_K * this.config.temperatureK;
+      const targetKinetic = 0.5 * dof * BOLTZMANN_KJ_PER_MOL_K * this.targetTemperatureK;
+      // The ordered packing releases substantial potential energy while melting. During the
+      // first picosecond CSVR redraws the kinetic energy every step; coupling is then relaxed
+      // smoothly to the weak production value. No samples are taken in this equilibration stage.
+      let thermostatTau = this.config.thermostatTauPs;
+      if (this.elapsedPs < 1) thermostatTau = dt;
+      else if (this.elapsedPs < 20) thermostatTau = Math.min(thermostatTau, 0.05);
+      else if (this.elapsedPs < 50) {
+        const blend = (this.elapsedPs - 20) / 30;
+        thermostatTau = 0.05 + blend * (thermostatTau - 0.05);
+      }
       const lambda = csvrLambda(
         currentKinetic,
         targetKinetic,
         dof,
         dt,
-        this.config.thermostatTauPs,
+        thermostatTau,
         this.thermostatRng,
       );
       for (let i = 0; i < velocities.length; i++) velocities[i] *= lambda;
@@ -189,10 +213,58 @@ export class SurfaceTensionExperiment {
     const deltaArea = this.box.lengths[0] * this.box.lengths[1] * relativeAreaStep;
     return blockTestAreaSurfaceTension(
       this.testAreaSamples,
-      this.config.temperatureK,
+      this.targetTemperatureK,
       deltaArea,
       blockSize,
       2,
     );
+  }
+
+  analysis(relativeAreaStep = 5e-4): SurfaceTensionAnalysis {
+    let gammaMilliNewtonPerMeter: number | null = null;
+    let standardErrorMilliNewtonPerMeter: number | null = null;
+    if (this.testAreaSamples.length >= 2) {
+      const estimate = this.testAreaEstimate(relativeAreaStep, 1);
+      gammaMilliNewtonPerMeter = surfaceTensionToMilliNewtonPerMeter(estimate.gamma);
+      standardErrorMilliNewtonPerMeter = surfaceTensionToMilliNewtonPerMeter(
+        estimate.blockStatistics.standardError,
+      );
+    }
+    return {
+      densityProfile: this.densityProfile(),
+      liquidThickness: this.liquidThickness,
+      sampleCount: this.testAreaSamples.length,
+      gammaMilliNewtonPerMeter,
+      standardErrorMilliNewtonPerMeter,
+    };
+  }
+
+  setTargetTemperature(temperatureK: number): void {
+    if (!(temperatureK > 0)) throw new RangeError("target temperature must be positive");
+    this.targetTemperatureK = temperatureK;
+  }
+
+  setTimestep(timestepPs: number): void {
+    if (!(timestepPs > 0)) throw new RangeError("timestep must be positive");
+    this.timestepPs = timestepPs;
+  }
+
+  restoreState(
+    positions: ArrayLike<number>,
+    velocities: ArrayLike<number>,
+    step: number,
+    timePs: number,
+  ) {
+    if (
+      positions.length !== this.state.positions.length ||
+      velocities.length !== this.state.velocities.length
+    ) {
+      throw new RangeError("restored L11 state has incompatible buffer lengths");
+    }
+    this.state.positions.set(positions);
+    this.state.velocities.set(velocities);
+    this.stepCount = step;
+    this.elapsedPs = timePs;
+    this.last = this.force.compute(this.state, this.box, this.species);
   }
 }

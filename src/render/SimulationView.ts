@@ -232,6 +232,7 @@ export class SimulationView {
           this.driver.demixing(),
           this.driver.speedDistribution(),
         );
+      appStore.getState().publishSurfaceTension(this.driver.surfaceTensionAnalysis());
     }
   }
 

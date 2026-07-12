@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { appStore } from "../state/store";
+import { appStore, useAppStore } from "../state/store";
 import { CanvasHost } from "../ui/CanvasHost";
 import { ControlPanel } from "../ui/controls/ControlPanel";
 import { EngineStatusBadge } from "../ui/EngineStatusBadge";
 import type { EngineStatus } from "../ui/engineStatus";
+import { SurfaceTensionLabPanel } from "../ui/experiments/SurfaceTensionLabPanel";
 import { Exporter } from "../ui/export/Exporter";
 import { GraphsPanel } from "../ui/graphs/GraphsPanel";
 import { ObservablesPanel } from "../ui/panels/ObservablesPanel";
@@ -11,6 +12,7 @@ import { ScenePicker } from "../ui/scenes/ScenePicker";
 
 export function App() {
   const [status, setStatus] = useState<EngineStatus>("initializing");
+  const isSurfaceTensionLab = useAppStore((state) => state.config.level === "L11");
 
   // Keyboard shortcuts: Space = play/pause, R = reset, N = single step.
   useEffect(() => {
@@ -32,19 +34,32 @@ export function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div className={`app${isSurfaceTensionLab ? " app--lab" : ""}`}>
       <CanvasHost onStatus={setStatus} />
 
       <header className="app__header">
         <h1 className="app__title">Dynamique-Chimie</h1>
-        <p className="app__subtitle">Simulateur de dynamique moléculaire — temps réel</p>
+        <p className="app__subtitle">
+          {isSurfaceTensionLab
+            ? "Laboratoire moléculaire quantitatif"
+            : "Simulateur de dynamique moléculaire — temps réel"}
+        </p>
       </header>
 
       <aside className="sidebar">
-        <ScenePicker />
-        <ControlPanel />
-        <ObservablesPanel />
-        <GraphsPanel />
+        {isSurfaceTensionLab ? (
+          <>
+            <SurfaceTensionLabPanel />
+            <ScenePicker />
+          </>
+        ) : (
+          <>
+            <ScenePicker />
+            <ControlPanel />
+            <ObservablesPanel />
+            <GraphsPanel />
+          </>
+        )}
         <Exporter />
       </aside>
 

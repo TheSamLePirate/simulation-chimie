@@ -3,6 +3,10 @@ import { applyBoundary } from "../../core/boundary";
 import { createBox, createBoxXYZ, volume } from "../../core/box";
 import { type DistanceConstraints, rattle, shake } from "../../core/constraints";
 import { buildSaltWaterSystem } from "../../core/dissolution";
+import {
+  type SurfaceTensionAnalysis,
+  SurfaceTensionExperiment,
+} from "../../core/experiments/surfaceTension";
 import { IonicForce } from "../../core/forces/ionic";
 import { LennardJonesCellForce } from "../../core/forces/lennardJonesCell";
 import { MolecularForce } from "../../core/forces/molecular";
@@ -45,6 +49,7 @@ function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
     case "L8":
     case "L9":
     case "L10":
+    case "L11":
       // Molecular systems need topology; they are built in CpuEngine.configure().
       throw new Error("molecular force is built in configure()");
   }
@@ -99,6 +104,7 @@ export class CpuEngine implements SimulationEngine {
   private constraints: DistanceConstraints | null = null;
   private invMass = new Float64Array(0);
   private refPositions = new Float64Array(0);
+  private l11: SurfaceTensionExperiment | null = null;
 
   constructor(config: SimConfig) {
     this.config = config;
@@ -113,9 +119,38 @@ export class CpuEngine implements SimulationEngine {
   /** (Re)build box, species, state and force model from the current config. */
   private configure(): void {
     const c = this.config;
+    this.l11 = null;
     this.box = createBox(c.boxLength, c.boundary);
     // Velocities start at initialTemperature; the thermostat then drives toward temperature.
     const initT = c.initialTemperature ?? c.temperature;
+
+    if (c.level === "L11") {
+      const lz = c.particleCount >= 1024 ? 10 : 8;
+      const nextPowerOfTwo = (value: number) => 2 ** Math.ceil(Math.log2(value));
+      const gridX = nextPowerOfTwo(Math.max(8, Math.ceil(c.boxLength / 0.07)));
+      const gridZ = nextPowerOfTwo(Math.max(16, Math.ceil(lz / 0.07)));
+      const experiment = new SurfaceTensionExperiment({
+        molecules: c.particleCount,
+        box: [c.boxLength, c.boxLength, lz],
+        temperatureK: c.temperature,
+        targetDensityKgPerM3: 997,
+        seed: c.seed,
+        timestepPs: c.timestep,
+        thermostatTauPs: c.thermostatTau,
+        alphaNmInverse: 3.5,
+        pmeGrid: [gridX, gridX, gridZ],
+        densityBins: 80,
+      });
+      this.l11 = experiment;
+      this.box = experiment.box;
+      this.state = experiment.state;
+      this.species = experiment.species;
+      this.bonds = experiment.renderBonds;
+      this.constraints = null;
+      this.stepCount = 0;
+      this.elapsed = 0;
+      return;
+    }
 
     // L4 atomistic water / L5 rigid water / L7 rigid-water droplet (surface tension).
     if (c.level === "L4" || c.level === "L5" || c.level === "L7") {
@@ -258,6 +293,10 @@ export class CpuEngine implements SimulationEngine {
   }
 
   step(steps: number): void {
+    if (this.l11) {
+      this.l11.step(steps);
+      return;
+    }
     const dt = this.config.timestep;
     for (let i = 0; i < steps; i++) {
       this.last = this.constraints
@@ -369,6 +408,18 @@ export class CpuEngine implements SimulationEngine {
   }
 
   observables(): Observables {
+    if (this.l11) {
+      const current = this.l11.instantaneous();
+      return {
+        step: current.step,
+        time: current.timePs,
+        kineticEnergy: current.kineticEnergy,
+        potentialEnergy: current.potentialEnergy,
+        totalEnergy: current.totalEnergy,
+        temperature: current.temperatureK,
+        pressure: Number.NaN,
+      };
+    }
     const ke = kineticEnergy(this.state, this.species);
     const pe = this.last.potentialEnergy;
     const pInternal = pressure(ke, this.last.virial, volume(this.box));
@@ -386,7 +437,7 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // Molecular levels (L4–L10) change topology/atom count ⇒ full rebuild, not a swap.
+    // Molecular levels (L4–L11) change topology/atom count ⇒ full rebuild, not a swap.
     if (
       level === "L4" ||
       level === "L5" ||
@@ -394,7 +445,8 @@ export class CpuEngine implements SimulationEngine {
       level === "L7" ||
       level === "L8" ||
       level === "L9" ||
-      level === "L10"
+      level === "L10" ||
+      level === "L11"
     ) {
       this.configure();
       return;
@@ -406,6 +458,7 @@ export class CpuEngine implements SimulationEngine {
   /** Update the integration timestep (ps) without disturbing the trajectory. */
   setTimestep(timestep: number): void {
     this.config = { ...this.config, timestep };
+    this.l11?.setTimestep(timestep);
   }
 
   /**
@@ -414,6 +467,10 @@ export class CpuEngine implements SimulationEngine {
    */
   rescaleToTemperature(targetK: number): void {
     this.config = { ...this.config, temperature: targetK };
+    if (this.l11) {
+      this.l11.setTargetTemperature(targetK);
+      return;
+    }
     if (this.config.thermostat !== "none") return;
     const current = temperature(this.state, this.species, true);
     if (current > 0 && targetK > 0) {
@@ -442,6 +499,16 @@ export class CpuEngine implements SimulationEngine {
     this.config = { ...this.config, electricField };
   }
 
+  surfaceTensionAnalysis(): SurfaceTensionAnalysis | null {
+    return this.l11?.analysis() ?? null;
+  }
+
+  collectSurfaceTensionSample(relativeAreaStep = 5e-4): SurfaceTensionAnalysis | null {
+    if (!this.l11) return null;
+    this.l11.collectTestAreaSample(relativeAreaStep);
+    return this.l11.analysis(relativeAreaStep);
+  }
+
   /** Overwrite the live state from a snapshot (sizes must match the config). */
   loadState(
     positions: ArrayLike<number>,
@@ -450,6 +517,11 @@ export class CpuEngine implements SimulationEngine {
     step: number,
     time: number,
   ): void {
+    if (this.l11) {
+      this.state.typeIds.set(typeIds);
+      this.l11.restoreState(positions, velocities, step, time);
+      return;
+    }
     this.state.positions.set(positions);
     this.state.velocities.set(velocities);
     this.state.typeIds.set(typeIds);

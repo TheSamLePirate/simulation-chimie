@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import type { SurfaceTensionAnalysis } from "../core/experiments/surfaceTension";
 import { demixingOrderParameter } from "../core/observables/demixing";
 import { type RadialDistribution, radialDistribution } from "../core/observables/rdf";
 import { type SpeedDistribution, speedDistribution } from "../core/observables/speedDistribution";
@@ -66,6 +67,8 @@ export interface SimDriver {
   speedDistribution(): SpeedDistribution | null;
   /** Demixing order parameter for binary mixtures, or null (single species / GPU). */
   demixing(): number | null;
+  surfaceTensionAnalysis(): SurfaceTensionAnalysis | null;
+  collectSurfaceTensionSample(relativeAreaStep?: number): SurfaceTensionAnalysis | null;
   /** Capture a restorable state snapshot, or null when state isn't CPU-readable (GPU). */
   snapshot(): Snapshot | null;
   setLevel(level: AccuracyLevel): void;
@@ -149,6 +152,14 @@ class CpuDriver implements SimDriver {
     if (species.length < 2) return null;
     const cutoff = 1.5 * Math.max(...species.map((s) => s.sigma));
     return demixingOrderParameter(this.engine.state, this.engine.box, cutoff);
+  }
+
+  surfaceTensionAnalysis(): SurfaceTensionAnalysis | null {
+    return this.engine.surfaceTensionAnalysis();
+  }
+
+  collectSurfaceTensionSample(relativeAreaStep = 5e-4): SurfaceTensionAnalysis | null {
+    return this.engine.collectSurfaceTensionSample(relativeAreaStep);
   }
 
   snapshot(): Snapshot {
@@ -253,6 +264,14 @@ class GpuDriver implements SimDriver {
   }
 
   demixing(): number | null {
+    return null;
+  }
+
+  surfaceTensionAnalysis(): SurfaceTensionAnalysis | null {
+    return null;
+  }
+
+  collectSurfaceTensionSample(_relativeAreaStep = 5e-4): SurfaceTensionAnalysis | null {
     return null;
   }
 

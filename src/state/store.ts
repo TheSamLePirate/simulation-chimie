@@ -1,5 +1,6 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
+import type { SurfaceTensionAnalysis } from "../core/experiments/surfaceTension";
 import type { RadialDistribution } from "../core/observables/rdf";
 import type { SpeedDistribution } from "../core/observables/speedDistribution";
 import type { AccuracyLevel, EngineKind, Observables, SimConfig } from "../engine/types";
@@ -39,6 +40,7 @@ export interface AppState {
   rdf: RadialDistribution | null;
   speeds: SpeedDistribution | null;
   demixing: number | null;
+  surfaceTension: SurfaceTensionAnalysis | null;
   fps: number;
   colorMode: ColorMode;
   renderStyle: RenderStyle;
@@ -60,6 +62,7 @@ export interface AppState {
     demixing: number | null,
     speeds: SpeedDistribution | null,
   ) => void;
+  publishSurfaceTension: (analysis: SurfaceTensionAnalysis | null) => void;
   setColorMode: (colorMode: ColorMode) => void;
   setRenderStyle: (renderStyle: RenderStyle) => void;
 }
@@ -72,6 +75,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   rdf: null,
   speeds: null,
   demixing: null,
+  surfaceTension: null,
   fps: 0,
   colorMode: "species",
   renderStyle: "spheres",
@@ -88,6 +92,7 @@ export const appStore = createStore<AppState>((set, get) => ({
   requestReset: () => set({ resetNonce: get().resetNonce + 1 }),
   publishSample: (observables, fps) => set({ observables, fps }),
   publishAnalysis: (rdf, demixing, speeds) => set({ rdf, demixing, speeds }),
+  publishSurfaceTension: (surfaceTension) => set({ surfaceTension }),
   setColorMode: (colorMode) => set({ colorMode }),
   setRenderStyle: (renderStyle) => set({ renderStyle }),
 }));

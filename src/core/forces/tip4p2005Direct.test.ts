@@ -90,6 +90,25 @@ describe("TIP4P/2005 liquid slab", () => {
       /does not fit/,
     );
   });
+
+  it("selects a non-overlapping FCC packing for the 256-water preview", () => {
+    const box = createBoxXYZ(1.8, 1.8, 8, "periodic");
+    const slab = buildTip4p2005Slab(256, box, 300, new Rng(2), 997);
+    let minimum = Infinity;
+    for (let i = 0; i < 256; i++) {
+      for (let j = i + 1; j < 256; j++) {
+        let squared = 0;
+        for (let component = 0; component < 3; component++) {
+          let delta =
+            slab.state.positions[9 * i + component] - slab.state.positions[9 * j + component];
+          delta -= box.lengths[component] * Math.round(delta / box.lengths[component]);
+          squared += delta * delta;
+        }
+        minimum = Math.min(minimum, Math.sqrt(squared));
+      }
+    }
+    expect(minimum).toBeGreaterThan(0.31);
+  });
 });
 
 describe("TIP4P/2005 isolated-pair oracle", () => {

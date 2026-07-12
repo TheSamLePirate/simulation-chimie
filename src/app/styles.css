@@ -14,6 +14,18 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html,
 body,
 #root {
@@ -356,6 +368,333 @@ body {
 .scene-btn[data-active="true"] {
   border-color: var(--accent);
   background: rgba(59, 130, 246, 0.18);
+}
+
+/* ── L11 quantitative laboratory ─────────────────────────────────── */
+
+.app--lab .sidebar {
+  width: 472px;
+  gap: 12px;
+  background: linear-gradient(to left, rgba(7, 12, 19, 0.97), rgba(7, 12, 19, 0.88));
+}
+
+.lab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: linear-gradient(145deg, rgba(22, 34, 49, 0.94), rgba(11, 18, 28, 0.96));
+  border: 1px solid rgba(125, 211, 252, 0.15);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+}
+
+.lab-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lab-hero__eyebrow {
+  margin: 0 0 5px;
+  color: #7dd3fc;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.lab-hero__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.lab-hero__copy {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lab-badge {
+  flex: none;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.lab-badge--preview {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.lab-badge--reference {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.lab-toolbar,
+.lab-presets {
+  display: flex;
+  gap: 7px;
+}
+
+.lab-toolbar .btn {
+  min-width: 0;
+}
+
+.lab-presets {
+  min-width: 0;
+  margin: 0;
+  padding: 3px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 9px;
+}
+
+.lab-preset {
+  flex: 1;
+  padding: 7px 4px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.lab-preset[data-active="true"] {
+  color: #fff;
+  background: rgba(59, 130, 246, 0.9);
+}
+
+.lab-phase {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.lab-phase__head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-phase__track {
+  height: 5px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+}
+
+.lab-phase__track span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #22c55e);
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+
+.lab-phase__note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.lab-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.lab-metrics > div {
+  min-width: 0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 9px;
+}
+
+.lab-metrics dt,
+.lab-metrics small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.lab-metrics dd {
+  margin: 4px 0 1px;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lab-equation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 10px;
+  color: #dbeafe;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 9px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+}
+
+.lab-fraction {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+
+.lab-fraction span:first-child {
+  padding: 0 8px 3px;
+  border-bottom: 1px solid currentColor;
+}
+
+.lab-fraction span:last-child {
+  padding-top: 2px;
+  font-size: 13px;
+}
+
+.lab-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.lab-section-head h3 {
+  margin: 0;
+  font-size: 11px;
+}
+
+.lab-section-head span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.lab-profile__canvas {
+  display: block;
+  width: 100%;
+  height: 152px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+}
+
+.lab-chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.lab-chart-grid .chart + .chart {
+  margin-top: 0;
+}
+
+.lab-sampling {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lab-sampling > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lab-sampling strong {
+  font-size: 12px;
+}
+
+.lab-sampling span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.lab-sampling .btn {
+  flex: none;
+}
+
+.lab-size-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.lab-size-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 10px;
+  color: var(--muted);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.lab-size-switch button[data-active="true"] {
+  color: var(--fg);
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.lab-size-switch strong {
+  font-size: 13px;
+}
+
+.lab-size-switch span {
+  font-size: 9px;
+}
+
+.lab-integrity {
+  margin: 0;
+  padding-left: 10px;
+  color: var(--muted);
+  border-left: 2px solid rgba(245, 158, 11, 0.55);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .app--lab .sidebar {
+    width: 100vw;
+    max-width: none;
+  }
+
+  .app--lab .app__header,
+  .app--lab .status-badge {
+    display: none;
+  }
+
+  .lab-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lab-metrics > div:last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ── Export ───────────────────────────────────────────────────────── */

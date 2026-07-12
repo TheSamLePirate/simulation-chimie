@@ -99,6 +99,19 @@ export const ACCURACY_LEVELS = {
       "Coulomb (Wolf DSF)",
     ],
   },
+  L11: {
+    id: "L11",
+    label: "L11 · Tension de surface quantitative",
+    description: "Slab eau–vapeur TIP4P/2005 + smooth PME + correction de slab",
+    forces: [
+      "TIP4P/2005 rigide (site virtuel M)",
+      "Lennard-Jones O–O",
+      "Smooth PME (B-splines ordre 6)",
+      "Correction Yeh–Berkowitz",
+      "Contraintes SHAKE/RATTLE",
+      "Estimateur test-area",
+    ],
+  },
 } as const;
 
 export type AccuracyLevel = keyof typeof ACCURACY_LEVELS;

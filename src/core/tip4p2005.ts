@@ -200,38 +200,73 @@ export function buildTip4p2005Slab(
     throw new RangeError("the target-density slab does not fit inside the simulation box");
   }
 
-  const cells = molecules / 2;
-  let best: readonly [number, number, number] | null = null;
-  let bestCost = Infinity;
-  for (let nx = 1; nx <= cells; nx++) {
-    if (cells % nx !== 0) continue;
-    const yz = cells / nx;
-    for (let ny = 1; ny <= yz; ny++) {
-      if (yz % ny !== 0) continue;
-      const nz = yz / ny;
-      const spacings = [lx / nx, ly / ny, liquidThickness / nz];
-      const cost = Math.max(...spacings) / Math.min(...spacings);
-      if (cost < bestCost) {
-        bestCost = cost;
-        best = [nx, ny, nz];
+  const lattices = [
+    [
+      [0.25, 0.25, 0.25],
+      [0.75, 0.75, 0.75],
+    ],
+    [
+      [0.25, 0.25, 0.25],
+      [0.25, 0.75, 0.75],
+      [0.75, 0.25, 0.75],
+      [0.75, 0.75, 0.25],
+    ],
+  ] as const;
+  let best: {
+    readonly dimensions: readonly [number, number, number];
+    readonly basis: (typeof lattices)[number];
+  } | null = null;
+  let bestScore = -Infinity;
+  for (const basis of lattices) {
+    if (molecules % basis.length !== 0) continue;
+    const cells = molecules / basis.length;
+    for (let nx = 1; nx <= cells; nx++) {
+      if (cells % nx !== 0) continue;
+      const yz = cells / nx;
+      for (let ny = 1; ny <= yz; ny++) {
+        if (yz % ny !== 0) continue;
+        const nz = yz / ny;
+        const spacings = [lx / nx, ly / ny, liquidThickness / nz];
+        let minimumDistance = Infinity;
+        for (let a = 0; a < basis.length; a++) {
+          for (let b = 0; b < basis.length; b++) {
+            for (let tx = -1; tx <= 1; tx++) {
+              for (let ty = -1; ty <= 1; ty++) {
+                for (let tz = -1; tz <= 1; tz++) {
+                  if (a === b && tx === 0 && ty === 0 && tz === 0) continue;
+                  const dx = (basis[b][0] + tx - basis[a][0]) * spacings[0];
+                  const dy = (basis[b][1] + ty - basis[a][1]) * spacings[1];
+                  const dz = (basis[b][2] + tz - basis[a][2]) * spacings[2];
+                  minimumDistance = Math.min(minimumDistance, Math.hypot(dx, dy, dz));
+                }
+              }
+            }
+          }
+        }
+        const anisotropy = Math.max(...spacings) / Math.min(...spacings);
+        const score = minimumDistance / Math.sqrt(anisotropy);
+        if (score > bestScore) {
+          bestScore = score;
+          best = { dimensions: [nx, ny, nz], basis };
+        }
       }
     }
   }
   if (!best) throw new Error("unable to factor slab lattice");
 
   const system = buildTip4p2005System(molecules, box, temperatureK, rng);
-  const [nx, ny, nz] = best;
+  const [nx, ny, nz] = best.dimensions;
   let molecule = 0;
   for (let iz = 0; iz < nz; iz++) {
     for (let iy = 0; iy < ny; iy++) {
       for (let ix = 0; ix < nx; ix++) {
-        for (const basis of [0.25, 0.75]) {
+        for (const basis of best.basis) {
           const oxygen = 3 * molecule;
           const oldO = system.state.positions.slice(3 * oxygen, 3 * oxygen + 3);
           const target = [
-            -lx / 2 + ((ix + basis) * lx) / nx,
-            -ly / 2 + ((iy + basis) * ly) / ny,
-            -liquidThickness / 2 + ((iz + basis) * liquidThickness) / nz,
+            -lx / 2 + ((ix + basis[0]) * lx) / nx,
+            -ly / 2 + ((iy + basis[1]) * ly) / ny,
+            -liquidThickness / 2 + ((iz + basis[2]) * liquidThickness) / nz,
           ];
           for (let atom = oxygen; atom < oxygen + 3; atom++) {
             for (let component = 0; component < 3; component++) {

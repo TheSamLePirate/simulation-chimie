@@ -77,4 +77,24 @@ describe("CpuEngine", () => {
     b.step(300);
     expect(Array.from(a.state.positions)).toEqual(Array.from(b.state.positions));
   });
+
+  it("integrates the L11 TIP4P/2005 slab through the common engine contract", () => {
+    const engine = new CpuEngine({
+      ...BASE,
+      level: "L11",
+      particleCount: 2,
+      boxLength: 2,
+      temperature: 300,
+      thermostat: "csvr",
+      thermostatTau: 1,
+    });
+    expect(engine.box.lengths).toEqual([2, 2, 8]);
+    expect(engine.state.count).toBe(6);
+    expect(engine.bonds?.i.length).toBe(4);
+    expect(engine.observables().temperature).toBeCloseTo(300, 10);
+    expect(Number.isNaN(engine.observables().pressure)).toBe(true);
+    engine.step(1);
+    expect(engine.observables().step).toBe(1);
+    expect(Number.isFinite(engine.observables().totalEnergy)).toBe(true);
+  });
 });
