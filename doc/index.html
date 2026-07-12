@@ -726,6 +726,7 @@
         position: relative;
         overflow: hidden;
         border-radius: var(--radius-xl);
+        scroll-margin-top: 82px;
       }
 
       .model-card::before {
@@ -1562,7 +1563,7 @@
       </a>
       <nav class="nav-links" aria-label="Navigation principale">
         <a href="#methode">Méthode</a>
-        <a href="#modeles">L0 → L10</a>
+        <a href="#modeles">L0 → L11</a>
         <a href="#laboratoire">Laboratoire</a>
         <a href="#precision">Précision</a>
         <a href="#observables">Observables</a>
@@ -1584,7 +1585,7 @@
           <span class="eyebrow"><span class="pulse"></span> Documentation scientifique vivante</span>
           <h1>Voir les forces.<br /><span class="gradient">Comprendre la matière.</span></h1>
           <p>
-            Onze niveaux de fidélité, du gaz parfait à la rupture de liaison. Chaque modèle est
+            Douze niveaux de fidélité, du gaz parfait à la mesure d'une interface. Chaque modèle est
             expliqué avec son intuition, ses équations, son algorithme réel et ses limites — sans
             cacher la différence entre une simulation convaincante et une expérience de laboratoire.
           </p>
@@ -1593,7 +1594,7 @@
             <a class="button" href="#laboratoire">Manipuler les potentiels</a>
           </div>
           <div class="hero-meta">
-            <div><strong>11</strong> niveaux physiques</div>
+            <div><strong>12</strong> niveaux physiques</div>
             <div><strong>Float64</strong> oracle CPU</div>
             <div><strong>WebGPU</strong> L0 à L8</div>
             <div><strong>nm · ps</strong> unités GROMACS</div>
@@ -1743,7 +1744,7 @@
         <div class="section-head reveal">
           <div>
             <span class="section-kicker">02 · Échelle de fidélité</span>
-            <h2>Onze façons de<br />regarder la matière.</h2>
+            <h2>Douze façons de<br />regarder la matière.</h2>
           </div>
           <p class="section-intro">
             Chaque niveau ajoute une famille d'interactions. La précision est documentée par des
@@ -1876,7 +1877,7 @@
           <article class="precision-card">
             <span class="status warn">Approximation</span>
             <h3>Électrostatique</h3>
-            <p>Wolf DSF évite une FFT et vise environ 1 % de l'Ewald pour des systèmes adaptés. Ce n'est pas PME/Ewald longue portée.</p>
+            <p>L0–L10 utilisent Wolf DSF pour le temps réel. L11 ajoute Ewald direct comme oracle et smooth PME d'ordre 6, validé à 1,6×10⁻⁶ RMS relatif sur les forces.</p>
           </article>
           <article class="precision-card">
             <span class="status warn">Modèle classique</span>
@@ -1890,8 +1891,8 @@
           </article>
           <article class="precision-card">
             <span class="status limit">CPU seulement</span>
-            <h3>L9 / L10 & NPT</h3>
-            <p>Les dièdres, Morse et le barostat nécessitent le CPU. Le repli est volontaire : correct mais plus lent vaut mieux que rapide mais faux.</p>
+            <h3>L9 / L10 / L11 & NPT</h3>
+            <p>Dièdres, Morse, PME L11 et barostat restent CPU. L11 est précis mais lent : golden states et aperçu, pas encore production nanoseconde.</p>
           </article>
         </div>
 
@@ -1903,6 +1904,7 @@
               <tr><td>Voisinage</td><td>Cell-list CPU / tri cellulaire GPU</td><td>Comparaison exhaustive à O(N²), forces &lt; 10⁻⁶</td><td>Optimisation sans changer le modèle</td></tr>
               <tr><td>Molécules</td><td>Liaisons, angles, dièdres, exclusions intra</td><td>Gradient énergie sur chaque coordonnée</td><td>Topologie classique paramétrée</td></tr>
               <tr><td>Eau rigide</td><td>SHAKE + RATTLE, 100 itérations CPU</td><td>Erreurs O–H et H–H &lt; 10⁻⁴ nm en test</td><td>Géométrie fixée, vibrations internes supprimées</td></tr>
+              <tr><td>Interface L11</td><td>TIP4P/2005 + PME + correction slab + test-area</td><td>Force RMS 1,6×10⁻⁶, gradients, blocs</td><td>Quantitatif après 200 ps + 2–5 ns, jamais sur l'aperçu brut</td></tr>
               <tr><td>Thermodynamique</td><td>T cinétique, P virielle, g(r), histogrammes</td><td>Gaz parfait, équipartition, normalisations</td><td>Grandeurs instantanées bruyantes à petit N</td></tr>
               <tr><td>Reproductibilité</td><td>Mulberry32 + graine, sommation déterministe</td><td>Trajectoires CPU bit-à-bit</td><td>Rejouable, pas « aléatoire matériel »</td></tr>
             </tbody>
@@ -2036,6 +2038,8 @@
           <article class="observable"><span class="tag">Vitesses</span><div class="formula">\(f(v)=4\pi v^2(\frac{m}{2\pi kT})^{3/2}e^{-mv^2/2kT}\)</div><p>Compare l'histogramme simulé à la loi exacte de Maxwell–Boltzmann.</p></article>
           <article class="observable"><span class="tag">Démixtion</span><div class="formula">\(S=\langle N_{même}/N_{voisins}\rangle\)</div><p>Pour un mélange 50/50 aléatoire, \(S\approx0.5\). Deux phases séparées font tendre \(S\) vers 1.</p></article>
           <article class="observable"><span class="tag">Énergie</span><div class="formula">\(E_{tot}=E_k+E_p\)</div><p>En NVE, ses oscillations doivent rester bornées. Une dérive persistante signale souvent un pas trop grand.</p></article>
+          <article class="observable"><span class="tag">Tension de surface</span><div class="formula">\(\gamma=\frac{\Delta F_+-\Delta F_-}{4\delta A}\)</div><p>Deux déformations virtuelles à volume constant donnent la dérivée d'énergie libre des deux interfaces du slab.</p></article>
+          <article class="observable"><span class="tag">Profil du slab</span><div class="formula">\(\rho(z)=\frac{m(z)}{L_xL_y\,\Delta z}\)</div><p>Le plateau liquide, les deux zones interfaciales et le vide vérifient que la géométrie mesurée est bien celle prévue.</p></article>
         </div>
       </section>
     </main>
@@ -2102,7 +2106,7 @@
           id: "L7", title: "Tension de surface", subtitle: "Pourquoi une goutte devient ronde", backend: "CPU + GPU",
           vulgar: "Une molécule au centre est entourée dans toutes les directions. À la surface, il lui manque des voisines côté vide : elle est tirée vers l'intérieur. La sphère gagne parce qu'elle offre le moins de surface pour un volume donné.",
           calc: "Même eau rigide que L5, mais initialisée en cube compact de pas 0.31 nm au centre d'une boîte plus grande. LJ + électrostatique créent la cohésion ; le thermostat laisse la forme relaxer.",
-          precision: "Démontre qualitativement l'origine moléculaire et la sphérification. Le simulateur n'estime pas encore γ par tenseur de pression ; ne pas lire une tension interfaciale expérimentale depuis la forme seule.",
+          precision: "Démontre qualitativement l'origine moléculaire et la sphérification. L7 seul ne mesure pas γ : la route quantitative, l'incertitude et la géométrie plane appartiennent à L11.",
           formula: "\\Delta P=\\gamma(\\frac1{R_1}+\\frac1{R_2})\\;\\xrightarrow{sphere}\\;\\frac{2\\gamma}{R}", note: "Loi de Laplace pour interpréter le résultat ; γ n'est pas imposé directement.", tags: ["interface", "goutte", "cohésion"]
         },
         {
@@ -2125,6 +2129,13 @@
           calc: "Chaque dimère commence à r0 = 0.14 nm dans un puits De = 25 kJ·mol⁻¹, largeur a = 18 nm⁻¹. Le chauffage fournit l'énergie qui permet de sortir du puits ; la force tend ensuite vers zéro.",
           precision: "Force vérifiée par gradient numérique, asymptote d'énergie vérifiée vers De et force lointaine < 10⁻³ dans le test. Modèle de démonstration à puits volontairement peu profond, pas une réaction chimique ab initio.",
           formula: "V_M(r)=D_e[1-e^{-a(r-r_0)}]^2,\\qquad F=-2D_eae^{-a\\Delta r}(1-e^{-a\\Delta r})", note: "Courbure près du minimum : k = 2Dea², identique au ressort tangent.", tags: ["CPU", "anharmonique", "rupture"]
+        },
+        {
+          id: "L11", title: "Interface quantitative · TIP4P/2005", subtitle: "Mesurer γ, pas seulement voir une goutte", backend: "CPU",
+          vulgar: "On place une tranche d'eau entre deux zones de vide. Puis on imagine deux copies presque identiques : l'une offre un peu plus de surface, l'autre un peu moins. L'énergie nécessaire pour créer cette surface révèle sa tension, comme le travail nécessaire pour étirer une peau élastique.",
+          calc: "Chaque eau rigide possède deux H positifs et un site négatif M sans masse. LJ agit entre oxygènes ; smooth PME additionne les charges à longue portée et Yeh–Berkowitz retire l'artefact du slab. Pour chaque configuration, les centres de masse sont déformés à volume constant vers A±δA, sans étirer les molécules, puis ΔF± est obtenu par moyenne exponentielle.",
+          precision: "Forces PME ↔ Ewald direct : 1,6×10⁻⁶ RMS relatif ; viriel : 4,5×10⁻⁷. Le tableau de bord 256 molécules reste un aperçu. Une mesure exige 1 024 molécules, ≥200 ps d'équilibration, 2–5 ns, cinq graines, blocs de 100–200 ps et convergence 512/1 024/2 048.",
+          formula: "\\gamma=\\frac{\\Delta F_+-\\Delta F_-}{2n_{int}\\,\\delta A},\\qquad \\Delta F_\\pm=-k_BT\\ln\\langle e^{-\\beta\\Delta U_\\pm}\\rangle", note: "Avec deux interfaces périodiques, n_int = 2 et le dénominateur devient 4δA.", tags: ["TIP4P/2005", "PME", "test-area", "GPU à venir"]
         }
       ];
 
@@ -2363,6 +2374,31 @@
             "Le test de trajectoire chauffée observe au moins une liaison étirée au-delà du seuil de rupture choisi.",
           ],
           limits: "La topologie conserve l'identité de la paire après rupture et aucune nouvelle liaison ne peut se former avec un autre atome. C'est un potentiel dissociable classique de démonstration, pas un moteur réactif ni quantique.",
+        },
+        L11: {
+          algorithm: [
+            "Construire 1 024 eaux TIP4P/2005 dans un slab centré à la densité cible ; choisir BCC/FCC pour éviter les recouvrements, puis fondre et équilibrer au moins 200 ps.",
+            "À chaque pas de 2 fs, placer le site virtuel M, calculer LJ O–O par cell-list, la partie réelle erfc, la grille B-spline d'ordre 6, la FFT 3D, l'influence réciproque et la correction Yeh–Berkowitz.",
+            "Redistribuer exactement la force de M sur O/H, intégrer par Velocity-Verlet, projeter les trois distances par SHAKE/RATTLE et thermostater par CSVR avec 6N−3 degrés de liberté.",
+            "À intervalles espacés, construire A+δA et A−δA en déplaçant uniquement les centres de masse à volume constant ; calculer ΔU±, puis ΔF± par log-sum-exp.",
+            "Estimer γ sur chaque bloc indépendant, publier moyenne, erreur standard, profil ρ(z), cinq graines et convergence en taille.",
+          ],
+          parameters: [
+            ["TIP4P/2005", "rOH 0.09572 nm · θ 104.52° · rOM 0.01546 nm"],
+            ["Charges", "qH +0.5564 e · qM −1.1128 e"],
+            ["LJ oxygène", "σ 0.31589 nm · ε 0.7749 kJ mol⁻¹"],
+            ["Référence", "1 024 H₂O · 3.2×3.2×10 nm · 997 kg m⁻³"],
+            ["PME", "α 3.5 nm⁻¹ · grille 64×64×256 · B-spline ordre 6"],
+            ["Protocole", "200 ps équilibre · 2–5 ns production · 5 graines"],
+          ],
+          evidence: [
+            "Gradient numérique du dimère sur les 18 coordonnées massives et conservation force/couple du site M.",
+            "Ewald direct : gradient, invariance par translation, indépendance de α et correction slab analytique.",
+            "PME 64×64×128 : erreur RMS relative de force ≈1.6×10⁻⁶ et erreur relative du viriel ≈4.5×10⁻⁷.",
+            "Test-area : volume et géométrie interne conservés, dérivée analytique exacte, log-mean-exp stable et incertitude par blocs.",
+            "Runner : trajectoire déterministe, T initiale exacte avec 6N−3 ddl, contraintes à 10⁻⁶ nm et profil de masse conservatif.",
+          ],
+          limits: "Le chemin CPU demande environ une seconde par évaluation de force à 1 024 molécules : il valide les golden states mais ne produit pas encore plusieurs nanosecondes en temps raisonnable. L'aperçu 256 et ses premiers échantillons ne sont jamais une valeur publiée. PME GPU, route mécanique tensorielle complète, dispersion longue portée inhomogène et campagnes 512/1 024/2 048 restent nécessaires pour satisfaire tous les critères finaux.",
         },
       };
 

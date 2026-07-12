@@ -970,9 +970,29 @@ aucun overflow ; deux collectes donnent bien un estimateur γ et l'interface res
 
 ---
 
+## P51 — Atlas physique étendu à L11 ✅
+
+**Objectif (DoD) :** documenter le nouveau niveau avec la même profondeur, la même vulgarisation et
+la même honnêteté quantitative que L0–L10.
+
+**Livré :** `doc/index.html` passe à 12 niveaux/L0→L11. La carte L11 explique intuition du test-area,
+TIP4P/2005, site M, PME, correction de slab, déformation des centres de masse, moyenne exponentielle,
+incertitude et protocole. Son approfondissement détaille algorithme, toutes les constantes, preuves
+des tests et limites CPU/GPU. Ajout de γ et ρ(z) aux observables, PME à la matrice de précision et
+distinction explicite L7 qualitatif ↔ L11 quantitatif.
+
+**Vérifications :** syntaxe JavaScript de la page compilée, **12 cartes**, objet expert L11, zéro
+erreur KaTeX et zéro overflow à 1 280 px. Navigation réelle jusqu'à L11 vérifiée ; `scroll-margin`
+empêche désormais la barre fixe de masquer le titre ciblé.
+
+**Déviations au plan :** aucune. Les critères non encore démontrés (production ns, GPU PME, route
+mécanique complète et convergence de taille) sont affichés comme limites, jamais comme acquis.
+
+---
+
 ## Bilan
 
-**Phases P0–P50 livrées et commitées** (**148 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P51 livrées et commitées** (**148 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
