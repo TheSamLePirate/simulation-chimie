@@ -1,8 +1,8 @@
 import type { WebGPURenderer } from "three/webgpu";
-import { fft1d } from "../core/math/fft";
+import { fft1d, fft3d } from "../core/math/fft";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
-import { GpuFft1d } from "../engine/gpu/GpuFft";
+import { GpuFft1d, GpuFft3d } from "../engine/gpu/GpuFft";
 import type { SimConfig } from "../engine/types";
 
 /**
@@ -140,12 +140,32 @@ async function fftParity(length = 64) {
   return { length, forward, roundTrip: maxAbsDiff(roundTrip, input) };
 }
 
+/** Batched/strided 3D GPU FFT vs the x-fastest Float64 CPU oracle. */
+async function fft3dParity(nx = 8, ny = 4, nz = 4) {
+  const length = nx * ny * nz;
+  const input = new Float32Array(2 * length);
+  for (let i = 0; i < input.length; i++) {
+    input[i] = Math.sin(0.17 * i) + Math.cos(0.031 * i * i) + 0.002 * i;
+  }
+  const reference = Float64Array.from(input);
+  fft3d(reference, nx, ny, nz);
+  const gpu = new GpuFft3d(input.slice(), nx, ny, nz);
+  const renderer = sharedRenderer();
+  await gpu.transform(renderer);
+  const transformed = await gpu.read(renderer);
+  const forward = maxAbsDiff(transformed, reference);
+  await gpu.transform(renderer, true);
+  const roundTrip = await gpu.read(renderer);
+  return { nx, ny, nz, forward, roundTrip: maxAbsDiff(roundTrip, input) };
+}
+
 export interface MdHarness {
   forceParity: typeof forceParity;
   stepParity: typeof stepParity;
   energyDrift: typeof energyDrift;
   determinism: typeof determinism;
   fftParity: typeof fftParity;
+  fft3dParity: typeof fft3dParity;
 }
 
 declare global {
@@ -156,20 +176,17 @@ declare global {
 
 /** Attach the harness to `window.__md` (called once at startup; harmless in normal use). */
 export function installGpuHarness(): void {
-  window.__md = { forceParity, stepParity, energyDrift, determinism, fftParity };
+  window.__md = { forceParity, stepParity, energyDrift, determinism, fftParity, fft3dParity };
 
-  const requestedFftLength = new URLSearchParams(window.location.search).get("gpu-fft");
-  if (requestedFftLength !== null) {
+  const installReadback = (testId: string, run: () => Promise<unknown>) => {
     const output = document.createElement("pre");
-    output.dataset.testid = "gpu-fft-parity";
+    output.dataset.testid = testId;
     output.hidden = true;
     document.body.append(output);
-
-    const length = Number(requestedFftLength) || 64;
     const startedAt = performance.now();
     const runWhenRendererIsReady = () => {
       if ((window as unknown as { __mdRenderer?: WebGPURenderer }).__mdRenderer) {
-        void fftParity(length)
+        void run()
           .then((result) => {
             output.textContent = JSON.stringify(result);
           })
@@ -185,5 +202,18 @@ export function installGpuHarness(): void {
       window.requestAnimationFrame(runWhenRendererIsReady);
     };
     window.requestAnimationFrame(runWhenRendererIsReady);
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const requestedFftLength = params.get("gpu-fft");
+  if (requestedFftLength !== null) {
+    const length = Number(requestedFftLength) || 64;
+    installReadback("gpu-fft-parity", () => fftParity(length));
+  }
+  const requestedFft3d = params.get("gpu-fft3d");
+  if (requestedFft3d !== null) {
+    const dimensions = requestedFft3d.split("x").map(Number);
+    const [nx = 8, ny = 4, nz = 4] = dimensions;
+    installReadback("gpu-fft3d-parity", () => fft3dParity(nx, ny, nz));
   }
 }

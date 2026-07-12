@@ -84,4 +84,12 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     expect(r.forward.maxRel).toBeLessThan(1e-5);
     expect(r.roundTrip.maxAbs).toBeLessThan(1e-5);
   });
+
+  test("3D FFT matches the Float64 oracle and round-trips", async ({ page }) => {
+    await page.goto("/?gpu-fft3d=8x4x4");
+    const raw = await page.getByTestId("gpu-fft3d-parity").textContent({ timeout: 30_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.forward.maxRel).toBeLessThan(1e-5);
+    expect(r.roundTrip.maxAbs).toBeLessThan(1e-5);
+  });
 });

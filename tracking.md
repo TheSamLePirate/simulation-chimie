@@ -1047,9 +1047,28 @@ avant d'autoriser L11 sur GPU.
 
 ---
 
+## P55 — FFT 3D batchée et stridée WebGPU ✅
+
+**Objectif (DoD) :** transformer directement un maillage x-fastest anisotrope, sans copies ni
+transpositions CPU, et démontrer l'indexation de chaque axe contre l'oracle Float64.
+
+**Livré :** FFT 3D séparable Float32 avec bit-reversal et papillons batchés pour les lignes x, y et z,
+strides natifs dans un buffer GPU unique et normalisation inverse globale 1/(NxNyNz). Le harnais et
+son pont DOM acceptent désormais `?gpu-fft3d=Nx×Ny×Nz`.
+
+**Vérifications :** **1 nouveau test** de contrat dimensionnel. En navigateur WebGPU réel, 8×4×4
+donne une erreur relative aller de **7,27×10⁻⁸** et un aller-retour de **1,95×10⁻⁷** ; 16×8×4 donne
+**4,80×10⁻⁸** et **1,80×10⁻⁷**. Les deux grilles anisotropes exercent les trois strides sans erreur
+shader. Lint, typecheck, tests, build et e2e verts.
+
+**Déviations au plan :** aucune pour la FFT. L11 reste CPU jusqu'à parité de toute la chaîne PME
+(charges B-spline → influence réciproque → champ → interpolation → forces + correction de slab).
+
+---
+
 ## Bilan
 
-**Phases P0–P54 livrées** (**157 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P55 livrées** (**158 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
