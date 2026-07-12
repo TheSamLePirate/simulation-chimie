@@ -101,4 +101,13 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     expect(r.energy.relative).toBeLessThan(5e-4);
     expect(r.virial.relative).toBeLessThan(5e-4);
   });
+
+  test("full smooth-PME Ewald terms match the Float64 CPU oracle", async ({ page }) => {
+    await page.goto("/?gpu-pme-full=8x8x16");
+    const raw = await page.getByTestId("gpu-pme-full-parity").textContent({ timeout: 60_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.maxRel).toBeLessThan(5e-3);
+    expect(r.energy.relative).toBeLessThan(5e-4);
+    expect(r.virial.relative).toBeLessThan(5e-4);
+  });
 });

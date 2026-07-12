@@ -221,6 +221,65 @@ async function pmeReciprocalParity(nx = 16, ny = 16, nz = 32) {
   };
 }
 
+/** Full smooth PME (real + reciprocal + self + Yeh–Berkowitz slab) vs the CPU oracle. */
+async function pmeFullParity(nx = 8, ny = 8, nz = 16) {
+  const positions = Float32Array.from([
+    -0.71, 0.12, -0.55, -0.23, -0.62, 0.81, 0.18, 0.43, -0.91, 0.57, -0.31, 0.22, 0.82, 0.71, 1.03,
+    -0.49, 0.83, -0.17,
+  ]);
+  const charges = Float32Array.from([0.75, -0.5, 0.25, -0.75, 0.5, -0.25]);
+  const box = createBoxXYZ(2.4, 2.6, 3.2, "periodic");
+  const alpha = 3.5;
+  const grid = [nx, ny, nz] as const;
+  const realCutoff = 1.1;
+  const gpu = new GpuPmeReciprocal({
+    count: charges.length,
+    positions,
+    charges,
+    box,
+    alpha,
+    grid,
+    realCutoff,
+    slabCorrection: true,
+  });
+  const renderer = sharedRenderer();
+  await gpu.computeFull(renderer);
+  const gpuForces = await gpu.readForces(renderer);
+  const gpuThermodynamics = await gpu.readFullEnergyVirial(renderer);
+  for (let component = 0; component < 3; component++) {
+    let total = 0;
+    for (let i = 0; i < charges.length; i++) total += gpuForces[3 * i + component];
+    const correction = total / charges.length;
+    for (let i = 0; i < charges.length; i++) gpuForces[3 * i + component] -= correction;
+  }
+  const cpu = computeSmoothPme(
+    {
+      count: charges.length,
+      positions: Float64Array.from(positions),
+      charges: Float64Array.from(charges),
+    },
+    box,
+    { alpha, grid, realCutoff, slabCorrection: true },
+  );
+  return {
+    nx,
+    ny,
+    nz,
+    energy: {
+      gpu: gpuThermodynamics.energy,
+      cpu: cpu.potentialEnergy,
+      relative:
+        Math.abs(gpuThermodynamics.energy - cpu.potentialEnergy) / Math.abs(cpu.potentialEnergy),
+    },
+    virial: {
+      gpu: gpuThermodynamics.virial,
+      cpu: cpu.virial,
+      relative: Math.abs(gpuThermodynamics.virial - cpu.virial) / Math.abs(cpu.virial),
+    },
+    ...maxAbsDiff(gpuForces, cpu.forces),
+  };
+}
+
 export interface MdHarness {
   forceParity: typeof forceParity;
   stepParity: typeof stepParity;
@@ -229,6 +288,7 @@ export interface MdHarness {
   fftParity: typeof fftParity;
   fft3dParity: typeof fft3dParity;
   pmeReciprocalParity: typeof pmeReciprocalParity;
+  pmeFullParity: typeof pmeFullParity;
 }
 
 declare global {
@@ -247,6 +307,7 @@ export function installGpuHarness(): void {
     fftParity,
     fft3dParity,
     pmeReciprocalParity,
+    pmeFullParity,
   };
 
   const installReadback = (testId: string, run: () => Promise<unknown>) => {
@@ -292,5 +353,11 @@ export function installGpuHarness(): void {
     const dimensions = requestedPme.split("x").map(Number);
     const [nx = 16, ny = 16, nz = 32] = dimensions;
     installReadback("gpu-pme-parity", () => pmeReciprocalParity(nx, ny, nz));
+  }
+  const requestedFullPme = params.get("gpu-pme-full");
+  if (requestedFullPme !== null) {
+    const dimensions = requestedFullPme.split("x").map(Number);
+    const [nx = 8, ny = 8, nz = 16] = dimensions;
+    installReadback("gpu-pme-full-parity", () => pmeFullParity(nx, ny, nz));
   }
 }

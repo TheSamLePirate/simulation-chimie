@@ -3,9 +3,11 @@ import {
   atomicLoad,
   atomicStore,
   compute,
+  exp,
   Fn,
   float,
   floor,
+  If,
   instancedArray,
   instanceIndex,
   int,
@@ -14,6 +16,7 @@ import {
   mod,
   pow,
   round,
+  sqrt,
   uint,
   vec2,
   vec3,
@@ -21,6 +24,7 @@ import {
 import type { WebGPURenderer } from "three/webgpu";
 import { buildPmeInfluenceGrid, buildPmeVirialFactorGrid } from "../../core/forces/pme";
 import type { Box } from "../../core/types";
+import { COULOMB_CONSTANT } from "../../core/units";
 import { GpuFft3d } from "./GpuFft";
 
 const WORKGROUP = [64];
@@ -30,6 +34,7 @@ const SUPPORT_POINTS = PME_ORDER ** 3;
 // while leaving over an order of magnitude of signed i32 headroom for dense liquid water.
 const CHARGE_SCALE = 1 << 24;
 const BINOMIAL_6 = [1, 6, 15, 20, 15, 6, 1] as const;
+const TWO_OVER_SQRT_PI = 2 / Math.sqrt(Math.PI);
 
 const vec3Array = (data: Float32Array) => instancedArray(data, "vec3");
 const vec2Array = (data: Float32Array) => instancedArray(data, "vec2");
@@ -71,6 +76,35 @@ function wrappedGridIndex(base: Node, offset: Node, length: number): Node {
   return uv(mod(fl(base.add(iv(offset)).add(length)), float(length)));
 }
 
+function roundVec(value: Node): Node {
+  return vec3(round(value.x), round(value.y), round(value.z));
+}
+
+function erfcApprox(x: Node): Node {
+  const t = float(1).div(x.mul(0.5).add(1));
+  const polynomial = t
+    .mul(0.17087277)
+    .sub(0.82215223)
+    .mul(t)
+    .add(1.48851587)
+    .mul(t)
+    .sub(1.13520398)
+    .mul(t)
+    .add(0.27886807)
+    .mul(t)
+    .sub(0.18628806)
+    .mul(t)
+    .add(0.09678418)
+    .mul(t)
+    .add(0.37409196)
+    .mul(t)
+    .add(1.00002368)
+    .mul(t)
+    .sub(1.26551223)
+    .sub(x.mul(x));
+  return t.mul(exp(polynomial));
+}
+
 export interface GpuPmeReciprocalInput {
   readonly count: number;
   readonly positions: Float32Array;
@@ -78,6 +112,8 @@ export interface GpuPmeReciprocalInput {
   readonly box: Box;
   readonly alpha: number;
   readonly grid: readonly [number, number, number];
+  readonly realCutoff?: number;
+  readonly slabCorrection?: boolean;
 }
 
 /** GPU smooth-PME reciprocal mesh path (order-6 assignment and analytic force interpolation). */
@@ -92,12 +128,18 @@ export class GpuPmeReciprocal {
   private readonly contributions: ReturnType<typeof vec3Array>;
   private readonly forces: ReturnType<typeof vec3Array>;
   private readonly energyVirial: ReturnType<typeof vec2Array>;
+  private readonly realForces: ReturnType<typeof vec3Array>;
+  private readonly realEnergyVirial: ReturnType<typeof vec2Array>;
+  private readonly dipoleSlab: ReturnType<typeof vec2Array>;
   private readonly kClear: Kernel;
   private readonly kAssign: Kernel;
   private readonly kDequantize: Kernel;
   private readonly kInfluence: Kernel;
   private readonly kInterpolate: Kernel;
   private readonly kReduce: Kernel;
+  private readonly kDipoleSlab: Kernel;
+  private readonly kRealSpace: Kernel;
+  private readonly kCombineForces: Kernel;
 
   constructor(input: GpuPmeReciprocalInput) {
     const { count, positions, charges, box, alpha, grid } = input;
@@ -112,6 +154,15 @@ export class GpuPmeReciprocal {
     const [nx, ny, nz] = grid;
     const gridPoints = nx * ny * nz;
     const [lx, ly, lz] = box.lengths;
+    const volume = lx * ly * lz;
+    const realCutoff = input.realCutoff ?? 0.49 * Math.min(lx, ly, lz);
+    if (!(realCutoff > 0) || realCutoff > 0.5 * Math.min(lx, ly, lz)) {
+      throw new RangeError("GPU PME realCutoff must be within the minimum-image radius");
+    }
+    const slabCorrection = input.slabCorrection ?? false;
+    let chargeSquareSum = 0;
+    for (const charge of charges) chargeSquareSum += charge * charge;
+    const selfEnergy = (-COULOMB_CONSTANT * alpha * chargeSquareSum) / Math.sqrt(Math.PI);
     this.count = count;
     this.positions = vec3Array(positions);
     this.charges = vec2Array(scalarPairs(charges));
@@ -125,6 +176,9 @@ export class GpuPmeReciprocal {
     this.contributions = vec3Array(new Float32Array(3 * count * SUPPORT_POINTS));
     this.forces = vec3Array(new Float32Array(3 * count));
     this.energyVirial = vec2Array(new Float32Array(2 * gridPoints));
+    this.realForces = vec3Array(new Float32Array(3 * count));
+    this.realEnergyVirial = vec2Array(new Float32Array(2 * count));
+    this.dipoleSlab = vec2Array(new Float32Array(2));
     this.fft = new GpuFft3d(new Float32Array(2 * gridPoints), nx, ny, nz);
 
     this.kClear = kernel(() => {
@@ -235,6 +289,71 @@ export class GpuPmeReciprocal {
       });
       this.forces.element(instanceIndex).assign(force);
     }, count);
+
+    this.kDipoleSlab = kernel(() => {
+      const dipoleZ = float(0).toVar();
+      Loop(count, ({ i }: { i: Node }) => {
+        dipoleZ.addAssign(this.charges.element(uv(i)).x.mul(this.positions.element(uv(i)).z));
+      });
+      const slabEnergy = slabCorrection
+        ? dipoleZ.mul(dipoleZ).mul((COULOMB_CONSTANT * 2 * Math.PI) / volume)
+        : float(0);
+      this.dipoleSlab.element(uint(0)).assign(vec2(dipoleZ, slabEnergy));
+    }, 1);
+
+    this.kRealSpace = kernel(() => {
+      const particle = uv(instanceIndex);
+      const position = this.positions.element(particle).toVar();
+      const charge = this.charges.element(particle).x;
+      const force = vec3(0).toVar();
+      const energy = float(0).toVar();
+      const virial = float(0).toVar();
+      Loop(count, ({ i: j }: { i: Node }) => {
+        const other = uv(j);
+        const delta = position.sub(this.positions.element(other)).toVar();
+        const boxVector = vec3(lx, ly, lz);
+        delta.assign(delta.sub(boxVector.mul(roundVec(delta.div(boxVector)))));
+        const r2 = delta.dot(delta).toVar();
+        If(r2.greaterThan(float(1e-12)), () => {
+          If(r2.lessThan(realCutoff * realCutoff), () => {
+            const r = sqrt(r2);
+            const qq = charge.mul(this.charges.element(other).x);
+            const erfcR = erfcApprox(r.mul(alpha));
+            const expR = exp(r2.mul(-alpha * alpha));
+            const fOverR = qq.mul(COULOMB_CONSTANT).mul(
+              erfcR.div(r2.mul(r)).add(
+                float(TWO_OVER_SQRT_PI * alpha)
+                  .mul(expR)
+                  .div(r2),
+              ),
+            );
+            force.addAssign(delta.mul(fOverR));
+            energy.addAssign(
+              qq
+                .mul(COULOMB_CONSTANT * 0.5)
+                .mul(erfcR)
+                .div(r),
+            );
+            virial.addAssign(fOverR.mul(r2).mul(0.5));
+          });
+        });
+      });
+      if (slabCorrection) {
+        const dipoleZ = this.dipoleSlab.element(uint(0)).x;
+        force.z.addAssign(charge.mul(dipoleZ).mul((-COULOMB_CONSTANT * 4 * Math.PI) / volume));
+      }
+      If(particle.equal(uint(0)), () => {
+        const slabEnergy = this.dipoleSlab.element(uint(0)).y;
+        energy.addAssign(float(selfEnergy).add(slabEnergy));
+        virial.addAssign(slabEnergy);
+      });
+      this.realForces.element(particle).assign(force);
+      this.realEnergyVirial.element(particle).assign(vec2(energy, virial));
+    }, count);
+
+    this.kCombineForces = kernel(() => {
+      this.forces.element(instanceIndex).addAssign(this.realForces.element(instanceIndex));
+    }, count);
   }
 
   async compute(renderer: WebGPURenderer): Promise<void> {
@@ -246,6 +365,13 @@ export class GpuPmeReciprocal {
     await this.fft.transform(renderer, true);
     await renderer.computeAsync(this.kInterpolate);
     await renderer.computeAsync(this.kReduce);
+  }
+
+  async computeFull(renderer: WebGPURenderer): Promise<void> {
+    await this.compute(renderer);
+    await renderer.computeAsync(this.kDipoleSlab);
+    await renderer.computeAsync(this.kRealSpace);
+    await renderer.computeAsync(this.kCombineForces);
   }
 
   async readForces(renderer: WebGPURenderer): Promise<Float32Array> {
@@ -271,6 +397,20 @@ export class GpuPmeReciprocal {
     const terms = new Float32Array(await renderer.getArrayBufferAsync(this.energyVirial.value));
     let energy = 0;
     let virial = 0;
+    for (let i = 0; i < terms.length; i += 2) {
+      energy += terms[i];
+      virial += terms[i + 1];
+    }
+    return { energy, virial };
+  }
+
+  async readFullEnergyVirial(
+    renderer: WebGPURenderer,
+  ): Promise<{ energy: number; virial: number }> {
+    const reciprocal = await this.readReciprocalEnergyVirial(renderer);
+    const terms = new Float32Array(await renderer.getArrayBufferAsync(this.realEnergyVirial.value));
+    let energy = reciprocal.energy;
+    let virial = reciprocal.virial;
     for (let i = 0; i < terms.length; i += 2) {
       energy += terms[i];
       virial += terms[i + 1];

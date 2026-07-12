@@ -1107,9 +1107,30 @@ mesure d'énergie à chaque pas est requise, ce qui n'est pas le protocole de pr
 
 ---
 
+## P58 — Ewald complet et correction de slab WebGPU ✅
+
+**Objectif (DoD) :** compléter le chemin maillage par le réel courte portée, l'auto-énergie et la
+correction Yeh–Berkowitz, puis comparer le résultat total à `computeSmoothPme`.
+
+**Livré :** somme O(N²) minimum-image `erfc(αr)/r` en Float32, forces et viriel analytiques,
+auto-énergie `−kₑαΣq²/√π`, réduction du dipôle Mz device-side, énergie de slab `2πkₑMz²/V` et force
+`−4πkₑqMz/V`. `computeFull()` additionne ces forces aux forces réciproques sans readback ; les
+observables ne sont lues que sur demande. Garde-fou strict du rayon minimum-image.
+
+**Vérifications :** parité réelle WebGPU contre le CPU Float64 sur 8×8×16, rc=1,1 nm et slab actif :
+erreurs relatives **2,24×10⁻⁵** (force totale), **2,51×10⁻⁵** (énergie totale) et **3,62×10⁻⁵**
+(viriel total). Le test headed dédié impose 5×10⁻³ / 5×10⁻⁴ / 5×10⁻⁴. Contrat de cutoff étendu ;
+lint, typecheck, **160 tests**, build et e2e verts.
+
+**Déviations au plan :** le réel est volontairement O(N²) dans cette première version, comme le
+chemin moléculaire GPU déjà validé pour les petits systèmes. Une cell-list de sites virtuels pourra
+être ajoutée après l'intégration TIP4P, sans modifier l'oracle ni les formules.
+
+---
+
 ## Bilan
 
-**Phases P0–P57 livrées** (**160 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P58 livrées** (**160 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

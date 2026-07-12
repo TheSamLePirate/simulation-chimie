@@ -27,5 +27,17 @@ describe("GPU smooth-PME reciprocal contract", () => {
           grid: [8, 8, 16],
         }),
     ).toThrow(/neutral/);
+    expect(
+      () =>
+        new GpuPmeReciprocal({
+          count: 2,
+          positions: new Float32Array(6),
+          charges: Float32Array.from([1, -1]),
+          box,
+          alpha: 3.5,
+          grid: [8, 8, 16],
+          realCutoff: 1.1,
+        }),
+    ).toThrow(/minimum-image/);
   });
 });
