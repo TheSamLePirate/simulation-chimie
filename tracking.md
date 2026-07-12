@@ -48,6 +48,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P39** | Approfondissement expert de l'atlas physique | ✅ |
 | **P40** | Fondations scientifiques L11 : tenseurs, densité, incertitude | ✅ |
 | **P41** | TIP4P/2005 : géométrie rigide et site virtuel exact | ✅ |
+| **P42** | Oracle Ewald direct 3D + correction slab | ✅ |
 
 ---
 
@@ -788,9 +789,29 @@ la livraison de l'oracle Ewald périodique.
 
 ---
 
+## P42 — Oracle Ewald direct 3D + correction slab ✅
+
+**Objectif (DoD) :** établir une référence électrostatique périodique Float64 contrôlable avant le
+smooth PME de performance.
+
+**Livré :** somme Ewald 3D directe pour charges neutres : somme réelle explicite sur images,
+structure factors sur la boîte réciproque ±k, auto-énergie analytique, forces réelles/réciproques,
+bounds k adaptés à chaque axe et correction de slab Yeh–Berkowitz (énergie + force). Les entrées
+non neutres ou mal formées sont refusées au lieu d'ajouter implicitement un fond compensateur.
+
+**Vérifications :** lint + typecheck + **108 tests** (31 fichiers) + build + **7 e2e** verts.
+Les 5 nouveaux tests couvrent le gradient d'énergie sur chaque coordonnée, invariance par
+translation, force totale nulle, indépendance du paramètre de séparation α après convergence,
+correction slab analytique et validation des entrées.
+
+**Déviations au plan :** cet oracle O(N²·Nimages + N·Nk) est volontairement lent. Il sert à valider
+PME et les petits golden states, jamais la production à 1 024 molécules.
+
+---
+
 ## Bilan
 
-**Phases P0–P41 livrées et commitées** (**103 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P42 livrées et commitées** (**108 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
