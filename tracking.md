@@ -809,9 +809,29 @@ PME et les petits golden states, jamais la production à 1 024 molécules.
 
 ---
 
+## P43 — Oracle périodique TIP4P/2005 complet ✅
+
+**Objectif (DoD) :** réunir la géométrie TIP4P/2005, le site virtuel et Ewald dans un même champ de
+force périodique vérifiable, puis exposer le viriel scalaire nécessaire aux contrôles de pression.
+
+**Livré :** champ de force CPU Float64 TIP4P/2005 périodique : Lennard-Jones O–O à force décalée,
+charges H/H/M sommées par Ewald direct, correction de slab optionnelle et redistribution exacte de
+la force du site M. Les molécules traversant une frontière sont reconstruites par image minimale
+autour de O avant de placer M. Ewald fournit désormais son viriel scalaire (réel, réciproque et
+correction slab), contrôlé par dérivée de l'énergie sous dilatation isotrope.
+
+**Vérifications :** lint + typecheck et **9 tests ciblés** verts. Les nouveaux contrôles couvrent le
+gradient d'énergie sur toutes les coordonnées massives, la conservation de la force totale,
+l'invariance lorsqu'un H est déplacé d'un vecteur de maille, le viriel Ewald et la correction slab.
+
+**Déviations au plan :** aucune. Ce chemin reste un oracle de petits systèmes ; il n'est pas utilisé
+par la scène de production tant que smooth PME n'a pas démontré sa parité énergie/forces/viriel.
+
+---
+
 ## Bilan
 
-**Phases P0–P42 livrées et commitées** (**108 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P43 livrées et commitées** (**112 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

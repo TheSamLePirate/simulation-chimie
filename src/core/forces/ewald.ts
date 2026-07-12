@@ -18,6 +18,8 @@ export interface EwaldOptions {
 export interface EwaldResult {
   readonly potentialEnergy: number;
   readonly forces: Float64Array;
+  /** Scalar configurational virial −∂U/∂ln(scale), kJ·mol⁻¹. */
+  readonly virial: number;
   readonly realEnergy: number;
   readonly reciprocalEnergy: number;
   readonly selfEnergy: number;
@@ -70,6 +72,7 @@ export function computeEwald3d(sites: ChargeSites, box: Box, options: EwaldOptio
   const alpha2 = alpha * alpha;
   const [imx, imy, imz] = options.realImages;
   let realEnergy = 0;
+  let realVirial = 0;
 
   // Ordered i,j,image sum. Energy carries 1/2; force on i is accumulated without 1/2.
   for (let i = 0; i < sites.count; i++) {
@@ -97,6 +100,7 @@ export function computeEwald3d(sites: ChargeSites, box: Box, options: EwaldOptio
             forces[3 * i] += fOverR * dx;
             forces[3 * i + 1] += fOverR * dy;
             forces[3 * i + 2] += fOverR * dz;
+            realVirial += 0.5 * fOverR * r2;
           }
         }
       }
@@ -105,6 +109,7 @@ export function computeEwald3d(sites: ChargeSites, box: Box, options: EwaldOptio
 
   const [kmx, kmy, kmz] = options.kMax;
   let reciprocalEnergy = 0;
+  let reciprocalVirial = 0;
   for (let nx = -kmx; nx <= kmx; nx++) {
     const kx = (2 * Math.PI * nx) / lx;
     for (let ny = -kmy; ny <= kmy; ny++) {
@@ -125,13 +130,15 @@ export function computeEwald3d(sites: ChargeSites, box: Box, options: EwaldOptio
           structureReal += q * Math.cos(phase);
           structureImag += q * Math.sin(phase);
         }
-        reciprocalEnergy +=
+        const energyTerm =
           (COULOMB_CONSTANT *
             2 *
             Math.PI *
             weight *
             (structureReal * structureReal + structureImag * structureImag)) /
           volume;
+        reciprocalEnergy += energyTerm;
+        reciprocalVirial += energyTerm * (1 - k2 / (2 * alpha2));
 
         const forceScale = (COULOMB_CONSTANT * 4 * Math.PI * weight) / volume;
         for (let i = 0; i < sites.count; i++) {
@@ -168,6 +175,7 @@ export function computeEwald3d(sites: ChargeSites, box: Box, options: EwaldOptio
   return {
     potentialEnergy: realEnergy + reciprocalEnergy + selfEnergy + slabEnergy,
     forces,
+    virial: realVirial + reciprocalVirial + slabEnergy,
     realEnergy,
     reciprocalEnergy,
     selfEnergy,

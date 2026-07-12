@@ -73,6 +73,21 @@ describe("direct Ewald oracle", () => {
     expect(maxForceDiff).toBeLessThan(2e-4);
   });
 
+  it("matches the isotropic box derivative of the energy", () => {
+    const sites = neutralSites();
+    const length = 2.4;
+    const base = computeEwald3d(sites, createBox(length, "periodic"), OPTIONS);
+    const h = 1e-5;
+    const energyAtLogScale = (logScale: number) => {
+      const scale = Math.exp(logScale);
+      const scaled = neutralSites();
+      for (let i = 0; i < scaled.positions.length; i++) scaled.positions[i] *= scale;
+      return computeEwald3d(scaled, createBox(length * scale, "periodic"), OPTIONS).potentialEnergy;
+    };
+    const numeric = -(energyAtLogScale(h) - energyAtLogScale(-h)) / (2 * h);
+    expect(base.virial).toBeCloseTo(numeric, 3);
+  });
+
   it("adds the exact Yeh–Berkowitz slab energy and force correction", () => {
     const sites = {
       count: 2,

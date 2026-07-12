@@ -184,6 +184,34 @@ export function tip4pVirtualPosition(
   ];
 }
 
+/** Virtual M position using O-relative minimum images, safe when a molecule straddles a PBC face. */
+export function tip4pVirtualPositionInBox(
+  oxygen: ArrayLike<number>,
+  hydrogen1: ArrayLike<number>,
+  hydrogen2: ArrayLike<number>,
+  box: Box,
+): MutableVec3 {
+  const periodic = box.boundary === "periodic";
+  const minimum = (delta: number, length: number) =>
+    periodic ? delta - length * Math.round(delta / length) : delta;
+  const d1 = [
+    minimum(hydrogen1[0] - oxygen[0], box.lengths[0]),
+    minimum(hydrogen1[1] - oxygen[1], box.lengths[1]),
+    minimum(hydrogen1[2] - oxygen[2], box.lengths[2]),
+  ];
+  const d2 = [
+    minimum(hydrogen2[0] - oxygen[0], box.lengths[0]),
+    minimum(hydrogen2[1] - oxygen[1], box.lengths[1]),
+    minimum(hydrogen2[2] - oxygen[2], box.lengths[2]),
+  ];
+  const h = 0.5 * TIP4P_2005_VIRTUAL_GAMMA;
+  return [
+    oxygen[0] + h * (d1[0] + d2[0]),
+    oxygen[1] + h * (d1[1] + d2[1]),
+    oxygen[2] + h * (d1[2] + d2[2]),
+  ];
+}
+
 /** Exact transpose-Jacobian redistribution of a force applied at the virtual M site. */
 export function redistributeTip4pVirtualForce(forceM: ArrayLike<number>): {
   oxygen: MutableVec3;
