@@ -42,6 +42,9 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ terminé
 | **P33** | Nouvelles forces : champ électrique (q·E) + thermostat de Langevin/mouvement brownien (CPU + GPU) + démos | ✅ |
 | **P34** | Nouvelles forces : dièdres (Ryckaert-Bellemans, L9 alcane) + liaisons de Morse (L10 dissociation) (CPU) + démos | ✅ |
 | **P35** | Moléculaire sur GPU : la gouttelette (L4–L8) tourne sur WebGPU et correspond au CPU (3 bugs corrigés, pas un problème de précision) | ✅ |
+| **P36** | Panneau « État » : forces & modèles actifs | ✅ |
+| **P37** | Distribution des vitesses Maxwell-Boltzmann | ✅ |
+| **P38** | Atlas HTML interactif des modèles physiques | ✅ |
 
 ---
 
@@ -701,13 +704,34 @@ suivie par la courbe pondérée.
 
 ---
 
+## P38 — Atlas HTML interactif des modèles physiques ✅
+
+**Objectif (DoD) :** documenter visuellement et sans approximation marketing chaque modèle de
+physique de l'application, son calcul, sa vulgarisation, sa précision vérifiée et ses limites.
+
+**Livré :** `doc/index.html`, page autonome responsive en français : échelle complète L0→L10,
+Velocity-Verlet, unités GROMACS, CPU/GPU, thermostats, barostat, gravité, champ électrique,
+frontières et observables. Laboratoires interactifs pour WCA/LJ/Coulomb/Morse et
+Maxwell-Boltzmann, formules KaTeX, navigation/recherche, thèmes clair/sombre et accessibilité.
+Toutes les valeurs et affirmations quantitatives proviennent des constantes, algorithmes et tests
+du dépôt ; les notes de fidélité subjectives ont été explicitement écartées.
+
+**Vérifications :** audit croisé avec `core/`, `engine/`, `scenes/` et les tests ; Biome ; rendu
+réel desktop 1280 px et mobile 390 px (aucun débordement), 11 cartes, 37 formules KaTeX, deux
+canvas haute densité, contrôles interactifs et zéro erreur JavaScript.
+
+**Déviations au plan :** aucune (hors plan — demande utilisateur directe).
+
+---
+
 ## Bilan
 
-**Phases P0–P16 livrées et commitées** (**64 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P38 livrées et commitées** (**92 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
-**Physique — échelle complète L0→L5 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
-atomistique (Coulomb-Wolf)**, **eau atomistique flexible (SPC/Fw)**, **eau rigide (SHAKE/RATTLE)**.
+**Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
+atomistique (Coulomb-Wolf)**, **eau atomistique flexible (SPC/Fw)**, **eau rigide (SHAKE/RATTLE)**,
+huile/eau, tension de surface, dissolution, dièdres d'alcane et dissociation de Morse.
 **Ensembles NVE / NVT (Berendsen, CSVR) / NPT (Berendsen).** **Gravité** (CPU + GPU). Démixtion huile/eau,
 ions NaCl, mouvement Brownien, transitions de phase.
 
@@ -716,15 +740,15 @@ ions NaCl, mouvement Brownien, transitions de phase.
 **Rendu :** sphères instanciées (ACES + éclairage hémisphérique) **ou surface de fluide écran-espace
 (metaballs)** ; coloration par espèce / vitesse.
 
-**Outillage :** snapshots/export round-trip (Zod), 9 scènes, graphes temps réel (T, P, énergies, g(r),
+**Outillage :** snapshots/export round-trip (Zod), 15 scènes, graphes temps réel (T, P, énergies, g(r),
 démixtion, MSD), déterminisme par seed.
 
 **Limites d'environnement assumées (pas des trous de code) :**
 - La **parité numérique GPU↔CPU** et le **rendu visuel** se vérifient en **navigateur réel** : le WebGPU
   **headless** ne résout pas le readback `mapAsync` ni la capture du canvas. Le CI valide compilation +
   dispatch + avancement + zéro exception ; le harnais `window.__md` couvre la parité en vrai navigateur.
-- **Coulomb/eau sur GPU** non portés : le moteur GPU est **mono-espèce** (l'électrostatique y serait non
-  physique) — nécessiterait d'abord un GPU multi-espèces.
+- Le GPU couvre **L0–L8 sans barostat** ; L9/L10 restent sur le CPU faute de kernels dièdres/Morse,
+  et NPT reste CPU faute de réduction virielle côté device.
 
 La demande explicite — h₂o + huile, **vraie physique mesurable**, temps réel, niveaux incrémentaux,
 WebGPU, tests partout, **+ gravité, GPU et surface de fluide** — est entièrement remplie.
