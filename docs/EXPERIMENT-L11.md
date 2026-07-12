@@ -111,6 +111,14 @@ les énergies/T instantanées, ρ(z), la collecte ΔU± et l'estimation test-are
 déterministe pour une graine donnée et destiné à l'oracle/golden CPU ; l'orchestrateur de protocole
 et le backend GPU pourront réutiliser exactement ce contrat de mesures.
 
+La route mécanique diagonale évite de compter les rotations internes comme une pression : son
+tenseur cinétique est construit avec les vitesses des centres de masse moléculaires. Le viriel
+Wαα=−∂U/∂εα est obtenu par six log-déformations centrales (±2×10⁻⁵) des centres de masse et de la
+boîte, sans toucher à la géométrie H₂O. Cette dérivée inclut automatiquement PME, slab et queue LJ.
+Sur un golden TIP4P/2005, γ mécanique rejoint la dérivée test-area à moins de 0,2 %. Les composantes
+hors diagonale du tenseur instantané restent à implémenter ; elles ne sont pas nécessaires à γ du
+slab mais restent un critère explicite non clôturé.
+
 Sanity check 1 024 molécules : T(0)=300,000 K, énergie potentielle initiale finie, puis T≈315 K au
 premier pas pendant la relaxation du packing. Aucune donnée ne doit donc être collectée avant la
 phase d'équilibration spécifiée.

@@ -505,7 +505,7 @@ export class CpuEngine implements SimulationEngine {
 
   collectSurfaceTensionSample(relativeAreaStep = 5e-4): SurfaceTensionAnalysis | null {
     if (!this.l11) return null;
-    this.l11.collectTestAreaSample(relativeAreaStep);
+    this.l11.collectSurfaceTensionSample(relativeAreaStep);
     return this.l11.analysis(relativeAreaStep);
   }
 

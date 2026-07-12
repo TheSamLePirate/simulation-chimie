@@ -66,6 +66,10 @@ describe("surface-tension experiment runner", () => {
     expect(estimate.samples).toBe(2);
     expect(Number.isFinite(estimate.gamma)).toBe(true);
     expect(estimate.blockStatistics.blocks).toBe(2);
+    experiment.collectSurfaceTensionSample(1e-4);
+    const combined = experiment.analysis(1e-4);
+    expect(Number.isFinite(combined.mechanicalGammaMilliNewtonPerMeter)).toBe(true);
+    expect(Number.isFinite(combined.routeDifferenceMilliNewtonPerMeter)).toBe(true);
     expect(experiment.state.positions).toEqual(positions);
   });
 

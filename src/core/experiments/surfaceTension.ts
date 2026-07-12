@@ -4,7 +4,8 @@ import { rattle, shake } from "../constraints";
 import { Tip4p2005EwaldForce } from "../forces/tip4p2005Ewald";
 import { kineticEnergy } from "../observables";
 import { type DensityProfile, massDensityProfileZ } from "../observables/densityProfile";
-import { surfaceTensionToMilliNewtonPerMeter } from "../observables/tensor";
+import { mechanicalSurfaceTensionSnapshot } from "../observables/mechanicalSurfaceTension";
+import { blockAverage, surfaceTensionToMilliNewtonPerMeter } from "../observables/tensor";
 import {
   type BlockedTestAreaEstimate,
   blockTestAreaSurfaceTension,
@@ -58,6 +59,9 @@ export interface SurfaceTensionAnalysis {
   readonly sampleCount: number;
   readonly gammaMilliNewtonPerMeter: number | null;
   readonly standardErrorMilliNewtonPerMeter: number | null;
+  readonly mechanicalGammaMilliNewtonPerMeter: number | null;
+  readonly mechanicalStandardErrorMilliNewtonPerMeter: number | null;
+  readonly routeDifferenceMilliNewtonPerMeter: number | null;
 }
 
 /** Deterministic CPU oracle runner for short L11 validations and golden-state generation. */
@@ -69,6 +73,7 @@ export class SurfaceTensionExperiment {
   readonly renderBonds: { readonly i: Int32Array; readonly j: Int32Array };
   readonly liquidThickness: number;
   readonly testAreaSamples: TestAreaSample[] = [];
+  readonly mechanicalGammaSamples: number[] = [];
 
   private readonly force: Tip4p2005EwaldForce;
   private readonly constraints;
@@ -210,6 +215,18 @@ export class SurfaceTensionExperiment {
     return sample;
   }
 
+  collectSurfaceTensionSample(relativeAreaStep = 5e-4, strain = 2e-5): void {
+    this.collectTestAreaSample(relativeAreaStep);
+    const mechanical = mechanicalSurfaceTensionSnapshot(
+      this.state,
+      this.box,
+      this.species,
+      this.force,
+      strain,
+    );
+    this.mechanicalGammaSamples.push(mechanical.gamma);
+  }
+
   testAreaEstimate(relativeAreaStep: number, blockSize: number): BlockedTestAreaEstimate {
     const deltaArea = this.box.lengths[0] * this.box.lengths[1] * relativeAreaStep;
     return blockTestAreaSurfaceTension(
@@ -224,11 +241,20 @@ export class SurfaceTensionExperiment {
   analysis(relativeAreaStep = 5e-4): SurfaceTensionAnalysis {
     let gammaMilliNewtonPerMeter: number | null = null;
     let standardErrorMilliNewtonPerMeter: number | null = null;
+    let mechanicalGammaMilliNewtonPerMeter: number | null = null;
+    let mechanicalStandardErrorMilliNewtonPerMeter: number | null = null;
     if (this.testAreaSamples.length >= 2) {
       const estimate = this.testAreaEstimate(relativeAreaStep, 1);
       gammaMilliNewtonPerMeter = surfaceTensionToMilliNewtonPerMeter(estimate.gamma);
       standardErrorMilliNewtonPerMeter = surfaceTensionToMilliNewtonPerMeter(
         estimate.blockStatistics.standardError,
+      );
+    }
+    if (this.mechanicalGammaSamples.length > 0) {
+      const statistics = blockAverage(this.mechanicalGammaSamples, 1);
+      mechanicalGammaMilliNewtonPerMeter = surfaceTensionToMilliNewtonPerMeter(statistics.mean);
+      mechanicalStandardErrorMilliNewtonPerMeter = surfaceTensionToMilliNewtonPerMeter(
+        statistics.standardError,
       );
     }
     return {
@@ -237,6 +263,12 @@ export class SurfaceTensionExperiment {
       sampleCount: this.testAreaSamples.length,
       gammaMilliNewtonPerMeter,
       standardErrorMilliNewtonPerMeter,
+      mechanicalGammaMilliNewtonPerMeter,
+      mechanicalStandardErrorMilliNewtonPerMeter,
+      routeDifferenceMilliNewtonPerMeter:
+        gammaMilliNewtonPerMeter === null || mechanicalGammaMilliNewtonPerMeter === null
+          ? null
+          : mechanicalGammaMilliNewtonPerMeter - gammaMilliNewtonPerMeter,
     };
   }
 

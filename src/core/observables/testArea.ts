@@ -10,26 +10,24 @@ export interface AreaPerturbation {
   readonly areaChange: number;
 }
 
-/**
- * Change the interfacial area at constant volume without stretching rigid molecules.
- * Molecular centres of mass follow (x,y,z) → (s x,s y,z/s²); internal coordinates
- * are reconstructed from minimum-image displacements around the first atom.
- */
-export function deformMolecularCentersAtConstantVolume(
+export interface MolecularDeformation {
+  readonly state: SimState;
+  readonly box: Box;
+}
+
+/** Scale molecular centres independently along x/y/z while preserving internal geometry. */
+export function deformMolecularCenters(
   state: SimState,
   box: Box,
   species: readonly Species[],
-  areaFactor: number,
-): AreaPerturbation {
-  if (!(areaFactor > 0) || !Number.isFinite(areaFactor)) {
-    throw new RangeError("areaFactor must be finite and greater than zero");
+  scale: readonly [number, number, number],
+): MolecularDeformation {
+  if (scale.some((value) => !(value > 0) || !Number.isFinite(value))) {
+    throw new RangeError("molecular deformation scales must be finite and positive");
   }
-  const [lx, ly, lz] = box.lengths;
-  const transverseScale = Math.sqrt(areaFactor);
-  const normalScale = 1 / areaFactor;
   const nextBox: Box = {
     boundary: box.boundary,
-    lengths: [lx * transverseScale, ly * transverseScale, lz * normalScale],
+    lengths: [box.lengths[0] * scale[0], box.lengths[1] * scale[1], box.lengths[2] * scale[2]],
   };
   const next = cloneState(state);
   const molecules = new Map<number, number[]>();
@@ -64,11 +62,7 @@ export function deformMolecularCentersAtConstantVolume(
     }
     if (!(totalMass > 0)) throw new RangeError("molecular mass must be greater than zero");
     for (let component = 0; component < 3; component++) centre[component] /= totalMass;
-    const scaledCentre = [
-      transverseScale * centre[0],
-      transverseScale * centre[1],
-      normalScale * centre[2],
-    ];
+    const scaledCentre = [scale[0] * centre[0], scale[1] * centre[1], scale[2] * centre[2]];
     for (let local = 0; local < atoms.length; local++) {
       const atom = atoms[local];
       for (let component = 0; component < 3; component++) {
@@ -77,9 +71,33 @@ export function deformMolecularCentersAtConstantVolume(
       }
     }
   }
+  return { state: next, box: nextBox };
+}
+
+/**
+ * Change the interfacial area at constant volume without stretching rigid molecules.
+ * Molecular centres of mass follow (x,y,z) → (s x,s y,z/s²); internal coordinates
+ * are reconstructed from minimum-image displacements around the first atom.
+ */
+export function deformMolecularCentersAtConstantVolume(
+  state: SimState,
+  box: Box,
+  species: readonly Species[],
+  areaFactor: number,
+): AreaPerturbation {
+  if (!(areaFactor > 0) || !Number.isFinite(areaFactor)) {
+    throw new RangeError("areaFactor must be finite and greater than zero");
+  }
+  const [lx, ly] = box.lengths;
+  const transverseScale = Math.sqrt(areaFactor);
+  const normalScale = 1 / areaFactor;
+  const deformation = deformMolecularCenters(state, box, species, [
+    transverseScale,
+    transverseScale,
+    normalScale,
+  ]);
   return {
-    state: next,
-    box: nextBox,
+    ...deformation,
     areaChange: lx * ly * (areaFactor - 1),
   };
 }

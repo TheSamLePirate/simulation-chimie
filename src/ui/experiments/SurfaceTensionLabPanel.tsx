@@ -133,6 +133,19 @@ export function SurfaceTensionLabPanel() {
           <small>mN·m⁻¹</small>
         </div>
         <div>
+          <dt>γ mécanique</dt>
+          <dd>
+            {analysis?.mechanicalGammaMilliNewtonPerMeter == null
+              ? "—"
+              : `${analysis.mechanicalGammaMilliNewtonPerMeter.toFixed(2)} ± ${(analysis.mechanicalStandardErrorMilliNewtonPerMeter ?? 0).toFixed(2)}`}
+          </dd>
+          <small>
+            {analysis?.routeDifferenceMilliNewtonPerMeter == null
+              ? "dérivée de strain"
+              : `écart ${analysis.routeDifferenceMilliNewtonPerMeter.toFixed(2)}`}
+          </small>
+        </div>
+        <div>
           <dt>Référence IAPWS</dt>
           <dd>{reference.toFixed(2)}</dd>
           <small>mN·m⁻¹ à {config.temperature} K</small>

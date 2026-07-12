@@ -511,7 +511,7 @@ body {
 
 .lab-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin: 0;
 }
@@ -686,14 +686,6 @@ body {
   .app--lab .app__header,
   .app--lab .status-badge {
     display: none;
-  }
-
-  .lab-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .lab-metrics > div:last-child {
-    grid-column: 1 / -1;
   }
 }
 

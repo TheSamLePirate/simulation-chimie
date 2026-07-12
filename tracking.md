@@ -1008,9 +1008,28 @@ planaire visé ; le portage GPU pourra choisir la même convolution 1D ou LJ-PME
 
 ---
 
+## P53 — Route mécanique diagonale pour corps rigides ✅
+
+**Objectif (DoD) :** fournir une seconde estimation de γ sans polluer la pression par les rotations
+internes ou des forces de contrainte SHAKE difficiles à reconstruire.
+
+**Livré :** tenseur cinétique des centres de masse moléculaires ; viriel diagonal robuste par
+Wαα=−∂U/∂εα sur six log-strains centraux qui conservent la géométrie interne. Pression diagonale,
+γ mécanique, moyenne/SEM et écart mécanique−test-area sont collectés avec chaque configuration et
+affichés dans le laboratoire.
+
+**Vérifications :** **4 nouveaux tests** : cinétique COM analytique, dérivées exactes d'une énergie
+logarithmique de boîte, identité planaire γ, garde-fou de strain et TIP4P/2005 réel où mécanique ↔
+test-area converge à **<0,2 %** quand δ→0.
+
+**Déviations au plan :** Pxx/Pyy/Pzz sont complets pour γ ; Pxy/Pxz/Pyz instantanés restent à faire.
+Ils valent zéro en moyenne par symétrie du slab, mais ne sont pas déclarés implémentés.
+
+---
+
 ## Bilan
 
-**Phases P0–P52 livrées et commitées** (**151 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P53 livrées et commitées** (**155 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
