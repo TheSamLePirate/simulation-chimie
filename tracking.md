@@ -890,9 +890,29 @@ requise avant le système de 1 024 molécules.
 
 ---
 
+## P47 — Voisins O(N) pour PME réel et LJ TIP4P/2005 ✅
+
+**Objectif (DoD) :** supprimer les doubles boucles de paires du chemin TIP4P/2005 de production,
+y compris dans une boîte de slab qui ne contient que deux cellules transverses.
+
+**Livré :** parcours linked-cell générique sur buffers de positions (sites virtuels inclus), avec
+déduplication des cellules voisines lorsque les offsets périodiques aliasent pour 1–2 cellules par
+axe. L'espace réel erfc PME et le Lennard-Jones O–O utilisent ce parcours ; les sommes réciproques
+restent FFT O(M log M).
+
+**Vérifications :** **4 nouveaux tests** comparent exhaustivement les paires à la boucle brute dans
+des grilles à 8, 2 et 1 cellule(s), vérifient l'absence de doublons, un site hors boîte et les entrées.
+Parité Ewald/PME et gradient moléculaire inchangés. Benchmark informatif local : **≈0,82 s** pour un
+calcul de forces 1 024 eaux, grille 64×64×256, toutes valeurs finies.
+
+**Déviations au plan :** le batch CPU devient praticable mais pas interactif à 1 024 molécules. La
+scène devra distinguer explicitement aperçu réduit et production batch ; le temps réel attend PME GPU.
+
+---
+
 ## Bilan
 
-**Phases P0–P46 livrées et commitées** (**136 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P47 livrées et commitées** (**140 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

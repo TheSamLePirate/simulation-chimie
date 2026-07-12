@@ -1,3 +1,4 @@
+import { forEachPositionNeighborPair } from "../neighbors";
 import { redistributeTip4pVirtualForce, TIP4P_2005, tip4pVirtualPositionInBox } from "../tip4p2005";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
 import { COULOMB_CONSTANT } from "../units";
@@ -149,37 +150,32 @@ export class Tip4p2005EwaldForce implements ForceModel {
     const vAtCutoff = 4 * TIP4P_2005.epsilonO * (c12 - c6);
     let ljEnergy = 0;
     let ljVirial = 0;
-    for (let i = 0; i < molecules; i++) {
-      const oi = 3 * i;
-      for (let j = i + 1; j < molecules; j++) {
-        const oj = 3 * j;
-        let dx = positions[3 * oi] - positions[3 * oj];
-        let dy = positions[3 * oi + 1] - positions[3 * oj + 1];
-        let dz = positions[3 * oi + 2] - positions[3 * oj + 2];
-        dx -= lx * Math.round(dx / lx);
-        dy -= ly * Math.round(dy / ly);
-        dz -= lz * Math.round(dz / lz);
-        const r2 = dx * dx + dy * dy + dz * dz;
-        if (r2 >= cutoff2 || r2 < 1e-12) continue;
-        const r = Math.sqrt(r2);
-        const inv2 = sigma2 / r2;
-        const inv6 = inv2 * inv2 * inv2;
-        const inv12 = inv6 * inv6;
-        const fRadial = (24 * TIP4P_2005.epsilonO * (2 * inv12 - inv6)) / r;
-        const fOverR = (fRadial - fAtCutoff) / r;
-        const fx = fOverR * dx;
-        const fy = fOverR * dy;
-        const fz = fOverR * dz;
-        forces[3 * oi] += fx;
-        forces[3 * oi + 1] += fy;
-        forces[3 * oi + 2] += fz;
-        forces[3 * oj] -= fx;
-        forces[3 * oj + 1] -= fy;
-        forces[3 * oj + 2] -= fz;
-        ljEnergy += 4 * TIP4P_2005.epsilonO * (inv12 - inv6) - vAtCutoff + (r - cutoff) * fAtCutoff;
-        ljVirial += fOverR * r2;
-      }
+    const oxygenPositions = new Float64Array(3 * molecules);
+    for (let molecule = 0; molecule < molecules; molecule++) {
+      oxygenPositions.set(positions.subarray(9 * molecule, 9 * molecule + 3), 3 * molecule);
     }
+    forEachPositionNeighborPair(molecules, oxygenPositions, box, cutoff, (i, j, dx, dy, dz, r2) => {
+      const oi = 3 * i;
+      const oj = 3 * j;
+      if (r2 >= cutoff2) return;
+      const r = Math.sqrt(r2);
+      const inv2 = sigma2 / r2;
+      const inv6 = inv2 * inv2 * inv2;
+      const inv12 = inv6 * inv6;
+      const fRadial = (24 * TIP4P_2005.epsilonO * (2 * inv12 - inv6)) / r;
+      const fOverR = (fRadial - fAtCutoff) / r;
+      const fx = fOverR * dx;
+      const fy = fOverR * dy;
+      const fz = fOverR * dz;
+      forces[3 * oi] += fx;
+      forces[3 * oi + 1] += fy;
+      forces[3 * oi + 2] += fz;
+      forces[3 * oj] -= fx;
+      forces[3 * oj + 1] -= fy;
+      forces[3 * oj + 2] -= fz;
+      ljEnergy += 4 * TIP4P_2005.epsilonO * (inv12 - inv6) - vAtCutoff + (r - cutoff) * fAtCutoff;
+      ljVirial += fOverR * r2;
+    });
     return {
       potentialEnergy: ewald.potentialEnergy + ljEnergy,
       virial: ewald.virial + ljVirial,

@@ -1,5 +1,6 @@
 import { erfcAccurate as erfc } from "../math/erf";
 import { fft3d } from "../math/fft";
+import { forEachPositionNeighborPair } from "../neighbors";
 import type { Box } from "../types";
 import { COULOMB_CONSTANT } from "../units";
 import type { ChargeSites, EwaldResult } from "./ewald";
@@ -124,36 +125,26 @@ export function computeSmoothPme(
   let realEnergy = 0;
   let realVirial = 0;
 
-  for (let i = 0; i < sites.count; i++) {
-    for (let j = i + 1; j < sites.count; j++) {
-      const qq = sites.charges[i] * sites.charges[j];
-      if (qq === 0) continue;
-      let dx = sites.positions[3 * i] - sites.positions[3 * j];
-      let dy = sites.positions[3 * i + 1] - sites.positions[3 * j + 1];
-      let dz = sites.positions[3 * i + 2] - sites.positions[3 * j + 2];
-      dx -= lx * Math.round(dx / lx);
-      dy -= ly * Math.round(dy / ly);
-      dz -= lz * Math.round(dz / lz);
-      const r2 = dx * dx + dy * dy + dz * dz;
-      if (r2 >= cutoff2 || r2 < 1e-20) continue;
-      const r = Math.sqrt(r2);
-      const erfcR = erfc(alpha * r);
-      const expR = Math.exp(-alpha2 * r2);
-      realEnergy += COULOMB_CONSTANT * qq * (erfcR / r);
-      const fOverR =
-        COULOMB_CONSTANT * qq * (erfcR / (r2 * r) + (TWO_OVER_SQRT_PI * alpha * expR) / r2);
-      const fx = fOverR * dx;
-      const fy = fOverR * dy;
-      const fz = fOverR * dz;
-      forces[3 * i] += fx;
-      forces[3 * i + 1] += fy;
-      forces[3 * i + 2] += fz;
-      forces[3 * j] -= fx;
-      forces[3 * j + 1] -= fy;
-      forces[3 * j + 2] -= fz;
-      realVirial += fOverR * r2;
-    }
-  }
+  forEachPositionNeighborPair(sites.count, sites.positions, box, cutoff, (i, j, dx, dy, dz, r2) => {
+    const qq = sites.charges[i] * sites.charges[j];
+    if (qq === 0 || r2 >= cutoff2) return;
+    const r = Math.sqrt(r2);
+    const erfcR = erfc(alpha * r);
+    const expR = Math.exp(-alpha2 * r2);
+    realEnergy += COULOMB_CONSTANT * qq * (erfcR / r);
+    const fOverR =
+      COULOMB_CONSTANT * qq * (erfcR / (r2 * r) + (TWO_OVER_SQRT_PI * alpha * expR) / r2);
+    const fx = fOverR * dx;
+    const fy = fOverR * dy;
+    const fz = fOverR * dz;
+    forces[3 * i] += fx;
+    forces[3 * i + 1] += fy;
+    forces[3 * i + 2] += fz;
+    forces[3 * j] -= fx;
+    forces[3 * j + 1] -= fy;
+    forces[3 * j + 2] -= fz;
+    realVirial += fOverR * r2;
+  });
 
   const mesh = new Float64Array(2 * gridPoints);
   const assignment = new Array<[AxisWeights, AxisWeights, AxisWeights]>(sites.count);

@@ -20,33 +20,28 @@ function wrapCell(c: number, n: number, periodic: boolean): number {
  * finer per-interaction cutoffs and exclusions inside `fn`.
  */
 export function forEachNeighborPair(state: SimState, box: Box, cutoff: number, fn: PairFn): void {
-  const { count, positions } = state;
+  forEachPositionNeighborPair(state.count, state.positions, box, cutoff, fn);
+}
+
+/** Linked-cell search over a bare xyz buffer, used by virtual charge-site force models. */
+export function forEachPositionNeighborPair(
+  count: number,
+  positions: ArrayLike<number>,
+  box: Box,
+  cutoff: number,
+  fn: PairFn,
+): void {
   if (count < 2) return;
+  if (!(cutoff > 0)) throw new RangeError("neighbor cutoff must be positive");
   const [lx, ly, lz] = box.lengths;
   const periodic = box.boundary === "periodic";
   const rc2 = cutoff * cutoff;
 
-  const ncx = Math.floor(lx / cutoff);
-  const ncy = Math.floor(ly / cutoff);
-  const ncz = Math.floor(lz / cutoff);
+  const ncx = Math.max(1, Math.floor(lx / cutoff));
+  const ncy = Math.max(1, Math.floor(ly / cutoff));
+  const ncz = Math.max(1, Math.floor(lz / cutoff));
 
   const mi = (d: number, l: number) => (periodic ? d - l * Math.round(d / l) : d);
-
-  if (ncx < 3 || ncy < 3 || ncz < 3) {
-    for (let i = 0; i < count; i++) {
-      const ix = positions[3 * i];
-      const iy = positions[3 * i + 1];
-      const iz = positions[3 * i + 2];
-      for (let j = i + 1; j < count; j++) {
-        const dx = mi(ix - positions[3 * j], lx);
-        const dy = mi(iy - positions[3 * j + 1], ly);
-        const dz = mi(iz - positions[3 * j + 2], lz);
-        const r2 = dx * dx + dy * dy + dz * dz;
-        if (r2 < rc2 && r2 > 1e-12) fn(i, j, dx, dy, dz, r2);
-      }
-    }
-    return;
-  }
 
   const ncell = ncx * ncy * ncz;
   const head = new Int32Array(ncell).fill(-1);
@@ -76,6 +71,9 @@ export function forEachNeighborPair(state: SimState, box: Box, cutoff: number, f
     const cx = cellX[i];
     const cy = cellY[i];
     const cz = cellZ[i];
+    // With one or two cells on an axis, periodic offsets alias the same cell. Build a
+    // unique local list so every particle pair is still visited exactly once.
+    const neighborCells: number[] = [];
     for (let dz = -1; dz <= 1; dz++) {
       const nz = wrapCell(cz + dz, ncz, periodic);
       if (nz < 0) continue;
@@ -86,15 +84,18 @@ export function forEachNeighborPair(state: SimState, box: Box, cutoff: number, f
           const nx = wrapCell(cx + dx, ncx, periodic);
           if (nx < 0) continue;
           const nc = nx + ncx * (ny + ncy * nz);
-          for (let j = head[nc]; j !== -1; j = next[j]) {
-            if (j <= i) continue;
-            const ddx = mi(ix - positions[3 * j], lx);
-            const ddy = mi(iy - positions[3 * j + 1], ly);
-            const ddz = mi(iz - positions[3 * j + 2], lz);
-            const r2 = ddx * ddx + ddy * ddy + ddz * ddz;
-            if (r2 < rc2 && r2 > 1e-12) fn(i, j, ddx, ddy, ddz, r2);
-          }
+          if (!neighborCells.includes(nc)) neighborCells.push(nc);
         }
+      }
+    }
+    for (const nc of neighborCells) {
+      for (let j = head[nc]; j !== -1; j = next[j]) {
+        if (j <= i) continue;
+        const ddx = mi(ix - positions[3 * j], lx);
+        const ddy = mi(iy - positions[3 * j + 1], ly);
+        const ddz = mi(iz - positions[3 * j + 2], lz);
+        const r2 = ddx * ddx + ddy * ddy + ddz * ddz;
+        if (r2 < rc2 && r2 > 1e-12) fn(i, j, ddx, ddy, ddz, r2);
       }
     }
   }
