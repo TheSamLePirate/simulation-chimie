@@ -88,6 +88,19 @@ Lliq≈3,00 nm dans une boîte Lz=10 nm. Les oxygènes sont initialisés sur un 
 suivant les dimensions du slab, les orientations sont uniformes dans SO(3), puis SHAKE/RATTLE
 maintient rOH et rHH. Cette structure initiale ordonnée doit être fondue et équilibrée avant mesure.
 
+### Runner de référence
+
+`SurfaceTensionExperiment` assemble le builder, TIP4P/2005+PME, SHAKE/RATTLE et Velocity-Verlet à
+2 fs. Les vitesses atomiques sont d'abord projetées dans l'espace tangent rigide, puis normalisées
+avec **6N−3 degrés de liberté** ; le thermostat de production est CSVR avec τ=1 ps. Le runner expose
+les énergies/T instantanées, ρ(z), la collecte ΔU± et l'estimation test-area par blocs. Il est
+déterministe pour une graine donnée et destiné à l'oracle/golden CPU ; l'orchestrateur de protocole
+et le backend GPU pourront réutiliser exactement ce contrat de mesures.
+
+Sanity check 1 024 molécules : T(0)=300,000 K, énergie potentielle initiale finie, puis T≈315 K au
+premier pas pendant la relaxation du packing. Aucune donnée ne doit donc être collectée avant la
+phase d'équilibration spécifiée.
+
 ## Critères d'acceptation
 
 - Forces du site virtuel et forces réciproques conformes au gradient numérique.

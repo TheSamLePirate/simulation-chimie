@@ -929,9 +929,29 @@ liquide déjà équilibré. Le protocole impose une fusion/équilibration avant 
 
 ---
 
+## P49 — Runner NVT contraint et collecte quantitative ✅
+
+**Objectif (DoD) :** faire évoluer le slab avec le modèle validé et produire les données brutes de
+l'expérience sans dépendre de l'ancien moteur SPC/Wolf ni de l'UI.
+
+**Livré :** runner `SurfaceTensionExperiment` déterministe : Velocity-Verlet 2 fs, SHAKE/RATTLE,
+projection initiale des vitesses, température à 6N−3 degrés de liberté, thermostat CSVR, PME+slab,
+énergies, T, profil ρ(z), collecte test-area non destructive et estimation par blocs. Configuration
+de référence 1 024 molécules/3,2×3,2×10 nm/300 K/grille 64×64×256.
+
+**Vérifications :** **3 nouveaux tests** : température initiale exacte, trajectoires graine-identiques,
+géométrie rigide après intégration, progression temps/pas, profil de densité, ΔU± finis, estimation
+par blocs, absence de mutation lors des perturbations et validation des pas. Sanity réel 1 024 :
+initialisation ≈1,01 s, premier pas ≈1,13 s, T0=300 K puis T1≈315 K, toutes énergies finies.
+
+**Déviations au plan :** aucune mesure du premier pas n'est interprétée : la hausse est la relaxation
+du réseau initial et confirme le besoin des ≥200 ps d'équilibration. Le runner CPU reste un oracle.
+
+---
+
 ## Bilan
 
-**Phases P0–P48 livrées et commitées** (**142 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
+**Phases P0–P49 livrées et commitées** (**145 tests unitaires/golden + 7 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L10 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
