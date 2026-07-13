@@ -1191,9 +1191,31 @@ explicitement des deux côtés (`dispersionTailBins: 0`). `gpuSupportsConfig(L11
 
 ---
 
+## P62 — Janeček + vrai CSVR device-side ; support L11 WebGPU ✅
+
+**Objectif (DoD) :** porter le dernier terme de force, vérifier le NVT réel en navigateur et ne
+lever le fallback qu'après stabilité thermique.
+
+**Livré :** convolution Janeček ρO(z) en quatre passes GPU (clear/bin/evaluate/apply), auto-densité
+retirée, 8 images, énergie/force/viriel ajoutés à O. CSVR Bussi device-side : réduction de K,
+gaussiennes Box–Muller issues du PCG entier, χ² à `6N−3` ddl, λ par pas et calendrier τ identique au
+CPU. L11 rejoint `gpuSupportsConfig` hors NPT ; sélecteur CPU oracle / GPU production dans le labo.
+Atlas et AGENTS mis à jour.
+
+**Vérifications :** **2 nouveaux tests** (contrat Janeček, support gate). Parité Janeček Float32 ↔
+Float64 : **8,83×10⁻⁷** force, **8,26×10⁻⁷** énergie, **9,34×10⁻⁸** viriel. Force L11 complète
+reste à **2,95×10⁻⁴** relatif ; pas contraint complet à **1,64×10⁻⁷ nm**. Essai headed 256 molécules :
+l'ancien faux CSVR monte à 935 K ; après correction, **295,7 puis 289,9 K** pour cible 300 K, WebGPU
+actif et aucune erreur de page. **166 tests**, build/e2e verts.
+
+**Déviations au plan :** première compilation TSL/PME encore longue. La production 2–5 ns et la
+convergence 512/1 024/2 048 restent une campagne scientifique à exécuter, pas une valeur simulée ici.
+
+---
+
 ## Bilan
 
-**Phases P0–P61 livrées** (**164 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P62 livrées** (**166 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
@@ -1215,7 +1237,7 @@ démixtion, MSD), déterminisme par seed.
 - La **parité numérique GPU↔CPU** et le **rendu visuel** se vérifient en **navigateur réel** : le WebGPU
   **headless** ne résout pas le readback `mapAsync` ni la capture du canvas. Le CI valide compilation +
   dispatch + avancement + zéro exception ; le harnais `window.__md` couvre la parité en vrai navigateur.
-- Le GPU couvre **L0–L8 sans barostat** ; L9/L10 restent sur le CPU faute de kernels dièdres/Morse,
+- Le GPU couvre **L0–L8 et L11 sans barostat** ; L9/L10 restent sur le CPU faute de kernels dièdres/Morse,
   et NPT reste CPU faute de réduction virielle côté device.
 
 La demande explicite — h₂o + huile, **vraie physique mesurable**, temps réel, niveaux incrémentaux,

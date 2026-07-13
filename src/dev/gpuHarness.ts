@@ -1,7 +1,9 @@
+import { instancedArray } from "three/tsl";
 import type { WebGPURenderer } from "three/webgpu";
 import { applyBoundary } from "../core/boundary";
 import { createBoxXYZ } from "../core/box";
 import { rattle, shake } from "../core/constraints";
+import { planarLennardJonesTailCorrection } from "../core/forces/planarDispersionTail";
 import { computeSmoothPme } from "../core/forces/pme";
 import { Tip4p2005EwaldForce } from "../core/forces/tip4p2005Ewald";
 import { fft1d, fft3d } from "../core/math/fft";
@@ -16,6 +18,7 @@ import { buildSystem } from "../engine/buildSystem";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
 import { GpuFft1d, GpuFft3d } from "../engine/gpu/GpuFft";
+import { GpuPlanarDispersionTail } from "../engine/gpu/GpuPlanarDispersionTail";
 import { GpuPmeReciprocal } from "../engine/gpu/GpuPmeReciprocal";
 import { GpuTip4pPme, gpuVec3Storage } from "../engine/gpu/GpuTip4pPme";
 import type { SimConfig } from "../engine/types";
@@ -403,8 +406,7 @@ async function l11EngineForceParity(molecules = 8) {
     alpha: 3.5,
     pmeGrid: [32, 32, 128],
     slabCorrection: true,
-    // Defined ⇒ unshifted long LJ cutoff; zero ⇒ deliberately omit Janeček in this parity slice.
-    dispersionTailBins: 0,
+    dispersionTailBins: 80,
   });
   force.compute(system.state, system.box, system.species);
   return { molecules, ...maxAbsDiff(gpuForces, system.state.forces) };
@@ -434,7 +436,7 @@ async function l11EngineStepParity(molecules = 8) {
     alpha: 3.5,
     pmeGrid: [32, 32, 128],
     slabCorrection: true,
-    dispersionTailBins: 0,
+    dispersionTailBins: 80,
   });
   force.compute(system.state, system.box, system.species);
   const inverseMass = new Float64Array(system.state.count);
@@ -485,6 +487,54 @@ async function l11EngineStepParity(molecules = 8) {
   return { molecules, ...maxAbsDiff(gpuPositions, system.state.positions) };
 }
 
+/** GPU Janeček density-profile tail vs the standalone Float64 CPU convolution. */
+async function janecekParity(molecules = 80) {
+  const box = createBoxXYZ(3, 3, 10, "periodic");
+  const oxygenPositions = new Float64Array(3 * molecules);
+  const atomicPositions = new Float32Array(9 * molecules);
+  for (let molecule = 0; molecule < molecules; molecule++) {
+    const z = -1 + (2 * molecule) / (molecules - 1);
+    oxygenPositions[3 * molecule + 2] = z;
+    atomicPositions[9 * molecule + 2] = z;
+  }
+  const gpu = new GpuPlanarDispersionTail({
+    molecules,
+    atomicPositions: instancedArray(atomicPositions, "vec3"),
+    targetForces: instancedArray(new Float32Array(9 * molecules), "vec3"),
+    targetEnergyVirial: instancedArray(new Float32Array(6 * molecules), "vec2"),
+    boxLengths: [3, 3, 10],
+    sigma: TIP4P_2005.sigmaO,
+    epsilon: TIP4P_2005.epsilonO,
+    cutoff: 0.8,
+    bins: 80,
+  });
+  const renderer = sharedRenderer();
+  await renderer.computeAsync(gpu.kernels());
+  const actual = await gpu.read(renderer);
+  const reference = planarLennardJonesTailCorrection(
+    oxygenPositions,
+    box,
+    TIP4P_2005.sigmaO,
+    TIP4P_2005.epsilonO,
+    0.8,
+    80,
+  );
+  return {
+    molecules,
+    forces: maxAbsDiff(actual.forcesZ, reference.forcesZ),
+    energy: {
+      absolute: Math.abs(actual.potentialEnergy - reference.potentialEnergy),
+      relative:
+        Math.abs(actual.potentialEnergy - reference.potentialEnergy) /
+        Math.abs(reference.potentialEnergy),
+    },
+    virial: {
+      absolute: Math.abs(actual.virial - reference.virial),
+      relative: Math.abs(actual.virial - reference.virial) / Math.abs(reference.virial),
+    },
+  };
+}
+
 export interface MdHarness {
   forceParity: typeof forceParity;
   stepParity: typeof stepParity;
@@ -497,6 +547,7 @@ export interface MdHarness {
   tip4pPmeParity: typeof tip4pPmeParity;
   l11EngineForceParity: typeof l11EngineForceParity;
   l11EngineStepParity: typeof l11EngineStepParity;
+  janecekParity: typeof janecekParity;
 }
 
 declare global {
@@ -519,6 +570,7 @@ export function installGpuHarness(): void {
     tip4pPmeParity,
     l11EngineForceParity,
     l11EngineStepParity,
+    janecekParity,
   };
 
   const installReadback = (testId: string, run: () => Promise<unknown>) => {
@@ -586,5 +638,10 @@ export function installGpuHarness(): void {
   if (requestedL11Step !== null) {
     const molecules = Number(requestedL11Step) || 8;
     installReadback("gpu-l11-step-parity", () => l11EngineStepParity(molecules));
+  }
+  const requestedJanecek = params.get("gpu-janecek");
+  if (requestedJanecek !== null) {
+    const molecules = Number(requestedJanecek) || 80;
+    installReadback("gpu-janecek-parity", () => janecekParity(molecules));
   }
 }

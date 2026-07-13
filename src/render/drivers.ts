@@ -324,6 +324,8 @@ export function gpuSupportsConfig(config: SimConfig): boolean {
   //    (H-bond cohesion), keep molecular on the brute O(N²) nonbonded path (the molecular cell-list
   //    variant dropped neighbours ⇒ zero forces), and run SHAKE/RATTLE to convergence (50/30 iters,
   //    not 6/4 — water's coupled H–H constraint converges slowly; under-convergence injects energy).
+  //  • L11 quantitative surface tension: TIP4P/2005 virtual sites, smooth PME, slab correction,
+  //    raw O–O LJ and Janecek's inhomogeneous dispersion tail all match the Float64 CPU oracle.
   // L9/L10 (alkane dihedrals, Morse dissociation) stay CPU-only — no GPU dihedral/Morse kernels.
   // Barostat (NPT) needs a device-side virial reduction ⇒ still CPU-only.
   const supported =
@@ -335,7 +337,8 @@ export function gpuSupportsConfig(config: SimConfig): boolean {
     config.level === "L5" ||
     config.level === "L6" ||
     config.level === "L7" ||
-    config.level === "L8";
+    config.level === "L8" ||
+    config.level === "L11";
   return supported && config.barostat === "none";
 }
 

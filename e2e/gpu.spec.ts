@@ -121,7 +121,7 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     expect(r.virial.scaled).toBeLessThan(5e-3);
   });
 
-  test("integrated L11 GPU force path matches raw-LJ CPU physics", async ({ page }) => {
+  test("integrated L11 GPU force path matches full CPU physics", async ({ page }) => {
     await page.goto("/?gpu-l11-force=8");
     const raw = await page.getByTestId("gpu-l11-force-parity").textContent({ timeout: 120_000 });
     const r = JSON.parse(raw ?? "null");
@@ -133,5 +133,14 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     const raw = await page.getByTestId("gpu-l11-step-parity").textContent({ timeout: 120_000 });
     const r = JSON.parse(raw ?? "null");
     expect(r.maxAbs).toBeLessThan(5e-4);
+  });
+
+  test("GPU Janecek density-profile tail matches the Float64 convolution", async ({ page }) => {
+    await page.goto("/?gpu-janecek=80");
+    const raw = await page.getByTestId("gpu-janecek-parity").textContent({ timeout: 120_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.forces.maxRel).toBeLessThan(5e-4);
+    expect(r.energy.relative).toBeLessThan(5e-4);
+    expect(r.virial.relative).toBeLessThan(5e-4);
   });
 });

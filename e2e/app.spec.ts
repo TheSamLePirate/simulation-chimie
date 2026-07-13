@@ -131,6 +131,7 @@ test("L11 surface-tension laboratory loads a stable quantitative preview", async
   await expect(page.getByTestId("engine-status")).toBeVisible();
   await page.getByRole("button", { name: /Laboratoire γ\(T\)/ }).click();
   await expect(page.getByTestId("surface-tension-lab")).toBeVisible();
+  await expect(page.getByRole("button", { name: "GPU · production", exact: true })).toBeEnabled();
   await expect(page.getByRole("img", { name: /Profil de densité/ })).toBeVisible();
   await expect
     .poll(

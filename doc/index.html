@@ -1657,7 +1657,7 @@
           <article class="truth-card">
             <span class="number">04</span>
             <h3>GPU sous contrôle</h3>
-            <p>WebGPU accélère L0–L8 seulement lorsqu'il reproduit l'oracle CPU à la précision Float32.</p>
+            <p>WebGPU accélère L0–L8 et L11 seulement lorsqu'il reproduit l'oracle CPU à la précision Float32.</p>
           </article>
         </div>
 
@@ -1872,7 +1872,7 @@
           <article class="precision-card">
             <span class="status good">Oracle ↔ GPU</span>
             <h3>Parité des moteurs</h3>
-            <p>L0–L8 sont disponibles sur WebGPU. Les forces suivent le CPU à la précision Float32 ; le moléculaire est contrôlé sur trajectoire et température.</p>
+            <p>L0–L8 et L11 sont disponibles sur WebGPU. Pour L11, TIP4P/2005, smooth PME, correction de slab, queue Janeček et un pas contraint complet sont contrôlés contre l'oracle CPU Float64.</p>
           </article>
           <article class="precision-card">
             <span class="status warn">Approximation</span>
@@ -1891,8 +1891,8 @@
           </article>
           <article class="precision-card">
             <span class="status limit">CPU seulement</span>
-            <h3>L9 / L10 / L11 & NPT</h3>
-            <p>Dièdres, Morse, PME L11 et barostat restent CPU. L11 est précis mais lent : golden states et aperçu, pas encore production nanoseconde.</p>
+            <h3>L9 / L10 & NPT</h3>
+            <p>Dièdres, Morse et barostat restent CPU. L11 dispose maintenant de TIP4P/2005 + PME + slab + Janeček sur WebGPU, validé contre l'oracle Float64.</p>
           </article>
         </div>
 
@@ -2131,11 +2131,11 @@
           formula: "V_M(r)=D_e[1-e^{-a(r-r_0)}]^2,\\qquad F=-2D_eae^{-a\\Delta r}(1-e^{-a\\Delta r})", note: "Courbure près du minimum : k = 2Dea², identique au ressort tangent.", tags: ["CPU", "anharmonique", "rupture"]
         },
         {
-          id: "L11", title: "Interface quantitative · TIP4P/2005", subtitle: "Mesurer γ, pas seulement voir une goutte", backend: "CPU",
+          id: "L11", title: "Interface quantitative · TIP4P/2005", subtitle: "Mesurer γ, pas seulement voir une goutte", backend: "CPU + GPU",
           vulgar: "On place une tranche d'eau entre deux zones de vide. Puis on imagine deux copies presque identiques : l'une offre un peu plus de surface, l'autre un peu moins. L'énergie nécessaire pour créer cette surface révèle sa tension, comme le travail nécessaire pour étirer une peau élastique.",
           calc: "Chaque eau rigide possède deux H positifs et un site négatif M sans masse. LJ O–O reçoit une correction issue de ρ(z) ; PME additionne les charges et Yeh–Berkowitz corrige le slab. Test-area mesure ΔF± ; en parallèle, six déformations logarithmiques donnent Wxx, Wyy, Wzz et la route mécanique, avec la cinétique des centres de masse rigides.",
-          precision: "Forces PME ↔ Ewald direct : 1,6×10⁻⁶ RMS relatif ; viriel : 4,5×10⁻⁷. Le tableau de bord 256 molécules reste un aperçu. Une mesure exige 1 024 molécules, ≥200 ps d'équilibration, 2–5 ns, cinq graines, blocs de 100–200 ps et convergence 512/1 024/2 048.",
-          formula: "\\gamma=\\frac{\\Delta F_+-\\Delta F_-}{2n_{int}\\,\\delta A},\\qquad \\Delta F_\\pm=-k_BT\\ln\\langle e^{-\\beta\\Delta U_\\pm}\\rangle", note: "Avec deux interfaces périodiques, n_int = 2 et le dénominateur devient 4δA.", tags: ["TIP4P/2005", "PME", "test-area", "GPU à venir"]
+          precision: "Forces PME ↔ Ewald direct : 1,6×10⁻⁶ RMS relatif ; viriel : 4,5×10⁻⁷. WebGPU ↔ CPU sur le chemin L11 complet : 2,95×10⁻⁴ relatif ; un pas contraint diffère de 1,64×10⁻⁷ nm. Le tableau de bord 256 molécules reste un aperçu. Une mesure exige 1 024 molécules, ≥200 ps d'équilibration, 2–5 ns, cinq graines, blocs de 100–200 ps et convergence 512/1 024/2 048.",
+          formula: "\\gamma=\\frac{\\Delta F_+-\\Delta F_-}{2n_{int}\\,\\delta A},\\qquad \\Delta F_\\pm=-k_BT\\ln\\langle e^{-\\beta\\Delta U_\\pm}\\rangle", note: "Avec deux interfaces périodiques, n_int = 2 et le dénominateur devient 4δA.", tags: ["TIP4P/2005", "PME", "test-area", "CPU + GPU"]
         }
       ];
 
@@ -2402,7 +2402,7 @@
             "Runner : trajectoire déterministe, T initiale exacte avec 6N−3 ddl, contraintes à 10⁻⁶ nm et profil de masse conservatif.",
             "Golden TIP4P/2005 : limite de strain mécanique ↔ test-area à moins de 0,2 %.",
           ],
-          limits: "Le chemin CPU demande environ une seconde par force à 1 024 molécules : il valide les golden states mais ne produit pas encore plusieurs nanosecondes en temps raisonnable. L'aperçu et ses premiers échantillons ne sont jamais une valeur publiée. PME GPU, composantes hors diagonale du tenseur et campagnes 512/1 024/2 048 restent nécessaires.",
+          limits: "Le chemin CPU demande environ une seconde par force à 1 024 molécules ; WebGPU couvre maintenant PME, slab, LJ et Janeček, mais sa première compilation est longue et une campagne 2–5 ns n'est pas encore publiée. L'aperçu et ses premiers échantillons ne sont jamais une valeur publiée. Les composantes hors diagonale du tenseur et les campagnes 512/1 024/2 048 restent nécessaires.",
         },
       };
 

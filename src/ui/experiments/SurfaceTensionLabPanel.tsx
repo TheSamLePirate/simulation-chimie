@@ -14,6 +14,7 @@ export function SurfaceTensionLabPanel() {
   const playing = useAppStore((state) => state.playing);
   const togglePlay = useAppStore((state) => state.togglePlay);
   const setPlaying = useAppStore((state) => state.setPlaying);
+  const setEngineKind = useAppStore((state) => state.setEngineKind);
   const requestStep = useAppStore((state) => state.requestStep);
   const requestReset = useAppStore((state) => state.requestReset);
   const patchConfig = useAppStore((state) => state.patchConfig);
@@ -82,6 +83,21 @@ export function SurfaceTensionLabPanel() {
           Repartir
         </button>
       </div>
+
+      <fieldset className="lab-presets">
+        <legend className="sr-only">Moteur de calcul</legend>
+        {(["cpu", "gpu"] as const).map((engineKind) => (
+          <button
+            type="button"
+            key={engineKind}
+            className="lab-preset"
+            data-active={config.engineKind === engineKind || undefined}
+            onClick={() => setEngineKind(engineKind)}
+          >
+            {engineKind === "cpu" ? "CPU · oracle" : "GPU · production"}
+          </button>
+        ))}
+      </fieldset>
 
       <fieldset className="lab-presets">
         <legend className="sr-only">Température de l’expérience</legend>
@@ -208,7 +224,7 @@ export function SurfaceTensionLabPanel() {
         </button>
         <button type="button" onClick={() => loadSize(1024)} data-active={!preview || undefined}>
           <strong>1 024</strong>
-          <span>Oracle CPU lent</span>
+          <span>Référence quantitative</span>
         </button>
       </div>
 

@@ -60,7 +60,7 @@ export function ControlPanel() {
               label: "GPU",
               title: gpuOk
                 ? "WebGPU compute (rendu GPU-résident)"
-                : "GPU : LJ monoatomique périodique uniquement — cette scène tourne sur CPU",
+                : "GPU non validé pour ce niveau ou ce barostat — repli sur l’oracle CPU",
               disabled: !gpuOk,
             },
           ]}

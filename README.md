@@ -25,6 +25,10 @@ Safari ≥ 26, Firefox récent).
 | **L0** | Gaz parfait (aucune interaction) | Maxwell-Boltzmann, PV = N·k·T |
 | **L1** | Sphères molles (WCA) | volume exclu, collisions |
 | **L2** | Lennard-Jones 12-6 (force-décalée) | **cohésion, condensation, démixtion**, g(r) |
+| **L3** | Ions + Coulomb Wolf DSF | cristaux ioniques, électrophorèse |
+| **L4–L8** | Eau moléculaire, contraintes, mélanges, interfaces, dissolution | liaisons H, gouttes, huile/eau, solvatation |
+| **L9–L10** | Dièdres RB, liaisons Morse | conformations et dissociation (CPU) |
+| **L11** | TIP4P/2005 + smooth PME + slab + Janeček + test-area | tension de surface quantitative γ(T) |
 
 ### Ensembles (thermostats)
 - **NVE** (énergie constante), **Berendsen** et **CSVR/Bussi** (NVT canonique correct).
@@ -33,7 +37,8 @@ Safari ≥ 26, Firefox récent).
 ### Moteurs
 - **CPU** : oracle déterministe Float64, **cell-lists O(N)**, multi-espèces, thermostats — le mode validé par défaut.
 - **GPU** : WebGPU/TSL, Velocity-Verlet en compute shaders, **rendu GPU-résident** (positions lues
-  dans le vertex shader, zéro readback) pour de grands comptes de particules.
+  dans le vertex shader, zéro readback) ; L0–L8 et L11 validés contre l'oracle Float64 (L9/L10 et
+  NPT restent CPU).
 
 ### Scènes prêtes à l'emploi
 Gaz parfait · Liquide Lennard-Jones · **Huile + Eau (démixtion)** · Cristallisation (NVT) · Chauffage / gaz.

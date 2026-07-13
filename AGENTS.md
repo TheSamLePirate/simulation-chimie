@@ -120,10 +120,12 @@ GPU support today (the rule: **the GPU runs only what it reproduces faithfully a
   (thermostat-controlled). Forces use an **i32 quantised accumulator** (WebGPU has no f32 atomics) +
   intramolecular `moleculeId` exclusions + per-molecule SHAKE/RATTLE.
 
-`gpuSupportsConfig()` = `(L0–L8) && barostat==="none"`. **L9/L10** (alkane RB dihedrals, Morse
-dissociation) stay **CPU-only** — no GPU dihedral/Morse kernels yet. NPT stays CPU (needs a
-device-side virial reduction). The shared deterministic **`engine/buildSystem.ts`** (lock-step
-tested) backs both engines.
+`gpuSupportsConfig()` = `(L0–L8 || L11) && barostat==="none"`. **L11** uses dynamic TIP4P/2005
+virtual sites, smooth PME, Yeh–Berkowitz slab correction, raw O–O LJ and the Janeček planar
+dispersion tail; headed CPU parity covers the spectral primitives, complete forces and a constrained
+Velocity-Verlet step. **L9/L10** (alkane RB dihedrals, Morse dissociation) stay **CPU-only** — no GPU
+dihedral/Morse kernels yet. NPT stays CPU (needs a device-side virial reduction). The shared
+deterministic **`engine/buildSystem.ts`** (lock-step tested) backs both engines.
 
 ⚠️ **The P32→P35 lesson (do not re-learn the hard way).** GPU molecular looked like a "float32 can't
 conserve energy" problem and was gated off for many phases. It was **three ordinary bugs**, found by

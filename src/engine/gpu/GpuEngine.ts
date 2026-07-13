@@ -6,6 +6,7 @@ import {
   bitXor,
   clamp,
   compute,
+  cos,
   exp,
   Fn,
   float,
@@ -15,6 +16,7 @@ import {
   instanceIndex,
   int,
   Loop,
+  log,
   max,
   mod,
   round,
@@ -41,6 +43,7 @@ import {
 } from "../../core/units";
 import { buildSystem } from "../buildSystem";
 import type { AccuracyLevel, Observables, SimConfig } from "../types";
+import { GpuPlanarDispersionTail } from "./GpuPlanarDispersionTail";
 import { GpuTip4pPme } from "./GpuTip4pPme";
 
 const WORKGROUP = [64];
@@ -94,6 +97,7 @@ type Kernel = ReturnType<typeof compute>;
 
 // biome-ignore lint/suspicious/noExplicitAny: TSL node arithmetic is loosely typed.
 type Node = any;
+type ScalarNode = ReturnType<typeof vec2>["x"];
 
 /** erfc(x) for x ≥ 0 (Numerical Recipes rational-exponential approximation), in TSL. */
 function erfcApprox(x: Node): Node {
@@ -236,6 +240,7 @@ export class GpuEngine {
   private readonly uHalfBox = uniform(0.5);
   // Berendsen thermostat scale (computed on CPU from the readback KE; 1 = no-op).
   private readonly uThermoLambda = uniform(1);
+  private readonly uThermostatTau = uniform(0.5);
   // Langevin thermostat (per-atom friction + random kick): v ← c₁·v + (c₂·√invM)·η.
   private readonly uLangevinC1 = uniform(1);
   private readonly uLangevinC2 = uniform(0); // √[(1−c₁²)·k_B·T]; ×√invM per atom in-kernel
@@ -261,6 +266,9 @@ export class GpuEngine {
   private readonly kForcesCellWCA: Kernel;
   private readonly kForcesCellLJ: Kernel;
   private readonly kThermostat: Kernel;
+  private readonly csvrScale: Vec2Storage;
+  private readonly kComputeCsvr: Kernel;
+  private readonly kApplyCsvr: Kernel;
   private readonly kLangevin: Kernel;
   private readonly kIntegrateB: Kernel;
   // Molecular kernels (built only for molecular systems; null for monatomic L0–L3).
@@ -276,6 +284,7 @@ export class GpuEngine {
   private readonly kSaveRef: Kernel | null;
   private readonly tip4pPme: GpuTip4pPme | null;
   private readonly kAddTip4pForces: Kernel | null;
+  private readonly planarDispersionTail: GpuPlanarDispersionTail | null;
 
   private renderer: THREE.WebGPURenderer | null = null;
   private stepCount = 0;
@@ -325,6 +334,7 @@ export class GpuEngine {
     this.velocities = vec3Array(Float32Array.from(state.velocities));
     this.forces = vec3Array(new Float32Array(n * 3));
     this.energyVirial = vec2Array(new Float32Array(n * 2));
+    this.csvrScale = vec2Array(Float32Array.from([1, 0]));
     this.moleculeIds = uintArray(Uint32Array.from(state.moleculeId));
 
     if (config.level === "L11") {
@@ -353,9 +363,24 @@ export class GpuEngine {
           .element(instanceIndex)
           .addAssign(this.tip4pPme?.atomicForceStorage.element(instanceIndex) as never);
       }, n);
+      this.planarDispersionTail = new GpuPlanarDispersionTail({
+        molecules,
+        atomicPositions: this.positions,
+        targetForces: this.forces,
+        targetEnergyVirial: this.energyVirial,
+        boxLengths: [box.lengths[0], box.lengths[1], box.lengths[2]],
+        sigma: TIP4P_2005.sigmaO,
+        epsilon: TIP4P_2005.epsilonO,
+        cutoff: Math.min(
+          5 * TIP4P_2005.sigmaO,
+          0.49 * Math.min(box.lengths[0], box.lengths[1], box.lengths[2]),
+        ),
+        bins: 80,
+      });
     } else {
       this.tip4pPme = null;
       this.kAddTip4pForces = null;
+      this.planarDispersionTail = null;
     }
 
     // Bonded topology + i32 quantised force accumulator (WebGPU has no f32 atomics, so bonded
@@ -607,6 +632,49 @@ export class GpuEngine {
       const word = uv(bitXor(shiftRight(state, rot), state)).mul(uint(277803737));
       return bitXor(shiftRight(word, uint(22)), word);
     };
+    const dof = Math.max(1, 3 * n - this.numConstraints - 3);
+    const targetKinetic = 0.5 * dof * BOLTZMANN_KJ_PER_MOL_K * config.temperature;
+    this.kComputeCsvr = kernel(() => {
+      const kinetic = float(0).toVar();
+      Loop(n, ({ i }: { i: Node }) => {
+        const velocity = this.velocities.element(uv(i));
+        kinetic.addAssign(
+          velocity
+            .dot(velocity)
+            .div(this.params.element(uv(i)).w)
+            .mul(0.5),
+        );
+      });
+      const stepU = uv(this.uStep);
+      const gaussian = (sample: Node): ScalarNode => {
+        const seed = uv(sample)
+          .mul(uint(2654435761))
+          .add(stepU.mul(uint(2246822519)))
+          .add(uint(3266489917));
+        const u1 = fl(pcg(seed)).add(0.5).mul(2.3283064365386963e-10);
+        const u2 = fl(pcg(seed.add(uint(374761393))))
+          .add(0.5)
+          .mul(2.3283064365386963e-10);
+        return sqrt(log(u1).mul(-2)).mul(cos(u2.mul(2 * Math.PI))) as ScalarNode;
+      };
+      const r1 = gaussian(uint(0));
+      const sumSq = float(0).toVar();
+      if (dof > 1) {
+        Loop(dof - 1, ({ i }: { i: Node }) => {
+          const value = gaussian(uv(i).add(1));
+          sumSq.addAssign(value.mul(value));
+        });
+      }
+      const c = exp(float(-config.timestep).div(this.uThermostatTau));
+      const ratio = float(targetKinetic).div(float(dof).mul(max(kinetic, float(1e-12))));
+      const newOverOld = float(1)
+        .add(float(1).sub(c).mul(r1.mul(r1).add(sumSq).mul(ratio).sub(1)))
+        .add(r1.mul(2).mul(sqrt(c.mul(float(1).sub(c)).mul(ratio))));
+      this.csvrScale.element(uint(0)).assign(vec2(sqrt(max(newOverOld, float(0))), kinetic));
+    }, 1);
+    this.kApplyCsvr = kernel(() => {
+      this.velocities.element(instanceIndex).mulAssign(this.csvrScale.element(uint(0)).x);
+    }, n);
     this.kLangevin = kernel(() => {
       const idx = instanceIndex;
       const v = this.velocities.element(idx).toVar();
@@ -1116,6 +1184,7 @@ export class GpuEngine {
     this.uLangevinC2.value = Math.sqrt(
       Math.max(0, (1 - c1 * c1) * BOLTZMANN_KJ_PER_MOL_K * config.temperature),
     );
+    this.uThermostatTau.value = config.thermostatTau;
 
     // Electrostatics (Wolf DSF), active for L3 ions AND all molecular levels (water H-bonds,
     // ions). Without it, water has no cohesion ⇒ no droplet. Pre-compute the cutoff-shift consts.
@@ -1155,6 +1224,7 @@ export class GpuEngine {
       }
     ).thermostat = thermostat;
     (this.config as { thermostatTau: number }).thermostatTau = tau;
+    this.uThermostatTau.value = tau;
     if (thermostat === "none") this.uThermoLambda.value = 1;
     // Refresh Langevin coefficients for the new τ (c₁ = e^(−Δt/τ)).
     const c1 = Math.exp(-this.config.timestep / tau);
@@ -1227,6 +1297,7 @@ export class GpuEngine {
       if (this.tip4pPme && this.kAddTip4pForces) {
         passes.push(...this.tip4pPme.kernels(), this.kAddTip4pForces);
       }
+      if (this.planarDispersionTail) passes.push(...this.planarDispersionTail.kernels());
       return passes;
     }
     const isLJ = this.config.level === "L2" || this.config.level === "L3";
@@ -1266,10 +1337,23 @@ export class GpuEngine {
     if (this.forcesEnabled) nodes.push(...this.forcePassNodes());
     nodes.push(this.kIntegrateB);
     if (rigid && this.kRattle) nodes.push(this.kRattle);
-    // Langevin = per-atom friction + noise (kLangevin); Berendsen/CSVR = global rescale (kThermostat).
+    // Langevin = per-atom friction + noise; CSVR computes a fresh global stochastic scale on-device.
     if (this.config.thermostat === "langevin") nodes.push(this.kLangevin);
-    else if (this.config.thermostat !== "none") nodes.push(this.kThermostat);
+    else if (this.config.thermostat === "csvr") nodes.push(this.kComputeCsvr, this.kApplyCsvr);
+    else if (this.config.thermostat === "berendsen") nodes.push(this.kThermostat);
     return nodes;
+  }
+
+  private activeThermostatTau(): number {
+    const target = this.config.thermostatTau;
+    if (this.config.level !== "L11") return target;
+    if (this.elapsed < 1) return this.config.timestep;
+    if (this.elapsed < 20) return Math.min(target, 0.05);
+    if (this.elapsed < 50) {
+      const blend = (this.elapsed - 20) / 30;
+      return 0.05 + blend * (target - 0.05);
+    }
+    return target;
   }
 
   /**
@@ -1281,9 +1365,12 @@ export class GpuEngine {
     const renderer = this.renderer;
     if (!renderer) return;
     const nodes = this.stepNodes();
-    const langevin = this.config.thermostat === "langevin";
+    const stochastic = this.config.thermostat === "langevin" || this.config.thermostat === "csvr";
     for (let s = 0; s < steps; s++) {
-      if (langevin) this.uStep.value = this.stepCount; // re-seed the per-atom RNG each substep
+      if (stochastic) this.uStep.value = this.stepCount;
+      if (this.config.thermostat === "csvr") {
+        this.uThermostatTau.value = this.activeThermostatTau();
+      }
       void renderer.computeAsync(nodes);
       this.elapsed += this.config.timestep;
       this.stepCount += 1;
@@ -1305,9 +1392,12 @@ export class GpuEngine {
     const renderer = this.renderer;
     if (!renderer) return;
     const nodes = this.stepNodes();
-    const langevin = this.config.thermostat === "langevin";
+    const stochastic = this.config.thermostat === "langevin" || this.config.thermostat === "csvr";
     for (let s = 0; s < steps; s++) {
-      if (langevin) this.uStep.value = this.stepCount;
+      if (stochastic) this.uStep.value = this.stepCount;
+      if (this.config.thermostat === "csvr") {
+        this.uThermostatTau.value = this.activeThermostatTau();
+      }
       await renderer.computeAsync(nodes);
       this.elapsed += this.config.timestep;
       this.stepCount += 1;
@@ -1360,7 +1450,7 @@ export class GpuEngine {
 
     // Feed the GPU Berendsen thermostat: recompute λ from the just-read KE. Applied each
     // step by kThermostat via the uThermoLambda uniform (held between readbacks).
-    if (this.config.thermostat !== "none") {
+    if (this.config.thermostat === "berendsen") {
       const currentT = temperatureFromKinetic(ke, dof);
       if (currentT > 1e-6) {
         const ratio = this.config.temperature / currentT;
