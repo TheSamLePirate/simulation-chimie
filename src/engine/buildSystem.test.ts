@@ -73,6 +73,18 @@ describe("buildSystem matches the CPU engine initial state", () => {
         timestep: 0.002,
       },
     ],
+    [
+      "L11 TIP4P/2005 slab",
+      {
+        level: "L11",
+        speciesName: "WATER_O",
+        particleCount: 8,
+        boxLength: 1.8,
+        timestep: 0.002,
+        thermostat: "csvr",
+        thermostatTau: 1,
+      },
+    ],
   ];
 
   for (const [name, patch] of cases) {

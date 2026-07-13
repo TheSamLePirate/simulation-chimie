@@ -1150,9 +1150,30 @@ construction dynamique des sites depuis les positions atomiques doit encore êtr
 
 ---
 
+## P60 — Sites virtuels dynamiques et builder L11 partagé ✅
+
+**Objectif (DoD) :** supprimer les positions de sites figées du harnais et construire le même slab
+initial dans les moteurs CPU/GPU, préalable à une trajectoire réelle.
+
+**Livré :** `buildSystem()` sait construire L11 (boîte anisotrope, slab TIP4P, contraintes, projection
+RATTLE et remise exacte à T cible) en lock-step avec `SurfaceTensionExperiment`. `GpuTip4pPme`
+accepte le buffer atomique vivant et reconstruit à chaque solve H1/H2 déroulés autour de O puis
+`M=O+γ/2(dOH1+dOH2)` sur le device. Les sites initiaux du test sont volontairement tous nuls.
+
+**Vérifications :** **1 nouveau test** lock-step L11 positions/vitesses à 10 décimales. Validation
+headed dynamique sur 32×32×64 : résultats strictement identiques à P59 — **9,93×10⁻⁴** relatif sur
+forces site et atomiques, erreurs scalées **9,20×10⁻⁴ / 2,10×10⁻³** énergie/viriel. Cela prouve que
+la reconstruction dynamique et le minimum-image ne changent pas l'oracle. Suite complète verte.
+
+**Déviations au plan :** le wrapper dynamique n'est pas encore ordonnancé dans les passes de
+Velocity-Verlet de `GpuEngine`; O–O LJ et correction Janeček doivent être réunis avec lui avant de
+lever le fallback CPU de L11.
+
+---
+
 ## Bilan
 
-**Phases P0–P59 livrées** (**161 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P60 livrées** (**162 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

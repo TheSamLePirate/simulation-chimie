@@ -1,11 +1,15 @@
 import { createBox, createBoxXYZ } from "../core/box";
+import { rattle } from "../core/constraints";
 import { buildSaltWaterSystem } from "../core/dissolution";
 import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../core/init";
 import { buildOilWaterSystem } from "../core/mixture";
+import { kineticEnergy } from "../core/observables";
 import { Rng } from "../core/rng";
 import { SPECIES_LIBRARY } from "../core/species";
 import { createState } from "../core/state";
+import { buildTip4p2005Slab } from "../core/tip4p2005";
 import type { Box, SimState, Species } from "../core/types";
+import { BOLTZMANN_KJ_PER_MOL_K } from "../core/units";
 import {
   buildWaterSystem,
   WATER_ANGLE_K,
@@ -166,6 +170,33 @@ const flatConstraints = (c: {
 export function buildSystem(config: SimConfig): BuiltSystem {
   const c = config;
   const initT = c.initialTemperature ?? c.temperature;
+
+  if (c.level === "L11") {
+    const lz = c.particleCount >= 1024 ? 10 : 8;
+    const box = createBoxXYZ(c.boxLength, c.boxLength, lz, "periodic");
+    const sys = buildTip4p2005Slab(c.particleCount, box, initT, new Rng(c.seed), 997);
+    const inverseMass = new Float64Array(sys.state.count);
+    for (let atom = 0; atom < sys.state.count; atom++) {
+      inverseMass[atom] = 1 / sys.species[sys.state.typeIds[atom]].mass;
+    }
+    rattle(sys.state, sys.constraints, inverseMass, box);
+    const currentKinetic = kineticEnergy(sys.state, sys.species);
+    const targetKinetic = 0.5 * (6 * c.particleCount - 3) * BOLTZMANN_KJ_PER_MOL_K * initT;
+    const velocityScale = Math.sqrt(targetKinetic / currentKinetic);
+    for (let i = 0; i < sys.state.velocities.length; i++) {
+      sys.state.velocities[i] *= velocityScale;
+    }
+    return {
+      state: sys.state,
+      box,
+      species: sys.species,
+      bonds: EMPTY_BONDS,
+      angles: EMPTY_ANGLES,
+      constraints: flatConstraints(sys.constraints),
+      renderBonds: sys.renderBonds,
+      molecular: true,
+    };
+  }
 
   // --- Molecular levels (L4–L8): dedicated builders return topology + constraints. ---
   if (c.level === "L4" || c.level === "L5" || c.level === "L7") {

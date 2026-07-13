@@ -14,7 +14,7 @@ import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
 import { GpuFft1d, GpuFft3d } from "../engine/gpu/GpuFft";
 import { GpuPmeReciprocal } from "../engine/gpu/GpuPmeReciprocal";
-import { GpuTip4pPme } from "../engine/gpu/GpuTip4pPme";
+import { GpuTip4pPme, gpuVec3Storage } from "../engine/gpu/GpuTip4pPme";
 import type { SimConfig } from "../engine/types";
 
 /**
@@ -320,12 +320,14 @@ async function tip4pPmeParity(nx = 8, ny = 8, nz = 16) {
   const grid = [nx, ny, nz] as const;
   const gpu = new GpuTip4pPme({
     molecules,
-    positions: sitePositions,
+    // Intentionally start charge sites at zero: the GPU must rebuild H1,H2,M from live atoms.
+    positions: new Float32Array(sitePositions.length),
     charges,
     box,
     alpha: 3.5,
     grid,
     slabCorrection: true,
+    atomicPositionStorage: gpuVec3Storage(Float32Array.from(system.state.positions)),
   });
   const renderer = sharedRenderer();
   await gpu.compute(renderer);

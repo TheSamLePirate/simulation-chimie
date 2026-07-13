@@ -19,6 +19,8 @@ import { GpuPmeReciprocal, type GpuPmeReciprocalInput } from "./GpuPmeReciprocal
 const WORKGROUP = [64];
 const vec2Array = (data: Float32Array) => instancedArray(data, "vec2");
 const vec3Array = (data: Float32Array) => instancedArray(data, "vec3");
+export type GpuVec3Storage = ReturnType<typeof vec3Array>;
+export const gpuVec3Storage = vec3Array;
 type Kernel = ReturnType<typeof compute>;
 // biome-ignore lint/suspicious/noExplicitAny: TSL node arithmetic is intentionally loosely typed.
 type Node = any;
@@ -54,6 +56,8 @@ function erfcApprox(x: Node): Node {
 
 export interface GpuTip4pPmeInput extends Omit<GpuPmeReciprocalInput, "count" | "exclusionGroups"> {
   readonly molecules: number;
+  /** Optional live O,H1,H2 atom buffer; charge sites are rebuilt before each solve. */
+  readonly atomicPositionStorage?: GpuVec3Storage;
 }
 
 /** TIP4P/2005 electrostatics layered on the validated raw smooth-PME charge-site path. */
@@ -61,12 +65,17 @@ export class GpuTip4pPme {
   readonly molecules: number;
   readonly pme: GpuPmeReciprocal;
 
+  get atomicForceStorage() {
+    return this.atomicForces;
+  }
+
   private readonly atomicForces: ReturnType<typeof vec3Array>;
   private readonly excludedEnergyVirial: ReturnType<typeof vec2Array>;
+  private readonly kBuildChargeSites: Kernel | null;
   private readonly kExcludeAndRedistribute: Kernel;
 
   constructor(input: GpuTip4pPmeInput) {
-    const { molecules, ...pmeInput } = input;
+    const { molecules, atomicPositionStorage, ...pmeInput } = input;
     if (!Number.isInteger(molecules) || molecules < 1) {
       throw new RangeError("GPU TIP4P molecule count must be positive");
     }
@@ -86,6 +95,23 @@ export class GpuTip4pPme {
     const gamma = TIP4P_2005_VIRTUAL_GAMMA;
     const halfGamma = 0.5 * gamma;
     const boxVector = vec3(...pmeInput.box.lengths);
+
+    this.kBuildChargeSites = atomicPositionStorage
+      ? kernel(() => {
+          const atomBase = uint(instanceIndex).mul(3);
+          const oxygen = atomicPositionStorage.element(atomBase);
+          const d1 = atomicPositionStorage.element(atomBase.add(1)).sub(oxygen).toVar();
+          const d2 = atomicPositionStorage.element(atomBase.add(2)).sub(oxygen).toVar();
+          d1.assign(d1.sub(boxVector.mul(roundVec(d1.div(boxVector)))));
+          d2.assign(d2.sub(boxVector.mul(roundVec(d2.div(boxVector)))));
+          const siteBase = uint(instanceIndex).mul(3);
+          this.pme.positionStorage.element(siteBase).assign(oxygen.add(d1));
+          this.pme.positionStorage.element(siteBase.add(1)).assign(oxygen.add(d2));
+          this.pme.positionStorage
+            .element(siteBase.add(2))
+            .assign(oxygen.add(d1.add(d2).mul(halfGamma)));
+        }, molecules)
+      : null;
 
     this.kExcludeAndRedistribute = kernel(() => {
       const base = uint(instanceIndex).mul(3);
@@ -138,6 +164,7 @@ export class GpuTip4pPme {
   }
 
   async compute(renderer: WebGPURenderer): Promise<void> {
+    if (this.kBuildChargeSites) await renderer.computeAsync(this.kBuildChargeSites);
     await this.pme.computeFull(renderer);
     await renderer.computeAsync(this.kExcludeAndRedistribute);
   }
