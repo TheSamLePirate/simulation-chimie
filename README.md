@@ -66,6 +66,7 @@ snapshot JSON / g(r) CSV**, import de scène.
 | `bun run typecheck` | Vérification des types |
 | `bun run test` / `test:watch` | Tests unitaires + physiques (Vitest) |
 | `bun run e2e` | Tests end-to-end (Playwright + WebGPU) |
+| `bun run campaign:surface-tension` | Campagne L11 : 4 températures × 5 graines, JSON + CSV (`--quick` pour le smoke test) |
 | `bun run check` | lint + typecheck + tests |
 
 ## Validation scientifique

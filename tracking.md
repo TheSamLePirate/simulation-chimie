@@ -1213,9 +1213,30 @@ convergence 512/1 024/2 048 restent une campagne scientifique à exécuter, pas 
 
 ---
 
+## P63 — Campagne batch L11 reproductible ✅
+
+**Objectif (DoD) :** transformer le protocole affiché dans l'UI en expérience exécutable, traçable
+et exportable sans intervention manuelle.
+
+**Livré :** `bun run campaign:surface-tension` exécute par défaut 280/300/320/340 K × 5 graines,
+1 024 molécules, 200 ps d'équilibration, 2 ns de production, échantillons 2 ps et blocs 100 ps.
+Options CLI pour températures, tailles 512/1 024/2 048, répliques, durées, seed, δA, strain et sortie.
+JSON + CSV contiennent les deux routes γ±SEM, leur écart, IAPWS, T finale, graine et temps. Mode
+`--quick` borné pour CI/smoke test ; le README et l'atlas donnent la commande.
+
+**Vérifications :** **2 nouveaux tests** parser/CSV. Exécution réelle du mode quick de bout en bout :
+2 échantillons, JSON/CSV écrits, toutes les valeurs finies ; γ≈49,65 mN/m sur N=8 et 0,004 ps est
+explicitement un smoke test non physique, pas un résultat. Typecheck et tests ciblés verts.
+
+**Déviations au plan :** la campagne de plusieurs nanosecondes n'est pas lancée automatiquement :
+elle consomme un temps machine substantiel et ses résultats ne doivent être publiés qu'après les
+contrôles de convergence documentés.
+
+---
+
 ## Bilan
 
-**Phases P0–P62 livrées** (**166 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique
