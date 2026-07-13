@@ -386,21 +386,28 @@ export class GpuPmeReciprocal {
   }
 
   async compute(renderer: WebGPURenderer): Promise<void> {
-    await renderer.computeAsync(this.kClear);
-    await renderer.computeAsync(this.kAssign);
-    await renderer.computeAsync(this.kDequantize);
-    await this.fft.transform(renderer);
-    await renderer.computeAsync(this.kInfluence);
-    await this.fft.transform(renderer, true);
-    await renderer.computeAsync(this.kInterpolate);
-    await renderer.computeAsync(this.kReduce);
+    await renderer.computeAsync(this.reciprocalKernels());
+  }
+
+  reciprocalKernels(): Kernel[] {
+    return [
+      this.kClear,
+      this.kAssign,
+      this.kDequantize,
+      ...this.fft.transformKernels(),
+      this.kInfluence,
+      ...this.fft.transformKernels(true),
+      this.kInterpolate,
+      this.kReduce,
+    ];
   }
 
   async computeFull(renderer: WebGPURenderer): Promise<void> {
-    await this.compute(renderer);
-    await renderer.computeAsync(this.kDipoleSlab);
-    await renderer.computeAsync(this.kRealSpace);
-    await renderer.computeAsync(this.kCombineForces);
+    await renderer.computeAsync(this.fullKernels());
+  }
+
+  fullKernels(): Kernel[] {
+    return [...this.reciprocalKernels(), this.kDipoleSlab, this.kRealSpace, this.kCombineForces];
   }
 
   async readForces(renderer: WebGPURenderer): Promise<Float32Array> {

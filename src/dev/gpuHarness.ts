@@ -1,5 +1,7 @@
 import type { WebGPURenderer } from "three/webgpu";
+import { applyBoundary } from "../core/boundary";
 import { createBoxXYZ } from "../core/box";
+import { rattle, shake } from "../core/constraints";
 import { computeSmoothPme } from "../core/forces/pme";
 import { Tip4p2005EwaldForce } from "../core/forces/tip4p2005Ewald";
 import { fft1d, fft3d } from "../core/math/fft";
@@ -10,6 +12,7 @@ import {
   TIP4P_2005,
   tip4pVirtualPositionInBox,
 } from "../core/tip4p2005";
+import { buildSystem } from "../engine/buildSystem";
 import { CpuEngine } from "../engine/cpu/CpuEngine";
 import { GpuEngine } from "../engine/gpu/GpuEngine";
 import { GpuFft1d, GpuFft3d } from "../engine/gpu/GpuFft";
@@ -378,6 +381,110 @@ async function tip4pPmeParity(nx = 8, ny = 8, nz = 16) {
   };
 }
 
+/** Integrated GpuEngine L11 initial force vs identical CPU TIP4P raw-LJ/PME physics. */
+async function l11EngineForceParity(molecules = 8) {
+  const config: SimConfig = {
+    ...TEST_CONFIG,
+    particleCount: molecules,
+    boxLength: 1.8,
+    temperature: 300,
+    timestep: 0.002,
+    level: "L11",
+    speciesName: "WATER_O",
+    thermostat: "csvr",
+    thermostatTau: 1,
+    engineKind: "gpu",
+  };
+  const gpu = await freshGpu(config);
+  const gpuForces = await gpu.readForces();
+  gpu.dispose();
+  const system = buildSystem(config);
+  const force = new Tip4p2005EwaldForce({
+    alpha: 3.5,
+    pmeGrid: [32, 32, 128],
+    slabCorrection: true,
+    // Defined ⇒ unshifted long LJ cutoff; zero ⇒ deliberately omit Janeček in this parity slice.
+    dispersionTailBins: 0,
+  });
+  force.compute(system.state, system.box, system.species);
+  return { molecules, ...maxAbsDiff(gpuForces, system.state.forces) };
+}
+
+/** One complete rigid-water Velocity-Verlet step through integrated L11 CPU/GPU paths. */
+async function l11EngineStepParity(molecules = 8) {
+  const config: SimConfig = {
+    ...TEST_CONFIG,
+    particleCount: molecules,
+    boxLength: 1.8,
+    temperature: 300,
+    timestep: 0.002,
+    level: "L11",
+    speciesName: "WATER_O",
+    thermostat: "none",
+    thermostatTau: 1,
+    engineKind: "gpu",
+  };
+  const gpu = await freshGpu(config);
+  await gpu.stepAsync(1);
+  const gpuPositions = await gpu.readPositions();
+  gpu.dispose();
+
+  const system = buildSystem(config);
+  const force = new Tip4p2005EwaldForce({
+    alpha: 3.5,
+    pmeGrid: [32, 32, 128],
+    slabCorrection: true,
+    dispersionTailBins: 0,
+  });
+  force.compute(system.state, system.box, system.species);
+  const inverseMass = new Float64Array(system.state.count);
+  for (let atom = 0; atom < system.state.count; atom++) {
+    inverseMass[atom] = 1 / system.species[system.state.typeIds[atom]].mass;
+  }
+  const referencePositions = system.state.positions.slice();
+  const halfDt = 0.5 * config.timestep;
+  for (let atom = 0; atom < system.state.count; atom++) {
+    const inverse = inverseMass[atom];
+    for (let component = 0; component < 3; component++) {
+      const index = 3 * atom + component;
+      system.state.velocities[index] += halfDt * system.state.forces[index] * inverse;
+      system.state.positions[index] += config.timestep * system.state.velocities[index];
+    }
+  }
+  applyBoundary(system.state, system.box, system.species);
+  shake(
+    system.state,
+    {
+      i: Int32Array.from(system.constraints.i),
+      j: Int32Array.from(system.constraints.j),
+      d0: Float64Array.from(system.constraints.d0),
+    },
+    referencePositions,
+    inverseMass,
+    system.box,
+    config.timestep,
+  );
+  force.compute(system.state, system.box, system.species);
+  for (let atom = 0; atom < system.state.count; atom++) {
+    const inverse = inverseMass[atom];
+    for (let component = 0; component < 3; component++) {
+      const index = 3 * atom + component;
+      system.state.velocities[index] += halfDt * system.state.forces[index] * inverse;
+    }
+  }
+  rattle(
+    system.state,
+    {
+      i: Int32Array.from(system.constraints.i),
+      j: Int32Array.from(system.constraints.j),
+      d0: Float64Array.from(system.constraints.d0),
+    },
+    inverseMass,
+    system.box,
+  );
+  return { molecules, ...maxAbsDiff(gpuPositions, system.state.positions) };
+}
+
 export interface MdHarness {
   forceParity: typeof forceParity;
   stepParity: typeof stepParity;
@@ -388,6 +495,8 @@ export interface MdHarness {
   pmeReciprocalParity: typeof pmeReciprocalParity;
   pmeFullParity: typeof pmeFullParity;
   tip4pPmeParity: typeof tip4pPmeParity;
+  l11EngineForceParity: typeof l11EngineForceParity;
+  l11EngineStepParity: typeof l11EngineStepParity;
 }
 
 declare global {
@@ -408,6 +517,8 @@ export function installGpuHarness(): void {
     pmeReciprocalParity,
     pmeFullParity,
     tip4pPmeParity,
+    l11EngineForceParity,
+    l11EngineStepParity,
   };
 
   const installReadback = (testId: string, run: () => Promise<unknown>) => {
@@ -465,5 +576,15 @@ export function installGpuHarness(): void {
     const dimensions = requestedTip4p.split("x").map(Number);
     const [nx = 8, ny = 8, nz = 16] = dimensions;
     installReadback("gpu-tip4p-parity", () => tip4pPmeParity(nx, ny, nz));
+  }
+  const requestedL11Force = params.get("gpu-l11-force");
+  if (requestedL11Force !== null) {
+    const molecules = Number(requestedL11Force) || 8;
+    installReadback("gpu-l11-force-parity", () => l11EngineForceParity(molecules));
+  }
+  const requestedL11Step = params.get("gpu-l11-step");
+  if (requestedL11Step !== null) {
+    const molecules = Number(requestedL11Step) || 8;
+    installReadback("gpu-l11-step-parity", () => l11EngineStepParity(molecules));
   }
 }

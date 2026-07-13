@@ -31,6 +31,7 @@ import { Vector3 } from "three/webgpu";
 import { erfc as erfcScalar } from "../../core/math/erf";
 import { pressure } from "../../core/observables";
 import { SPECIES_LIBRARY } from "../../core/species";
+import { TIP4P_2005 } from "../../core/tip4p2005";
 import type { Species } from "../../core/types";
 import {
   BAR_PER_KJ_PER_MOL_NM3,
@@ -40,6 +41,7 @@ import {
 } from "../../core/units";
 import { buildSystem } from "../buildSystem";
 import type { AccuracyLevel, Observables, SimConfig } from "../types";
+import { GpuTip4pPme } from "./GpuTip4pPme";
 
 const WORKGROUP = [64];
 /** Fixed-point scale for the i32 quantised force accumulator (WebGPU has no f32 atomics). */
@@ -138,6 +140,20 @@ const fl = (x: unknown) => float(x as never);
 /** Re-wrap as a fluent int / uint node (the typings reject atomic / derived nodes here). */
 const iv = (x: unknown) => int(x as never);
 const uv = (x: unknown) => uint(x as never);
+
+export function unpackGpuVec3(raw: Float32Array, count: number): Float32Array {
+  if (raw.length === 3 * count) return raw;
+  if (raw.length !== 4 * count) {
+    throw new Error(`Unexpected GPU vec3 buffer length ${raw.length} for ${count} elements`);
+  }
+  const packed = new Float32Array(3 * count);
+  for (let i = 0; i < count; i++) {
+    packed[3 * i] = raw[4 * i];
+    packed[3 * i + 1] = raw[4 * i + 1];
+    packed[3 * i + 2] = raw[4 * i + 2];
+  }
+  return packed;
+}
 
 function resolveSpecies(name: string): Species {
   const key = name.toUpperCase() as keyof typeof SPECIES_LIBRARY;
@@ -258,6 +274,8 @@ export class GpuEngine {
   private readonly kSettle: Kernel | null;
   private readonly kRattle: Kernel | null;
   private readonly kSaveRef: Kernel | null;
+  private readonly tip4pPme: GpuTip4pPme | null;
+  private readonly kAddTip4pForces: Kernel | null;
 
   private renderer: THREE.WebGPURenderer | null = null;
   private stepCount = 0;
@@ -308,6 +326,37 @@ export class GpuEngine {
     this.forces = vec3Array(new Float32Array(n * 3));
     this.energyVirial = vec2Array(new Float32Array(n * 2));
     this.moleculeIds = uintArray(Uint32Array.from(state.moleculeId));
+
+    if (config.level === "L11") {
+      const molecules = n / 3;
+      const charges = new Float32Array(3 * molecules);
+      for (let molecule = 0; molecule < molecules; molecule++) {
+        charges[3 * molecule] = TIP4P_2005.chargeH;
+        charges[3 * molecule + 1] = TIP4P_2005.chargeH;
+        charges[3 * molecule + 2] = TIP4P_2005.chargeM;
+      }
+      const nextPowerOfTwo = (value: number) => 2 ** Math.ceil(Math.log2(value));
+      const gridX = nextPowerOfTwo(Math.max(32, Math.ceil(box.lengths[0] / 0.07)));
+      const gridZ = nextPowerOfTwo(Math.max(64, Math.ceil(box.lengths[2] / 0.07)));
+      this.tip4pPme = new GpuTip4pPme({
+        molecules,
+        positions: new Float32Array(9 * molecules),
+        charges,
+        box,
+        alpha: 3.5,
+        grid: [gridX, gridX, gridZ],
+        slabCorrection: true,
+        atomicPositionStorage: this.positions,
+      });
+      this.kAddTip4pForces = kernel(() => {
+        this.forces
+          .element(instanceIndex)
+          .addAssign(this.tip4pPme?.atomicForceStorage.element(instanceIndex) as never);
+      }, n);
+    } else {
+      this.tip4pPme = null;
+      this.kAddTip4pForces = null;
+    }
 
     // Bonded topology + i32 quantised force accumulator (WebGPU has no f32 atomics, so bonded
     // kernels scatter forces as fixed-point integers; a dequantise pass adds them to `forces`).
@@ -616,6 +665,11 @@ export class GpuEngine {
   /** Multi-species LJ (Lorentz-Berthelot) + Coulomb (Wolf DSF) with intramolecular exclusions. */
   private buildMolNonbonded(): Kernel {
     const n = this.atomCount;
+    const tip4p = this.config.level === "L11";
+    const tip4pCutoff = Math.min(
+      5 * TIP4P_2005.sigmaO,
+      0.49 * Math.min(this.boxLengths.x, this.boxLengths.y, this.boxLengths.z),
+    );
     const C6 = 0.16 ** 3;
     const C12 = 0.16 ** 6;
     const TWO_PI = 2 / Math.sqrt(Math.PI);
@@ -638,7 +692,7 @@ export class GpuEngine {
           const sigma = pmi.x.add(pj.x).mul(0.5);
           const eps = sqrt(pmi.y.mul(pj.y));
           const qq = pmi.z.mul(pj.z);
-          const rcLj = sigma.mul(2.5);
+          const rcLj = tip4p ? float(tip4pCutoff) : sigma.mul(2.5);
           const rcLj2 = rcLj.mul(rcLj);
 
           If(r2.greaterThan(float(1e-12)), () => {
@@ -657,9 +711,14 @@ export class GpuEngine {
                 .mul(eps)
                 .mul(C12 - C6);
               const fRadial = float(24).mul(eps).mul(inv12.mul(2).sub(inv6)).div(r);
-              fOverR.addAssign(fRadial.sub(fAtRc).div(r));
               const vv = float(4).mul(eps).mul(inv12.sub(inv6));
-              peSum.addAssign(vv.sub(vAtRc).add(r.sub(rcLj).mul(fAtRc)).mul(0.5));
+              if (tip4p) {
+                fOverR.addAssign(fRadial.div(r));
+                peSum.addAssign(vv.mul(0.5));
+              } else {
+                fOverR.addAssign(fRadial.sub(fAtRc).div(r));
+                peSum.addAssign(vv.sub(vAtRc).add(r.sub(rcLj).mul(fAtRc)).mul(0.5));
+              }
             });
 
             If(this.uUseCoulomb.greaterThan(0.5), () => {
@@ -1060,7 +1119,7 @@ export class GpuEngine {
 
     // Electrostatics (Wolf DSF), active for L3 ions AND all molecular levels (water H-bonds,
     // ions). Without it, water has no cohesion ⇒ no droplet. Pre-compute the cutoff-shift consts.
-    const useCoulomb = config.level === "L3" || this.molecular;
+    const useCoulomb = config.level === "L3" || (this.molecular && config.level !== "L11");
     this.uUseCoulomb.value = useCoulomb ? 1 : 0;
     this.uUseShift.value = config.level === "L2" || config.level === "L3" ? 1 : 0;
     const alpha = 2.5;
@@ -1165,6 +1224,9 @@ export class GpuEngine {
       if (this.kBondForces) passes.push(this.kBondForces);
       if (this.kAngleForces) passes.push(this.kAngleForces);
       passes.push(this.kAddQForces);
+      if (this.tip4pPme && this.kAddTip4pForces) {
+        passes.push(...this.tip4pPme.kernels(), this.kAddTip4pForces);
+      }
       return passes;
     }
     const isLJ = this.config.level === "L2" || this.config.level === "L3";
@@ -1272,7 +1334,7 @@ export class GpuEngine {
       renderer.getArrayBufferAsync(this.velocities.value),
       renderer.getArrayBufferAsync(this.energyVirial.value),
     ]);
-    const vel = new Float32Array(velBuf);
+    const vel = unpackGpuVec3(new Float32Array(velBuf), n);
     const ev = new Float32Array(evBuf);
 
     let ke = 0;
@@ -1288,11 +1350,17 @@ export class GpuEngine {
       pe += ev[2 * i];
       virial += ev[2 * i + 1];
     }
+    if (this.tip4pPme) {
+      const electrostatics = await this.tip4pPme.readEnergyVirial(renderer);
+      pe += electrostatics.energy;
+      virial += electrostatics.virial;
+    }
+
+    const dof = 3 * n - this.numConstraints - 3;
 
     // Feed the GPU Berendsen thermostat: recompute λ from the just-read KE. Applied each
     // step by kThermostat via the uThermoLambda uniform (held between readbacks).
     if (this.config.thermostat !== "none") {
-      const dof = 3 * n - 3;
       const currentT = temperatureFromKinetic(ke, dof);
       if (currentT > 1e-6) {
         const ratio = this.config.temperature / currentT;
@@ -1302,14 +1370,14 @@ export class GpuEngine {
       }
     }
 
-    const volume = this.config.boxLength ** 3;
+    const volume = this.boxLengths.x * this.boxLengths.y * this.boxLengths.z;
     const pInternal = pressure(ke, virial, volume);
     return {
       ...base,
       kineticEnergy: ke,
       potentialEnergy: pe,
       totalEnergy: ke + pe,
-      temperature: temperatureFromKinetic(ke, 3 * n - 3),
+      temperature: temperatureFromKinetic(ke, dof),
       pressure: pInternal * BAR_PER_KJ_PER_MOL_NM3,
     };
   }
@@ -1318,21 +1386,30 @@ export class GpuEngine {
   async readPositions(): Promise<Float32Array> {
     const renderer = this.renderer;
     if (!renderer) return new Float32Array(this.atomCount * 3);
-    return new Float32Array(await renderer.getArrayBufferAsync(this.positions.value));
+    return unpackGpuVec3(
+      new Float32Array(await renderer.getArrayBufferAsync(this.positions.value)),
+      this.atomCount,
+    );
   }
 
   /** Read the current forces back to the CPU (for parity checks). */
   async readForces(): Promise<Float32Array> {
     const renderer = this.renderer;
     if (!renderer) return new Float32Array(this.atomCount * 3);
-    return new Float32Array(await renderer.getArrayBufferAsync(this.forces.value));
+    return unpackGpuVec3(
+      new Float32Array(await renderer.getArrayBufferAsync(this.forces.value)),
+      this.atomCount,
+    );
   }
 
   /** Read the current velocities back to the CPU (for parity checks). */
   async readVelocities(): Promise<Float32Array> {
     const renderer = this.renderer;
     if (!renderer) return new Float32Array(this.atomCount * 3);
-    return new Float32Array(await renderer.getArrayBufferAsync(this.velocities.value));
+    return unpackGpuVec3(
+      new Float32Array(await renderer.getArrayBufferAsync(this.velocities.value)),
+      this.atomCount,
+    );
   }
 
   setLevel(level: AccuracyLevel): void {

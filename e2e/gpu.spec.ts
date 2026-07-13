@@ -120,4 +120,18 @@ test.describe("GPU↔CPU parity (readback; non-headless only)", () => {
     expect(r.energy.scaled).toBeLessThan(5e-3);
     expect(r.virial.scaled).toBeLessThan(5e-3);
   });
+
+  test("integrated L11 GPU force path matches raw-LJ CPU physics", async ({ page }) => {
+    await page.goto("/?gpu-l11-force=8");
+    const raw = await page.getByTestId("gpu-l11-force-parity").textContent({ timeout: 120_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.maxRel).toBeLessThan(5e-3);
+  });
+
+  test("integrated L11 rigid step tracks CPU Velocity-Verlet", async ({ page }) => {
+    await page.goto("/?gpu-l11-step=8");
+    const raw = await page.getByTestId("gpu-l11-step-parity").textContent({ timeout: 120_000 });
+    const r = JSON.parse(raw ?? "null");
+    expect(r.maxAbs).toBeLessThan(5e-4);
+  });
 });

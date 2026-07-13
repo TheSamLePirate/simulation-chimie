@@ -1171,9 +1171,29 @@ lever le fallback CPU de L11.
 
 ---
 
+## P61 — L11 ordonnancé dans GpuEngine (sans queue Janeček) ✅
+
+**Objectif (DoD) :** brancher LJ O–O brut, PME TIP4P et SHAKE/RATTLE dans le vrai Velocity-Verlet,
+sans annoncer prématurément L11 comme supporté.
+
+**Livré :** listes de kernels FFT/PME batchables avec barrières conservées ; `GpuEngine` construit le
+PME dynamique L11, désactive Wolf, calcule le LJ O–O non shifté jusqu'au cutoff L11, ajoute les forces
+TIP4P aux atomes et expose les observables PME. Correction générale du padding vec3 readback, du
+volume anisotrope et des degrés de liberté rigides (`3Nat−Ncontraintes−3`). Le support UI reste fermé.
+
+**Vérifications :** **2 nouveaux tests** (unpack vec3 + contrat constructeur L11). En navigateur
+réel, force initiale GpuEngine vs CPU raw-LJ/PME : **2,95×10⁻⁴** relatif. Un pas complet NVE
+kick→drift→PBC→SHAKE→forces→kick→RATTLE suit le CPU à **1,64×10⁻⁷ nm absolu**
+(**2,16×10⁻⁷ relatif**). La FFT batchée conserve son golden 5,01×10⁻⁸.
+
+**Déviations au plan :** Janeček n'est pas encore device-side ; la force de parité la neutralise
+explicitement des deux côtés (`dispersionTailBins: 0`). `gpuSupportsConfig(L11)` reste donc faux.
+
+---
+
 ## Bilan
 
-**Phases P0–P60 livrées** (**162 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
+**Phases P0–P61 livrées** (**164 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
 Moteur CPU validé (oracle déterministe) + moteur GPU WebGPU avec **cell-lists O(N) + thermostat**.
 
 **Physique — échelle complète L0→L11 :** gaz parfait, sphères molles (WCA), Lennard-Jones, **électrostatique

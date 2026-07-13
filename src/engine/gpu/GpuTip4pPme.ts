@@ -164,9 +164,15 @@ export class GpuTip4pPme {
   }
 
   async compute(renderer: WebGPURenderer): Promise<void> {
-    if (this.kBuildChargeSites) await renderer.computeAsync(this.kBuildChargeSites);
-    await this.pme.computeFull(renderer);
-    await renderer.computeAsync(this.kExcludeAndRedistribute);
+    await renderer.computeAsync(this.kernels());
+  }
+
+  kernels(): Kernel[] {
+    return [
+      ...(this.kBuildChargeSites ? [this.kBuildChargeSites] : []),
+      ...this.pme.fullKernels(),
+      this.kExcludeAndRedistribute,
+    ];
   }
 
   private async readVec3(renderer: WebGPURenderer, storage: ReturnType<typeof vec3Array>) {

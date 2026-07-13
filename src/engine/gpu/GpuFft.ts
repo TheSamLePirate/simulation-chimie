@@ -104,11 +104,15 @@ export class GpuFft1d {
   }
 
   async transform(renderer: WebGPURenderer, inverse = false): Promise<void> {
-    await renderer.computeAsync(this.kBitReverse);
-    for (const pass of inverse ? this.inversePasses : this.forwardPasses) {
-      await renderer.computeAsync(pass);
-    }
-    if (inverse) await renderer.computeAsync(this.kNormalize);
+    await renderer.computeAsync(this.transformKernels(inverse));
+  }
+
+  transformKernels(inverse = false): Kernel[] {
+    return [
+      this.kBitReverse,
+      ...(inverse ? this.inversePasses : this.forwardPasses),
+      ...(inverse ? [this.kNormalize] : []),
+    ];
   }
 
   async read(renderer: WebGPURenderer): Promise<Float32Array> {
@@ -239,12 +243,17 @@ export class GpuFft3d {
   }
 
   async transform(renderer: WebGPURenderer, inverse = false): Promise<void> {
+    await renderer.computeAsync(this.transformKernels(inverse));
+  }
+
+  transformKernels(inverse = false): Kernel[] {
     const axes = inverse ? this.inverseAxes : this.forwardAxes;
+    const kernels: Kernel[] = [];
     for (let axis = 0; axis < axes.length; axis++) {
-      await renderer.computeAsync(this.bitReverseAxes[axis]);
-      for (const pass of axes[axis]) await renderer.computeAsync(pass);
+      kernels.push(this.bitReverseAxes[axis], ...axes[axis]);
     }
-    if (inverse) await renderer.computeAsync(this.kNormalize);
+    if (inverse) kernels.push(this.kNormalize);
+    return kernels;
   }
 
   async read(renderer: WebGPURenderer): Promise<Float32Array> {
