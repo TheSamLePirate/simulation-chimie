@@ -28,7 +28,7 @@ Authoritative implementation log for the approved AAA plan (`P64`–`P92`). This
 |---|---|---|---:|---:|
 | P64 | Scientific containment and immediate visible correctness | ✅ Done | 1 resolved | 0 |
 | P65 | Canonical strict versioned configuration | ✅ Done | 1 resolved | 0 |
-| P66 | Universal backend-neutral `BuiltSystem` | ⬜ Pending | 0 | 0 |
+| P66 | Universal backend-neutral `BuiltSystem` | ✅ Done | 2 resolved | 0 |
 | P67 | Explicit topology exclusions and 1–4 interactions | ⬜ Pending | 0 | 0 |
 | P68 | Exhaustive config transition planner | ⬜ Pending | 0 | 0 |
 | P69 | Transactional rebuilds and `runId` | ⬜ Pending | 0 | 0 |
@@ -144,3 +144,58 @@ None.
 
 - The snapshot schema still embeds a bare config and remains v1; P70 introduces checkpoint v2 with the RNG/analysis state and its own migration.
 - `make()` in the scene registry still lists optional fields explicitly. This is now a completeness guarantee (a scene is a full config), not a merge workaround; the comment was corrected to say so.
+
+---
+
+## P66 — Universal backend-neutral `BuiltSystem` for L0–L11 ✅
+
+**Objective:** remove the duplicated CPU/GPU system construction so the two engines cannot drift apart, and represent every level's physics losslessly in one Float64 model.
+
+### Defect this closed (measured, not theoretical)
+
+`buildSystem` had **no L9/L10 branches**: both fell through to the monatomic path. The new lock-step tests caught it immediately —
+
+| Level | Shared builder produced | CPU engine produced |
+|---|---:|---:|
+| L9 alkane (6 chains × 9 C) | **6 atoms** | 54 atoms |
+| L10 Morse (12 diatomics) | **12 atoms** | 24 atoms |
+
+The GPU would have built bare argon for an alkane system. It never surfaced only because `gpuSupportsConfig` blocks L9/L10 — the shared "single source of truth" was quietly wrong for two levels.
+
+### Delivered
+
+- **Canonical Float64 `BuiltSystem`** — carries `BondList` (incl. `morseA`), `AngleList`, `DihedralList`, `DistanceConstraints`, molecule ids, render bonds, `atomCount`, and a `forceSpec`. Precision-independent: no Float32 in the canonical model.
+- **`ForceSpec`** — a discriminated union stating how a level's forces are evaluated. Both engines read it instead of re-deriving level→physics.
+- **Exhaustive `switch` over `AccuracyLevel`** — L0–L11 each build their own system; TypeScript now fails the build if a new level is added without a branch. No fall-through remains.
+- **`toGpuTopology()` adapter** — Float32/GPU packing moved downstream of construction; `GpuEngine` narrows through it.
+- **`CpuEngine` consumes the shared builder** — its six duplicated builder branches are gone. It now imports **zero** system builders (was: alkane, dissolution, mixture, morseDiatomic, water, tip4p2005). `configure()` shrank from ~180 lines to ~50; `initialise()` was deleted as dead.
+- **`monatomicForceSpec()`** — shared by the builder and the CPU engine's live level swap, so a level means the same physics wherever applied, rather than a second mapping reappearing in `setLevel`.
+
+### Verification evidence (measured)
+
+| Gate | Result |
+|---|---|
+| `bun run lint` / `typecheck` | green |
+| `bun run test` | **199/199 passed** (189 → +10) |
+| `bun run build` | green |
+| `bunx playwright test` | **8 passed, 12 skipped** |
+| Lock-step CPU ↔ builder | **all 12 levels** (was 6): state, typeIds, positions/velocities to 1e-10, box lengths + boundary, species, moleculeId, render-bond count |
+| L9 topology | dihedrals present, `c.length === 6 × count` |
+| L10 topology | 6 bonds, all `morseA > 0` |
+| L5 topology | constraints present, zero spring bonds |
+| GPU packing | Float64 canonical → Float32 flat, counts preserved |
+| GPU physics headed | L5 **326.9 K**, NaCl **290.7 K**, dissolution **392.3 K** — all physical, steps advancing, **0 page errors** |
+
+### Issues
+
+1. **Resolved — the NaCl stability test failed the full suite at 41 s.** I did not assume it was the known flake: I measured the same test on HEAD vs the working tree — **8.84 s before, 8.86 s after**, i.e. my refactor caused no slowdown. The failure was CPU contention from my own background browser runs (the documented `CLAUDE.md` §6 hazard). Applied the remedy that file prescribes — a generous per-test timeout (30 s → 90 s) — so contention reads as "slow", never as "bad physics". P85 still owns proper CI sharding.
+2. **Resolved — `setLevel` would have reintroduced a second force mapping.** The live monatomic force swap could not call `makeForceModel(built)`. Rather than hand-writing a parallel `level → ForceModel` switch (exactly the duplication P66 removes), I extracted `monatomicForceSpec()` and both call sites share it.
+
+### Deviations
+
+None.
+
+### Carried forward (by design, not deviation)
+
+- L11 still constructs `SurfaceTensionExperiment`, which builds its own slab internally; the shared builder defines the same L11 system and the lock-step test pins them together. P81 unifies the estimator.
+- `MolecularForce` still receives whole-molecule exclusions; explicit 1–2/1–3/1–4 pair policy is P67, which now has one place to land.

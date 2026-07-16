@@ -36,5 +36,7 @@ describe("minimum-image cutoff stability (tight NaCl)", () => {
     expect(Number.isFinite(T)).toBe(true);
     expect(T).toBeGreaterThan(150);
     expect(T).toBeLessThan(600); // was ~1e62 K before the cap
-  }, 30_000);
+    // 10k O(N²) ionic steps take ~9 s alone but can exceed 40 s when the suite saturates the
+    // CPU in parallel. Time out generously so contention reads as slow, never as bad physics.
+  }, 90_000);
 });

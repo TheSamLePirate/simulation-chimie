@@ -1294,6 +1294,43 @@ appliquent un cutoff non borné. La règle ne vise donc que L1/L2, avec tests da
 
 ---
 
+## P66 — `BuiltSystem` universel L0–L11 (source unique) ✅
+
+**Objectif (DoD) :** supprimer la construction dupliquée CPU/GPU pour que les deux moteurs ne
+puissent plus diverger, et représenter la physique de chaque niveau sans perte dans un seul modèle
+Float64.
+
+**Défaut fermé (mesuré) :** `buildSystem` n'avait **aucune branche L9/L10** — les deux retombaient
+sur le chemin monatomique. Les nouveaux tests lock-step l'ont montré immédiatement : L9 (6 chaînes ×
+9 C) produisait **6 atomes** au lieu de 54, L10 (12 diatomiques) **12** au lieu de 24. Le GPU aurait
+construit de l'argon nu pour un système d'alcane ; seul `gpuSupportsConfig` (qui bloque L9/L10)
+masquait le problème.
+
+**Livré :** `BuiltSystem` canonique en Float64 — `BondList` (avec `morseA`), `AngleList`,
+`DihedralList`, `DistanceConstraints`, ids de molécules, render bonds, `atomCount` et un `forceSpec`
+(union discriminée décrivant l'évaluation des forces). `switch` exhaustif sur `AccuracyLevel` : les
+12 niveaux construisent leur propre système et TypeScript refuse désormais un niveau sans branche.
+Nouvel adaptateur `toGpuTopology()` : le packing Float32 vit en aval de la construction. `CpuEngine`
+consomme le builder partagé et n'importe plus **aucun** builder de système (avant : alkane,
+dissolution, mixture, morseDiatomic, water, tip4p2005) ; `configure()` passe de ~180 à ~50 lignes,
+`initialise()` disparaît. `monatomicForceSpec()` est partagé par le builder et le swap de niveau du
+CPU, pour qu'un niveau signifie la même physique partout.
+
+**Vérifications :** lint + typecheck verts. **199 tests** (189 → +10). Build vert, **8 e2e** verts.
+Lock-step CPU ↔ builder étendu de 6 à **12 niveaux** (état, typeIds, positions/vitesses à 1e-10,
+longueurs de boîte + bord, espèces, moleculeId, render bonds). L9 porte ses dièdres
+(`c.length = 6 × count`), L10 ses `morseA > 0`, L5 ses contraintes sans ressorts. En navigateur réel,
+la physique GPU est intacte : **L5 326,9 K**, **NaCl 290,7 K**, **dissolution 392,3 K**, pas qui
+avancent, **zéro erreur de page**.
+
+**Déviations au plan :** aucune. Le test de stabilité NaCl a échoué à 41 s dans la suite complète :
+mesuré sur HEAD vs arbre de travail (**8,84 s avant / 8,86 s après**), ma refonte n'y est pour rien —
+c'était la contention CPU documentée (`CLAUDE.md` §6). Remède prescrit par ce même fichier appliqué :
+timeout par test généreux (30 s → 90 s), pour qu'une machine chargée ne se lise jamais comme une
+physique fausse. Le sharding CI reste porté par P85.
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).

@@ -1,8 +1,6 @@
-import { buildAlkaneSystem } from "../../core/alkane";
 import { applyBoundary } from "../../core/boundary";
-import { createBox, createBoxXYZ, volume } from "../../core/box";
+import { createBox, volume } from "../../core/box";
 import { type DistanceConstraints, rattle, shake } from "../../core/constraints";
-import { buildSaltWaterSystem } from "../../core/dissolution";
 import {
   type SurfaceTensionAnalysis,
   SurfaceTensionExperiment,
@@ -13,73 +11,54 @@ import { MolecularForce } from "../../core/forces/molecular";
 import { NoForce } from "../../core/forces/none";
 import { WaterForce } from "../../core/forces/water";
 import { WcaForce } from "../../core/forces/wca";
-import { placeOnLattice, setMaxwellBoltzmannVelocities } from "../../core/init";
 import { velocityVerletStep } from "../../core/integrators/velocityVerlet";
-import { buildOilWaterSystem } from "../../core/mixture";
-import { buildMorseSystem } from "../../core/morseDiatomic";
 import { kineticEnergy, pressure, temperature } from "../../core/observables";
 import { Rng } from "../../core/rng";
-import { SPECIES_LIBRARY } from "../../core/species";
 import { createState } from "../../core/state";
 import { berendsenLambda, csvrLambda, langevinFactors } from "../../core/thermostats";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../../core/types";
 import { BAR_PER_KJ_PER_MOL_NM3, BOLTZMANN_KJ_PER_MOL_K, pressureToBar } from "../../core/units";
-import { buildWaterSystem } from "../../core/water";
+import {
+  type BuiltSystem,
+  buildSystem,
+  type ForceSpec,
+  isMonatomicLevel,
+  L11_DENSITY,
+  l11BoxHeight,
+  monatomicForceSpec,
+} from "../buildSystem";
 import type { AccuracyLevel, Observables, SimConfig, SimulationEngine } from "../types";
 
-function resolveSpecies(name: string): Species {
-  const key = name.toUpperCase() as keyof typeof SPECIES_LIBRARY;
-  return SPECIES_LIBRARY[key] ?? SPECIES_LIBRARY.ARGON;
-}
-
-function makeForceModel(level: AccuracyLevel, crossScale: number): ForceModel {
-  switch (level) {
-    case "L0":
-      return NoForce;
-    case "L1":
-      return new WcaForce();
-    case "L2":
-      return new LennardJonesCellForce(crossScale);
-    case "L3":
-      return new IonicForce();
-    case "L4":
-    case "L5":
-    case "L6":
-    case "L7":
-    case "L8":
-    case "L9":
-    case "L10":
-    case "L11":
-      // Molecular systems need topology; they are built in CpuEngine.configure().
-      throw new Error("molecular force is built in configure()");
-  }
-}
-
-/** Assign particle species: type 1 to a `fraction` of particles (seeded), else type 0. */
-function buildTypeIds(count: number, fraction: number, seed: number): Uint8Array {
-  const ids = new Uint8Array(count);
-  if (fraction > 0) {
-    const rng = new Rng(seed ^ 0x5bd1e995);
-    for (let i = 0; i < count; i++) ids[i] = rng.next() < fraction ? 1 : 0;
-  }
-  return ids;
-}
-
 /**
- * Alternating (rock-salt) species assignment matching `placeOnLattice`'s ix→iy→iz fill
- * order: opposite charges become nearest neighbours, so an ionic crystal starts stable
- * instead of exploding from like-charge contacts.
+ * Build the CPU force model a canonical system declares. One exhaustive switch, no fall-through.
+ * `built` supplies the topology the molecular models need; monatomic specs are self-contained.
  */
-function buildRockSaltTypeIds(count: number): Uint8Array {
-  const ids = new Uint8Array(count);
-  const perSide = Math.ceil(Math.cbrt(count));
-  for (let p = 0; p < count; p++) {
-    const iz = p % perSide;
-    const iy = Math.floor(p / perSide) % perSide;
-    const ix = Math.floor(p / (perSide * perSide));
-    ids[p] = (ix + iy + iz) & 1;
+function makeForceModel(spec: ForceSpec, built: BuiltSystem | null): ForceModel {
+  switch (spec.kind) {
+    case "none":
+      return NoForce;
+    case "wca":
+      return new WcaForce();
+    case "lennardJones":
+      return new LennardJonesCellForce(spec.crossScale);
+    case "ionic":
+      return new IonicForce();
+    case "water":
+      return new WaterForce(spec.topology, spec.rigid);
+    case "molecular": {
+      if (!built) throw new Error("a molecular force model needs its built topology");
+      return new MolecularForce(
+        built.bonds,
+        built.angles,
+        spec.ljCutoffFactor,
+        spec.coulombCutoff,
+        built.dihedrals,
+      );
+    }
+    case "surfaceTension":
+      // L11 evaluates its forces inside SurfaceTensionExperiment; configure() routes it there.
+      throw new Error("L11 forces are owned by SurfaceTensionExperiment");
   }
-  return ids;
 }
 
 /**
@@ -116,16 +95,22 @@ export class CpuEngine implements SimulationEngine {
     this.configure();
   }
 
-  /** (Re)build box, species, state and force model from the current config. */
+  /**
+   * (Re)build box, species, state, topology and force model from the current config.
+   * The level→system mapping lives in the shared canonical builder, so this engine and the GPU
+   * engine start from the identical system by construction rather than by parallel maintenance.
+   */
   private configure(): void {
     const c = this.config;
     this.l11 = null;
-    this.box = createBox(c.boxLength, c.boundary);
-    // Velocities start at initialTemperature; the thermostat then drives toward temperature.
-    const initT = c.initialTemperature ?? c.temperature;
+    this.constraints = null;
+    this.stepCount = 0;
+    this.elapsed = 0;
+    this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
 
+    // L11 owns its own integrator/force stack; the shared builder still defines its system.
     if (c.level === "L11") {
-      const lz = c.particleCount >= 1024 ? 10 : 8;
+      const lz = l11BoxHeight(c.particleCount);
       const nextPowerOfTwo = (value: number) => 2 ** Math.ceil(Math.log2(value));
       const gridX = nextPowerOfTwo(Math.max(8, Math.ceil(c.boxLength / 0.07)));
       const gridZ = nextPowerOfTwo(Math.max(16, Math.ceil(lz / 0.07)));
@@ -133,7 +118,7 @@ export class CpuEngine implements SimulationEngine {
         molecules: c.particleCount,
         box: [c.boxLength, c.boxLength, lz],
         temperatureK: c.temperature,
-        targetDensityKgPerM3: 997,
+        targetDensityKgPerM3: L11_DENSITY,
         seed: c.seed,
         timestepPs: c.timestep,
         thermostatTauPs: c.thermostatTau,
@@ -146,150 +131,27 @@ export class CpuEngine implements SimulationEngine {
       this.state = experiment.state;
       this.species = experiment.species;
       this.bonds = experiment.renderBonds;
-      this.constraints = null;
-      this.stepCount = 0;
-      this.elapsed = 0;
       return;
     }
 
-    // L4 atomistic water / L5 rigid water / L7 rigid-water droplet (surface tension).
-    if (c.level === "L4" || c.level === "L5" || c.level === "L7") {
-      const rigid = c.level === "L5" || c.level === "L7";
-      const rng = new Rng(c.seed);
-      // L7: pack at liquid spacing in a centred clump ⇒ vacuum around ⇒ a droplet forms.
-      const spacing = c.level === "L7" ? 0.31 : undefined;
-      const sys = buildWaterSystem(c.particleCount, this.box, initT, rng, spacing);
-      this.state = sys.state;
-      this.species = sys.species;
-      this.force = new WaterForce(sys.topology, rigid);
-      this.bonds = { i: sys.topology.bondI, j: sys.topology.bondJ };
-      if (rigid) {
-        this.constraints = sys.constraints;
-        this.refPositions = new Float64Array(this.state.positions.length);
-        this.invMass = new Float64Array(this.state.count);
-        for (let a = 0; a < this.state.count; a++) {
-          this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
-        }
-      } else {
-        this.constraints = null;
-      }
-      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
-      this.last = this.force.compute(this.state, this.box, this.species);
-      this.stepCount = 0;
-      this.elapsed = 0;
-      return;
-    }
+    const built = buildSystem(c);
+    this.box = built.box;
+    this.state = built.state;
+    this.species = built.species;
+    this.bonds = built.renderBonds;
+    this.force = makeForceModel(built.forceSpec, built);
 
-    // L6 — atomistic oil/water mixture: rigid water + flexible alkane oil, hydrophobic
-    // demixing. particleCount = total molecules; fractionSecond = oil fraction.
-    if (c.level === "L6") {
-      // Tall column so gravity makes the water/oil layering obvious along y.
-      this.box = createBoxXYZ(c.boxLength, c.boxLength * 2.5, c.boxLength, c.boundary);
-      const nOil = Math.round(c.particleCount * c.fractionSecond);
-      const nWater = Math.max(0, c.particleCount - nOil);
-      const rng = new Rng(c.seed);
-      const sys = buildOilWaterSystem(nWater, nOil, this.box, initT, rng);
-      this.state = sys.state;
-      this.species = sys.species;
-      this.force = new MolecularForce(sys.bonds, sys.angles);
-      this.bonds = sys.renderBonds;
-      this.constraints = sys.constraints;
+    // Rigid systems need the constraint solver's working buffers.
+    if (built.constraints.i.length > 0) {
+      this.constraints = built.constraints;
       this.refPositions = new Float64Array(this.state.positions.length);
       this.invMass = new Float64Array(this.state.count);
       for (let a = 0; a < this.state.count; a++) {
         this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
       }
-      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
-      this.last = this.force.compute(this.state, this.box, this.species);
-      this.stepCount = 0;
-      this.elapsed = 0;
-      return;
     }
 
-    // L9 — alkane chains: flexible bonds + angles + RB dihedrals ⇒ trans/gauche conformations.
-    // particleCount = number of chains; each chain is 9 united-atom carbons.
-    if (c.level === "L9") {
-      const rng = new Rng(c.seed);
-      const sys = buildAlkaneSystem(c.particleCount, 9, this.box, initT, rng);
-      this.state = sys.state;
-      this.species = sys.species;
-      this.force = new MolecularForce(sys.bonds, sys.angles, 2.5, 0.9, sys.dihedrals);
-      this.bonds = sys.renderBonds;
-      this.constraints = null;
-      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
-      this.last = this.force.compute(this.state, this.box, this.species);
-      this.stepCount = 0;
-      this.elapsed = 0;
-      return;
-    }
-
-    // L10 — Morse dissociation: diatomic molecules whose anharmonic bonds break when heated.
-    // particleCount = number of diatomic molecules.
-    if (c.level === "L10") {
-      const rng = new Rng(c.seed);
-      const sys = buildMorseSystem(c.particleCount, this.box, initT, rng);
-      this.state = sys.state;
-      this.species = sys.species;
-      this.force = new MolecularForce(sys.bonds, sys.angles);
-      this.bonds = sys.renderBonds;
-      this.constraints = null;
-      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
-      this.last = this.force.compute(this.state, this.box, this.species);
-      this.stepCount = 0;
-      this.elapsed = 0;
-      return;
-    }
-
-    // L8 — dissolution: a NaCl crystal in SPC water; the water solvates the surface ions.
-    // particleCount encodes the crystal side (≈ ∛count); the box determines the water count.
-    if (c.level === "L8") {
-      const crystalSide = Math.max(2, Math.round(Math.cbrt(c.particleCount)));
-      const rng = new Rng(c.seed);
-      const sys = buildSaltWaterSystem(this.box, initT, rng, crystalSide);
-      this.state = sys.state;
-      this.species = sys.species;
-      this.force = new MolecularForce(sys.bonds, sys.angles);
-      this.bonds = sys.renderBonds;
-      this.constraints = sys.constraints;
-      this.refPositions = new Float64Array(this.state.positions.length);
-      this.invMass = new Float64Array(this.state.count);
-      for (let a = 0; a < this.state.count; a++) {
-        this.invMass[a] = 1 / this.species[this.state.typeIds[a]].mass;
-      }
-      this.thermostatRng = new Rng(c.seed ^ 0x2c1b3c6d);
-      this.last = this.force.compute(this.state, this.box, this.species);
-      this.stepCount = 0;
-      this.elapsed = 0;
-      return;
-    }
-
-    this.bonds = null;
-    this.species = c.secondSpeciesName
-      ? [resolveSpecies(c.speciesName), resolveSpecies(c.secondSpeciesName)]
-      : [resolveSpecies(c.speciesName)];
-    const fraction = c.secondSpeciesName ? c.fractionSecond : 0;
-    // Ionic binaries (L3) start on a rock-salt lattice so opposite charges neighbour;
-    // everything else uses a seeded random species mix.
-    const ionicCrystal = c.level === "L3" && c.secondSpeciesName !== null;
-    const typeIds = ionicCrystal
-      ? buildRockSaltTypeIds(c.particleCount)
-      : buildTypeIds(c.particleCount, fraction, c.seed);
-    this.state = createState(c.particleCount, typeIds);
-    this.force = makeForceModel(c.level, c.crossScale);
-    this.initialise();
-  }
-
-  private initialise(): void {
-    const rng = new Rng(this.config.seed);
-    const initT = this.config.initialTemperature ?? this.config.temperature;
-    // `initialClump` packs a centred liquid-density droplet (≈ argon spacing) ⇒ heating evaporates it.
-    const spacing = this.config.initialClump ? 0.37 : undefined;
-    placeOnLattice(this.state, this.box, { jitter: 0.05, rng, spacing });
-    setMaxwellBoltzmannVelocities(this.state, this.species, initT, rng);
-    this.thermostatRng = new Rng(this.config.seed ^ 0x2c1b3c6d);
     this.last = this.force.compute(this.state, this.box, this.species);
-    this.stepCount = 0;
-    this.elapsed = 0;
   }
 
   step(steps: number): void {
@@ -437,21 +299,13 @@ export class CpuEngine implements SimulationEngine {
   /** Change the accuracy level in place (swap force model, recompute forces). */
   setLevel(level: AccuracyLevel): void {
     this.config = { ...this.config, level };
-    // Molecular levels (L4–L11) change topology/atom count ⇒ full rebuild, not a swap.
-    if (
-      level === "L4" ||
-      level === "L5" ||
-      level === "L6" ||
-      level === "L7" ||
-      level === "L8" ||
-      level === "L9" ||
-      level === "L10" ||
-      level === "L11"
-    ) {
+    // Molecular levels change topology/atom count ⇒ full rebuild, not a swap. Monatomic levels
+    // share one state, so only the force model changes — sourced from the same spec mapping.
+    if (!isMonatomicLevel(level)) {
       this.configure();
       return;
     }
-    this.force = makeForceModel(level, this.config.crossScale);
+    this.force = makeForceModel(monatomicForceSpec(level, this.config.crossScale), null);
     this.last = this.force.compute(this.state, this.box, this.species);
   }
 

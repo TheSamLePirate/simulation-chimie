@@ -41,7 +41,7 @@ import {
   COULOMB_CONSTANT,
   temperatureFromKinetic,
 } from "../../core/units";
-import { buildSystem } from "../buildSystem";
+import { buildSystem, toGpuTopology } from "../buildSystem";
 import type { AccuracyLevel, Observables, SimConfig } from "../types";
 import { GpuPlanarDispersionTail } from "./GpuPlanarDispersionTail";
 import { GpuTip4pPme } from "./GpuTip4pPme";
@@ -294,10 +294,11 @@ export class GpuEngine {
     this.config = config;
     this.species = resolveSpecies(config.speciesName);
 
-    // Build the full system (state + species + flat topology) the same way the CPU engine
-    // does — this is what lets molecular levels (L4–L8: water, oil, ions) run on the GPU.
+    // Build the full system from the SAME canonical builder the CPU engine uses, then narrow
+    // its Float64 topology to the Float32 arrays this device uploads.
     const system = buildSystem(config);
-    const { state, box, species, bonds, angles, constraints } = system;
+    const { state, box, species } = system;
+    const { bonds, angles, constraints } = toGpuTopology(system);
     const n = state.count; // ATOM count (molecular systems have ≥3× the molecule count)
     this.atomCount = n;
     this.molecular = system.molecular;
