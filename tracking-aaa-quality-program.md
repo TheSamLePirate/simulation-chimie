@@ -2,6 +2,18 @@
 
 Authoritative implementation log for the approved AAA plan (`P64`–`P92`). This file records progress, verification evidence, issues, and deviations at every phase. A phase is marked complete only when its full Definition of Done is satisfied and committed.
 
+## Source plan
+
+The approved plan this log executes lives **outside the repository**, at:
+
+```
+/Users/olivierveinand/.claude/plans/agile-finding-sunbeam.md
+```
+
+It holds the full P64–P92 specification: context, per-phase goal/work/critical files, exit gates, dependency order, safe parallelisation, the verification strategy, the final AAA exit criteria, and effort/risk ranges. This file is the running record of executing it; that file is the contract being executed.
+
+> Being outside the repo, the plan is not versioned with the code and will not survive a fresh clone. If the program is handed over or needs to outlive this machine, copy it to `docs/PLAN-AAA.md` and commit it — the per-phase notes below reference its phase numbers throughout.
+
 ## Program rules
 
 - Implement phases in approved dependency order.
