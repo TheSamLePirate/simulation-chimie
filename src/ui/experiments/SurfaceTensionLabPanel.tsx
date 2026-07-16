@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { iapwsSurfaceTension } from "../../core/observables/referenceSurfaceTension";
+import {
+  SCIENTIFIC_STATUS_BY_LEVEL,
+  SCIENTIFIC_STATUS_LABELS,
+} from "../../engine/scientificStatus";
 import { getActiveDriver } from "../../render/activeDriver";
 import { useAppStore } from "../../state/store";
 import { TimeSeriesChart } from "../graphs/TimeSeriesChart";
@@ -43,8 +47,11 @@ export function SurfaceTensionLabPanel() {
   const gamma = analysis?.gammaMilliNewtonPerMeter;
   const error = analysis?.standardErrorMilliNewtonPerMeter;
   const preview = config.particleCount < 1024;
+  const gpuPreview = config.engineKind === "gpu";
+  const scientificStatus = SCIENTIFIC_STATUS_BY_LEVEL.L11;
 
   const collect = () => {
+    if (gpuPreview) return;
     setCollecting(true);
     window.setTimeout(() => {
       const next = getActiveDriver()?.collectSurfaceTensionSample(5e-4) ?? null;
@@ -56,20 +63,35 @@ export function SurfaceTensionLabPanel() {
   const loadSize = (molecules: 256 | 1024) => {
     setPlaying(false);
     setSubsteps(1);
-    patchConfig({ particleCount: molecules, boxLength: molecules === 1024 ? 3.2 : 1.8 });
+    patchConfig({
+      particleCount: molecules,
+      boxLength: molecules === 1024 ? 3.2 : 1.8,
+    });
+  };
+
+  const setTemperature = (temperature: number) => {
+    setPlaying(false);
+    patchConfig({ temperature });
+    // GPU target temperature is constructor-bound: rebuild instead of applying a no-op.
+    if (gpuPreview) requestReset();
   };
 
   return (
     <section className="lab" data-testid="surface-tension-lab">
       <header className="lab-hero">
         <div>
-          <p className="lab-hero__eyebrow">L11 · EXPÉRIENCE QUANTITATIVE</p>
+          <p className="lab-hero__eyebrow">L11 · PROTOCOLE QUANTITATIF EN VALIDATION</p>
           <h2 className="lab-hero__title">Interface eau ↔ vapeur</h2>
           <p className="lab-hero__copy">TIP4P/2005 · smooth PME · deux interfaces planes</p>
         </div>
-        <span className={`lab-badge ${preview ? "lab-badge--preview" : "lab-badge--reference"}`}>
-          {preview ? "APERÇU" : "ORACLE 1 024"}
-        </span>
+        <div className="lab-hero__badges">
+          <span className={`lab-badge ${preview ? "lab-badge--preview" : "lab-badge--reference"}`}>
+            {preview ? "TAILLE APERÇU" : "TAILLE 1 024"}
+          </span>
+          <span className="lab-badge lab-badge--preview" data-testid="lab-scientific-status">
+            {gpuPreview ? "GPU · APERÇU NON CERTIFIÉ" : SCIENTIFIC_STATUS_LABELS[scientificStatus]}
+          </span>
+        </div>
       </header>
 
       <div className="lab-toolbar">
@@ -94,7 +116,7 @@ export function SurfaceTensionLabPanel() {
             data-active={config.engineKind === engineKind || undefined}
             onClick={() => setEngineKind(engineKind)}
           >
-            {engineKind === "cpu" ? "CPU · oracle" : "GPU · production"}
+            {engineKind === "cpu" ? "CPU · oracle" : "GPU · aperçu trajectoire"}
           </button>
         ))}
       </fieldset>
@@ -107,7 +129,7 @@ export function SurfaceTensionLabPanel() {
             key={temperature}
             className="lab-preset"
             data-active={config.temperature === temperature || undefined}
-            onClick={() => patchConfig({ temperature })}
+            onClick={() => setTemperature(temperature)}
           >
             {temperature} K
           </button>
@@ -116,7 +138,13 @@ export function SurfaceTensionLabPanel() {
 
       <div className="lab-phase">
         <div className="lab-phase__head">
-          <span>{production ? "Production" : "Équilibration"}</span>
+          <span>
+            {production
+              ? gpuPreview
+                ? "Dynamique prolongée"
+                : "Collecte CPU exploratoire"
+              : "Équilibration"}
+          </span>
           <span>{time.toFixed(2)} / 200 ps</span>
         </div>
         <div
@@ -130,9 +158,11 @@ export function SurfaceTensionLabPanel() {
           <span style={{ width: `${equilibrationProgress * 100}%` }} />
         </div>
         <p className="lab-phase__note">
-          {production
-            ? "Fenêtre de collecte ouverte · objectif 2–5 ns"
-            : "Les mesures restent exploratoires avant 200 ps."}
+          {gpuPreview
+            ? "Aperçu trajectoire uniquement : ρ(z), γ et incertitudes ne sont pas encore collectés sur GPU."
+            : production
+              ? "Collecte exploratoire CPU ouverte · une publication exige la campagne certifiée."
+              : "Les mesures restent exploratoires avant 200 ps."}
         </p>
       </div>
 
@@ -145,20 +175,30 @@ export function SurfaceTensionLabPanel() {
         </div>
         <div>
           <dt>γ test-area</dt>
-          <dd>{gamma == null ? "—" : `${gamma.toFixed(2)} ± ${(error ?? 0).toFixed(2)}`}</dd>
-          <small>mN·m⁻¹</small>
+          <dd>
+            {gpuPreview
+              ? "Indisponible"
+              : gamma == null
+                ? "—"
+                : `${gamma.toFixed(2)} ± ${(error ?? 0).toFixed(2)}`}
+          </dd>
+          <small>{gpuPreview ? "estimateur GPU non implémenté" : "mN·m⁻¹"}</small>
         </div>
         <div>
           <dt>γ mécanique</dt>
           <dd>
-            {analysis?.mechanicalGammaMilliNewtonPerMeter == null
-              ? "—"
-              : `${analysis.mechanicalGammaMilliNewtonPerMeter.toFixed(2)} ± ${(analysis.mechanicalStandardErrorMilliNewtonPerMeter ?? 0).toFixed(2)}`}
+            {gpuPreview
+              ? "Indisponible"
+              : analysis?.mechanicalGammaMilliNewtonPerMeter == null
+                ? "—"
+                : `${analysis.mechanicalGammaMilliNewtonPerMeter.toFixed(2)} ± ${(analysis.mechanicalStandardErrorMilliNewtonPerMeter ?? 0).toFixed(2)}`}
           </dd>
           <small>
-            {analysis?.routeDifferenceMilliNewtonPerMeter == null
-              ? "dérivée de strain"
-              : `écart ${analysis.routeDifferenceMilliNewtonPerMeter.toFixed(2)}`}
+            {gpuPreview
+              ? "tenseur GPU non collecté"
+              : analysis?.routeDifferenceMilliNewtonPerMeter == null
+                ? "dérivée de strain"
+                : `écart ${analysis.routeDifferenceMilliNewtonPerMeter.toFixed(2)}`}
           </small>
         </div>
         <div>
@@ -184,7 +224,7 @@ export function SurfaceTensionLabPanel() {
       <div className="lab-chart-block">
         <div className="lab-section-head">
           <h3>Profil de densité ρ(z)</h3>
-          <span>liquide · interfaces · vapeur</span>
+          <span>{gpuPreview ? "indisponible en aperçu GPU" : "liquide · interfaces · vapeur"}</span>
         </div>
         <DensityProfileChart
           profile={analysis?.densityProfile ?? null}
@@ -210,10 +250,18 @@ export function SurfaceTensionLabPanel() {
           <strong data-testid="lab-sample-count">
             {analysis?.sampleCount ?? 0} configurations
           </strong>
-          <span>εA = 5×10⁻⁴ · moyenne exponentielle</span>
+          <span>
+            {gpuPreview
+              ? "lecture GPU quantitative prévue en P81"
+              : "εA = 5×10⁻⁴ · moyenne exponentielle"}
+          </span>
         </div>
-        <button type="button" className="btn" onClick={collect} disabled={collecting}>
-          {collecting ? "Calcul ΔU±…" : "Échantillon exploratoire"}
+        <button type="button" className="btn" onClick={collect} disabled={collecting || gpuPreview}>
+          {gpuPreview
+            ? "Indisponible en aperçu GPU"
+            : collecting
+              ? "Calcul ΔU±…"
+              : "Échantillon exploratoire"}
         </button>
       </div>
 

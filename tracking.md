@@ -1234,6 +1234,37 @@ contrôles de convergence documentés.
 
 ---
 
+## P64 — Confinement scientifique et correction visible immédiate ✅
+
+**Objectif (DoD) :** premier jalon du programme AAA (voir `tracking-aaa-quality-program.md`) : cesser
+de présenter comme certifiés des chemins connus comme invalides ou incomplets, et corriger le défaut
+de cardinalité atomique du rendu moléculaire GPU.
+
+**Livré :** nouveau `engine/scientificStatus.ts` (autorité unique du confinement P64 : classification
+des niveaux, combinaisons non certifiées, repli sûr, motifs d'indisponibilité, vocabulaire
+`demo`/`kernel-validated`/`cross-engine-validated`/`accepted` — aucun niveau n'est `accepted`).
+`GpuParticleSystem` instancie `engine.atomCount` au lieu de `config.particleCount` : les scènes
+moléculaires GPU n'affichaient qu'un tiers de leurs atomes. Le NPT moléculaire et Langevin sous
+contraintes sont refusés par le schéma Zod à l'import et désactivés dans l'UI. La température GPU
+étant liée au constructeur, le panneau et le labo L11 déclenchent une reconstruction au lieu d'un
+setter silencieux. Pression contrainte/L11 et énergies moléculaires GPU s'affichent `Indisponible`
+avec motif. « GPU · production » devient « GPU · aperçu trajectoire » (badge non certifié,
+échantillonnage désactivé). README/CLAUDE/AGENTS/descriptions de niveaux/exporter corrigés.
+
+**Vérifications :** lint + typecheck verts. **176 tests** (168 + 8 nouveaux : 5 statut scientifique,
+2 refus de schéma, 1 contrat `atomCount`). Build vert, **8 e2e** verts (12 GPU quantitatifs toujours
+ignorés — P88). En navigateur réel : atomes rendus GPU/CPU **L4 375/375**, **L5 450/450**,
+**L7 510/510** (= molécules × 3 ; le GPU affichait 125/150/170 avant). Badge L11 GPU
+`GPU · APERÇU NON CERTIFIÉ`, bouton d'échantillonnage désactivé, Langevin/NPT désactivés en L5,
+pression `Indisponible`, **zéro erreur de page**.
+
+**Déviations au plan :** aucune. Le crochet `window.__mdScene` utilisé pour mesurer les instances a
+été retiré (bundle vérifié) ; un test unitaire fixe désormais `atomCount = 3 × particleCount`.
+Restent portés par les phases dédiées : métrique « Particules » (P73), température GPU vive
+(P68/P76), certification GPU matérielle (P88).
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).

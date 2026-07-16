@@ -6,8 +6,8 @@ import { downloadJSON, downloadText, rdfToCsv } from "./download";
 
 /**
  * Save / load and export panel — the practical "edit mode": a scene is fully described
- * by its (serialisable, Zod-validated) config, so exporting/importing it round-trips a
- * scene. Also exports a full state snapshot and the g(r) data (CPU mode).
+ * by its serialisable, Zod-validated config. Also exports a CPU state snapshot and g(r).
+ * Exact stochastic snapshot continuation and snapshot import are delivered by AAA P70.
  */
 export function Exporter() {
   const config = useAppStore((s) => s.config);

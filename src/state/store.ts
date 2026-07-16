@@ -3,6 +3,7 @@ import { createStore } from "zustand/vanilla";
 import type { SurfaceTensionAnalysis } from "../core/experiments/surfaceTension";
 import type { RadialDistribution } from "../core/observables/rdf";
 import type { SpeedDistribution } from "../core/observables/speedDistribution";
+import { containUnsafeScientificConfig } from "../engine/scientificStatus";
 import type { AccuracyLevel, EngineKind, Observables, SimConfig } from "../engine/types";
 
 /** Particle colouring mode (view-only, not part of the physics config). */
@@ -82,8 +83,11 @@ export const appStore = createStore<AppState>((set, get) => ({
   stepNonce: 0,
   resetNonce: 0,
 
-  patchConfig: (patch) => set({ config: { ...get().config, ...patch } }),
-  setLevel: (level) => set({ config: { ...get().config, level } }),
+  patchConfig: (patch) =>
+    set({
+      config: containUnsafeScientificConfig({ ...get().config, ...patch }),
+    }),
+  setLevel: (level) => set({ config: containUnsafeScientificConfig({ ...get().config, level }) }),
   setEngineKind: (engineKind) => set({ config: { ...get().config, engineKind } }),
   togglePlay: () => set({ playing: !get().playing }),
   setPlaying: (playing) => set({ playing }),

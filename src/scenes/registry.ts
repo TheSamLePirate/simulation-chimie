@@ -143,7 +143,7 @@ export const SCENES: readonly Scene[] = [
     id: "surface-tension-lab",
     label: "Laboratoire γ(T) · TIP4P/2005",
     description:
-      "Aperçu réduit d'un slab eau–vapeur avec TIP4P/2005, smooth PME, correction de slab et protocole test-area (L11, CPU)",
+      "Slab eau–vapeur TIP4P/2005 : oracle CPU exploratoire ou aperçu de trajectoire GPU ; campagne γ(T) non encore acceptée",
     config: make({
       level: "L11",
       speciesName: "WATER_O",

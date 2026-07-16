@@ -81,8 +81,9 @@ Adding a level = add to `ACCURACY_LEVELS`, the Zod enum, `makeForceModel`/`confi
 - **Forces** use minimum-image PBC; molecular forces use per-atom `moleculeId` for intramolecular
   exclusions. LJ uses **shifted-force** truncation at 2.5σ (continuous force at the cutoff);
   electrostatics use **Wolf DSF** (O(N), no FFT) with an `erfc` approximation.
-- **Determinism**: seeded RNG (`Rng`), reproducible per-thread summation; snapshots round-trip
-  through Zod.
+- **Determinism**: seeded RNG (`Rng`), reproducible per-thread summation. Zod snapshots restore
+  deterministic NVE trajectories exactly; stochastic CSVR/Langevin/L11 continuation still needs
+  checkpoint v2 with current RNG and analysis state (AAA P70).
 - New molecular systems are built by dedicated builders (`water.ts`, `mixture.ts`, `dissolution.ts`)
   that return state + species + topology (bonds/angles/constraints) + render bonds.
 

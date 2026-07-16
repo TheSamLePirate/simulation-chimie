@@ -59,4 +59,16 @@ describe("config schema validation", () => {
   it("rejects missing fields", () => {
     expect(() => parseConfig({ seed: 1 })).toThrow();
   });
+
+  it("rejects uncertified molecular NPT imports", () => {
+    expect(() => parseConfig({ ...CONFIG, level: "L5", barostat: "berendsen" })).toThrow(
+      /NPT moléculaire/,
+    );
+  });
+
+  it("rejects uncertified constrained Langevin imports", () => {
+    expect(() => parseConfig({ ...CONFIG, level: "L7", thermostat: "langevin" })).toThrow(
+      /Langevin sous contraintes/,
+    );
+  });
 });

@@ -131,7 +131,12 @@ test("L11 surface-tension laboratory loads a stable quantitative preview", async
   await expect(page.getByTestId("engine-status")).toBeVisible();
   await page.getByRole("button", { name: /Laboratoire γ\(T\)/ }).click();
   await expect(page.getByTestId("surface-tension-lab")).toBeVisible();
-  await expect(page.getByRole("button", { name: "GPU · production", exact: true })).toBeEnabled();
+  const gpuPreview = page.getByRole("button", {
+    name: "GPU · aperçu trajectoire",
+    exact: true,
+  });
+  await expect(gpuPreview).toBeEnabled();
+  await expect(page.getByTestId("lab-scientific-status")).toContainText(/protocole incomplet/i);
   await expect(page.getByRole("img", { name: /Profil de densité/ })).toBeVisible();
   await expect
     .poll(
@@ -145,5 +150,8 @@ test("L11 surface-tension laboratory loads a stable quantitative preview", async
   );
   expect(temperature).toBeLessThan(450);
   await expect(page.getByTestId("lab-sample-count")).toHaveText("0 configurations");
+  await gpuPreview.click();
+  await expect(page.getByTestId("lab-scientific-status")).toHaveText("GPU · APERÇU NON CERTIFIÉ");
+  await expect(page.getByRole("button", { name: "Indisponible en aperçu GPU" })).toBeDisabled();
   expect(pageErrors, pageErrors.join("\n")).toEqual([]);
 });

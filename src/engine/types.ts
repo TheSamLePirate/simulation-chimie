@@ -33,7 +33,7 @@ export const ACCURACY_LEVELS = {
   L4: {
     id: "L4",
     label: "L4 · Eau atomistique",
-    description: "Eau SPC/Fw : molécules O+2H, liaisons H, charges (CPU)",
+    description: "Eau SPC/Fw flexible : noyaux validés, thermodynamique complète en certification",
     forces: [
       "Eau SPC/Fw (flexible)",
       "Liaisons O–H harmoniques",
@@ -45,13 +45,14 @@ export const ACCURACY_LEVELS = {
   L5: {
     id: "L5",
     label: "L5 · Eau rigide",
-    description: "Eau rigide (contraintes SHAKE/RATTLE), grand pas de temps (CPU)",
+    description:
+      "Eau rigidifiée SPC/Fw : démonstration qualitative, thermodynamique contrainte en correction",
     forces: ["Eau SPC rigide", "Contraintes SHAKE/RATTLE", "LJ O–O", "Coulomb (Wolf DSF)"],
   },
   L6: {
     id: "L6",
     label: "L6 · Mélange moléculaire",
-    description: "Eau atomistique + huile (alcane) : démixtion hydrophobe réelle (CPU)",
+    description: "Eau + propane simplifié : démonstration qualitative de séparation hydrophobe",
     forces: [
       "Eau rigide (SHAKE/RATTLE)",
       "Alcane : liaisons + angles harmoniques",
@@ -62,7 +63,7 @@ export const ACCURACY_LEVELS = {
   L7: {
     id: "L7",
     label: "L7 · Tension de surface",
-    description: "Gouttelette d'eau dans le vide : la cohésion forme une sphère (CPU)",
+    description: "Gouttelette d'eau : démonstration qualitative de cohésion et de morphologie",
     forces: [
       "Eau SPC rigide (goutte initiale)",
       "Contraintes SHAKE/RATTLE",
@@ -73,14 +74,13 @@ export const ACCURACY_LEVELS = {
   L8: {
     id: "L8",
     label: "L8 · Dissolution",
-    description: "Cristal de sel (NaCl) dans l'eau : les ions se solvatent et se dissolvent (CPU)",
+    description: "NaCl dans une coque d'eau : démonstration qualitative de solvatation",
     forces: ["Ions Na⁺/Cl⁻ + eau rigide (SHAKE/RATTLE)", "Lennard-Jones", "Coulomb (Wolf DSF)"],
   },
   L9: {
     id: "L9",
     label: "L9 · Alcane (dièdres)",
-    description:
-      "Chaînes d'alcane : torsions dièdres ⇒ conformations trans/gauche, repliement (CPU)",
+    description: "Chaînes d'alcane : démonstration RB ; exclusions/1–4 en cours de certification",
     forces: [
       "Liaisons + angles harmoniques",
       "Dièdres Ryckaert-Bellemans",
@@ -91,7 +91,7 @@ export const ACCURACY_LEVELS = {
   L10: {
     id: "L10",
     label: "L10 · Dissociation",
-    description: "Molécules à liaison de Morse : chauffées, les liaisons se rompent (CPU)",
+    description: "Coordonnée de Morse dissociable : démonstration, sans topologie réactive",
     forces: [
       "Liaisons de Morse (dissociables)",
       "Angles harmoniques",
@@ -102,7 +102,8 @@ export const ACCURACY_LEVELS = {
   L11: {
     id: "L11",
     label: "L11 · Tension de surface quantitative",
-    description: "Slab eau–vapeur TIP4P/2005 + smooth PME + correction de slab",
+    description:
+      "Noyaux TIP4P/2005/PME validés ; protocole γ(T) et campagne complète non encore acceptés",
     forces: [
       "TIP4P/2005 rigide (site virtuel M)",
       "Lennard-Jones O–O",

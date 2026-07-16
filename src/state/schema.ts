@@ -1,29 +1,40 @@
 import { z } from "zod";
+import { scientificSafetyIssues } from "../engine/scientificStatus";
 import type { SimConfig } from "../engine/types";
 
 /** Zod schema mirroring {@link SimConfig}; used to validate imported scenes/snapshots. */
-export const simConfigSchema = z.object({
-  seed: z.number().int(),
-  particleCount: z.number().int().min(1).max(200000),
-  boxLength: z.number().positive(),
-  boundary: z.enum(["periodic", "reflective"]),
-  temperature: z.number().min(0),
-  initialTemperature: z.number().min(0).optional(),
-  initialClump: z.boolean().optional(),
-  timestep: z.number().positive(),
-  level: z.enum(["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11"]),
-  speciesName: z.string(),
-  secondSpeciesName: z.string().nullable(),
-  fractionSecond: z.number().min(0).max(1),
-  crossScale: z.number().min(0).max(2),
-  thermostat: z.enum(["none", "berendsen", "csvr", "langevin"]),
-  thermostatTau: z.number().positive(),
-  barostat: z.enum(["none", "berendsen"]),
-  pressureTarget: z.number(),
-  gravity: z.number(),
-  electricField: z.number().optional(),
-  engineKind: z.enum(["cpu", "gpu"]),
-});
+export const simConfigSchema = z
+  .object({
+    seed: z.number().int(),
+    particleCount: z.number().int().min(1).max(200000),
+    boxLength: z.number().positive(),
+    boundary: z.enum(["periodic", "reflective"]),
+    temperature: z.number().min(0),
+    initialTemperature: z.number().min(0).optional(),
+    initialClump: z.boolean().optional(),
+    timestep: z.number().positive(),
+    level: z.enum(["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11"]),
+    speciesName: z.string(),
+    secondSpeciesName: z.string().nullable(),
+    fractionSecond: z.number().min(0).max(1),
+    crossScale: z.number().min(0).max(2),
+    thermostat: z.enum(["none", "berendsen", "csvr", "langevin"]),
+    thermostatTau: z.number().positive(),
+    barostat: z.enum(["none", "berendsen"]),
+    pressureTarget: z.number(),
+    gravity: z.number(),
+    electricField: z.number().optional(),
+    engineKind: z.enum(["cpu", "gpu"]),
+  })
+  .superRefine((value, context) => {
+    for (const issue of scientificSafetyIssues(value as SimConfig)) {
+      context.addIssue({
+        code: "custom",
+        message: issue.message,
+        path: [issue.code === "molecular-npt-uncertified" ? "barostat" : "thermostat"],
+      });
+    }
+  });
 
 /** Parse + validate an unknown value into a SimConfig (throws on invalid). */
 export function parseConfig(value: unknown): SimConfig {

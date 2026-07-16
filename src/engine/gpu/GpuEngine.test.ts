@@ -34,4 +34,31 @@ describe("GPU engine buffer and L11 contracts", () => {
     expect(engine.boxLengths.toArray()).toEqual([1.8, 1.8, 8]);
     expect((await engine.readPositions()).length).toBe(9 * config.particleCount);
   });
+
+  it("exposes the atom count molecular rendering must instance (not the molecule count)", () => {
+    const config: SimConfig = {
+      seed: 7,
+      particleCount: 125,
+      boxLength: 1.6,
+      boundary: "periodic",
+      temperature: 300,
+      timestep: 0.0005,
+      level: "L4",
+      speciesName: "WATER_O",
+      secondSpeciesName: null,
+      fractionSecond: 0,
+      crossScale: 1,
+      thermostat: "csvr",
+      thermostatTau: 0.1,
+      barostat: "none",
+      pressureTarget: 1,
+      gravity: 0,
+      engineKind: "gpu",
+    };
+    // Water expands each molecule into O+2H: rendering particleCount would drop two thirds
+    // of the system (the P64 defect). Headed check: GPU instanced 375 = CPU 375.
+    const engine = new GpuEngine(config);
+    expect(engine.atomCount).toBe(3 * config.particleCount);
+    expect(engine.atomCount).not.toBe(config.particleCount);
+  });
 });

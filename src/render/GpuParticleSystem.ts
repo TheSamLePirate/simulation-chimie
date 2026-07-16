@@ -12,7 +12,8 @@ export class GpuParticleSystem {
   readonly mesh: THREE.InstancedMesh;
 
   constructor(engine: GpuEngine) {
-    const count = engine.config.particleCount;
+    // Molecular configs count molecules/entities; GPU storage and rendering count actual atoms.
+    const count = engine.atomCount;
     const geometry = new THREE.IcosahedronGeometry(1, 2); // unit sphere, scaled per instance
     const material = new THREE.MeshStandardNodeMaterial({
       roughness: 0.32,

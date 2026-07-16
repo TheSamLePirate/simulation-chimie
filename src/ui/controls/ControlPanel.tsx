@@ -1,3 +1,4 @@
+import { hasRigidConstraints, isMolecularLevel } from "../../engine/scientificStatus";
 import type { AccuracyLevel } from "../../engine/types";
 import { ACCURACY_LEVELS } from "../../engine/types";
 import { gpuSupportsConfig } from "../../render/drivers";
@@ -28,6 +29,13 @@ export function ControlPanel() {
   const setSubsteps = useAppStore((s) => s.setSubsteps);
 
   const gpuOk = gpuSupportsConfig(config);
+  const molecular = isMolecularLevel(config.level);
+  const constrained = hasRigidConstraints(config.level);
+  const setTemperature = (temperature: number) => {
+    patchConfig({ temperature });
+    // P64 containment: GPU temperature is constructor-bound, so rebuild instead of lying.
+    if (config.engineKind === "gpu") requestReset();
+  };
 
   return (
     <section className="panel">
@@ -94,7 +102,10 @@ export function ControlPanel() {
             {
               value: "langevin",
               label: "Langevin",
-              title: "NVT stochastique — friction + bruit ⇒ mouvement brownien",
+              title: constrained
+                ? "Désactivé temporairement : la projection RATTLE après le bruit n'est pas certifiée"
+                : "NVT stochastique — friction + bruit ⇒ mouvement brownien",
+              disabled: constrained,
             },
           ]}
           onChange={(thermostat) => patchConfig({ thermostat })}
@@ -111,7 +122,10 @@ export function ControlPanel() {
             {
               value: "berendsen",
               label: "NPT",
-              title: "Pression constante (Berendsen, CPU)",
+              title: molecular
+                ? "Désactivé temporairement : le NPT moléculaire n'est pas certifié"
+                : "Pression constante (Berendsen, CPU — équilibration)",
+              disabled: molecular,
             },
           ]}
           onChange={(barostat) => patchConfig({ barostat })}
@@ -189,13 +203,17 @@ export function ControlPanel() {
           onChange={(particleCount) => patchConfig({ particleCount })}
         />
         <Slider
-          label="Température cible"
+          label={
+            config.engineKind === "gpu"
+              ? "Température cible (réinitialise GPU)"
+              : "Température cible"
+          }
           value={config.temperature}
           min={5}
           max={600}
           step={1}
           format={(v) => `${v.toFixed(0)} K`}
-          onChange={(temperature) => patchConfig({ temperature })}
+          onChange={setTemperature}
         />
         <Slider
           label="Pression cible (NPT)"

@@ -1,3 +1,9 @@
+import {
+  energyUnavailableReason,
+  pressureUnavailableReason,
+  SCIENTIFIC_STATUS_BY_LEVEL,
+  SCIENTIFIC_STATUS_LABELS,
+} from "../../engine/scientificStatus";
 import { ACCURACY_LEVELS } from "../../engine/types";
 import { useAppStore } from "../../state/store";
 
@@ -5,6 +11,7 @@ interface Metric {
   id: string;
   label: string;
   value: string;
+  note?: string | undefined;
 }
 
 const THERMOSTAT_LABELS: Record<string, string> = {
@@ -17,15 +24,14 @@ export function ObservablesPanel() {
   const observables = useAppStore((s) => s.observables);
   const fps = useAppStore((s) => s.fps);
   const demixing = useAppStore((s) => s.demixing);
-  const particleCount = useAppStore((s) => s.config.particleCount);
-  const level = useAppStore((s) => s.config.level);
-  const thermostat = useAppStore((s) => s.config.thermostat);
-  const barostat = useAppStore((s) => s.config.barostat);
-  const gravity = useAppStore((s) => s.config.gravity);
-  const electricField = useAppStore((s) => s.config.electricField);
+  const config = useAppStore((s) => s.config);
+  const { particleCount, level, thermostat, barostat, gravity, electricField } = config;
 
   // Forces intrinsèques au niveau + champs/ensembles actifs dans la config courante.
   const levelInfo = ACCURACY_LEVELS[level];
+  const scientificStatus = SCIENTIFIC_STATUS_BY_LEVEL[level];
+  const pressureReason = pressureUnavailableReason(config);
+  const energyReason = energyUnavailableReason(config);
   const forces: string[] = [...levelInfo.forces];
   if (gravity > 0) forces.push("Gravité (−y)");
   if (electricField) forces.push("Champ électrique (+x)");
@@ -54,7 +60,12 @@ export function ObservablesPanel() {
     {
       id: "pressure",
       label: "Pression",
-      value: observables ? `${observables.pressure.toFixed(0)} bar` : "—",
+      value: pressureReason
+        ? "Indisponible"
+        : observables
+          ? `${observables.pressure.toFixed(0)} bar`
+          : "—",
+      note: pressureReason ?? undefined,
     },
     {
       id: "ke",
@@ -64,12 +75,22 @@ export function ObservablesPanel() {
     {
       id: "pe",
       label: "É. potentielle",
-      value: observables ? `${observables.potentialEnergy.toFixed(1)} kJ/mol` : "—",
+      value: energyReason
+        ? "Incomplète"
+        : observables
+          ? `${observables.potentialEnergy.toFixed(1)} kJ/mol`
+          : "—",
+      note: energyReason ?? undefined,
     },
     {
       id: "total",
       label: "É. totale",
-      value: observables ? `${observables.totalEnergy.toFixed(1)} kJ/mol` : "—",
+      value: energyReason
+        ? "Incomplète"
+        : observables
+          ? `${observables.totalEnergy.toFixed(1)} kJ/mol`
+          : "—",
+      note: energyReason ?? undefined,
     },
     {
       id: "demix",
@@ -85,14 +106,24 @@ export function ObservablesPanel() {
         {metrics.map((m) => (
           <div className="metric" key={m.id}>
             <dt className="metric__label">{m.label}</dt>
-            <dd className="metric__value" data-testid={`metric-${m.id}`}>
+            <dd className="metric__value" data-testid={`metric-${m.id}`} title={m.note}>
               {m.value}
             </dd>
+            {m.note && <span className="metric__note">{m.note}</span>}
           </div>
         ))}
       </dl>
       <div className="physics">
-        <h3 className="physics__title">Physique · {levelInfo.label}</h3>
+        <div className="physics__head">
+          <h3 className="physics__title">Physique · {levelInfo.label}</h3>
+          <span
+            className="science-status"
+            data-status={scientificStatus}
+            data-testid="scientific-status"
+          >
+            {SCIENTIFIC_STATUS_LABELS[scientificStatus]}
+          </span>
+        </div>
         <ul className="physics__forces" data-testid="physics-forces">
           {forces.map((f) => (
             <li className="physics__force" key={f}>

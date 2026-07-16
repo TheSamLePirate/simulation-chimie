@@ -28,7 +28,7 @@ Safari ≥ 26, Firefox récent).
 | **L3** | Ions + Coulomb Wolf DSF | cristaux ioniques, électrophorèse |
 | **L4–L8** | Eau moléculaire, contraintes, mélanges, interfaces, dissolution | liaisons H, gouttes, huile/eau, solvatation |
 | **L9–L10** | Dièdres RB, liaisons Morse | conformations et dissociation (CPU) |
-| **L11** | TIP4P/2005 + smooth PME + slab + Janeček + test-area | tension de surface quantitative γ(T) |
+| **L11** | TIP4P/2005 + smooth PME + slab + Janeček + test-area | protocole γ(T) en validation ; aucun résultat de campagne encore accepté |
 
 ### Ensembles (thermostats)
 - **NVE** (énergie constante), **Berendsen** et **CSVR/Bussi** (NVT canonique correct).
@@ -36,9 +36,10 @@ Safari ≥ 26, Firefox récent).
 
 ### Moteurs
 - **CPU** : oracle déterministe Float64, **cell-lists O(N)**, multi-espèces, thermostats — le mode validé par défaut.
-- **GPU** : WebGPU/TSL, Velocity-Verlet en compute shaders, **rendu GPU-résident** (positions lues
-  dans le vertex shader, zéro readback) ; L0–L8 et L11 validés contre l'oracle Float64 (L9/L10 et
-  NPT restent CPU).
+- **GPU** : WebGPU/TSL, Velocity-Verlet en compute shaders, **rendu GPU-résident**. L0–L8 et L11 ont
+  des validations de noyaux/étapes contre l'oracle Float64, mais la certification quantitative sur
+  matériel réel reste à automatiser ; L9/L10 et NPT restent CPU. L11 GPU est un aperçu de trajectoire,
+  pas encore un producteur certifié de γ ou ρ(z).
 
 ### Scènes prêtes à l'emploi
 Gaz parfait · Liquide Lennard-Jones · **Huile + Eau (démixtion)** · Cristallisation (NVT) · Chauffage / gaz.
@@ -48,8 +49,9 @@ Température, pression (viriel), énergies (cin./pot./tot.), **g(r)**, **paramè
 graphes temps réel sur canvas.
 
 ### Reproductibilité & export
-Configurations **Zod-validées**, **snapshots d'état** complets round-trippables, export **config JSON /
-snapshot JSON / g(r) CSV**, import de scène.
+Configurations **Zod-validées**, export **config JSON / snapshot CPU JSON / g(r) CSV** et import de
+configuration. Le snapshot restaure exactement les trajectoires déterministes NVE ; la reprise exacte
+CSVR/Langevin/L11 attend le checkpoint v2 avec état RNG et accumulateurs d'analyse.
 
 ### Raccourcis clavier
 `Espace` lecture/pause · `R` réinitialiser · `N` un pas · couleur des particules par **espèce** ou
@@ -66,7 +68,7 @@ snapshot JSON / g(r) CSV**, import de scène.
 | `bun run typecheck` | Vérification des types |
 | `bun run test` / `test:watch` | Tests unitaires + physiques (Vitest) |
 | `bun run e2e` | Tests end-to-end (Playwright + WebGPU) |
-| `bun run campaign:surface-tension` | Campagne L11 : 4 températures × 5 graines, JSON + CSV (`--quick` pour le smoke test) |
+| `bun run campaign:surface-tension` | Runner oracle CPU L11 (très coûteux aux paramètres complets) ; `--quick` = smoke test logiciel non physique |
 | `bun run check` | lint + typecheck + tests |
 
 ## Validation scientifique
@@ -74,7 +76,8 @@ snapshot JSON / g(r) CSV**, import de scène.
 Les **tests « golden »** vérifient la vraie physique : conservation d'énergie NVE (< 1 %),
 équipartition, **loi des gaz parfaits mesurée aux parois**, force LJ vs dérivée numérique,
 g(r) normalisé, **démixtion croissante** d'un mélange immiscible, thermostats qui atteignent la cible,
-cell-list **identique** à la référence O(N²), round-trip de snapshot, déterminisme bit-à-bit.
+cell-list **identique** à la référence O(N²), round-trip de snapshot NVE et déterminisme bit-à-bit
+depuis un état initial commun.
 
 > Le moteur **CPU est l'oracle de référence** ; le moteur GPU est validé par dispatch et, en navigateur
 > réel, par parité vs CPU (`window.__md`). Voir [`docs/PLAN.md`](docs/PLAN.md) et [`tracking.md`](tracking.md)
