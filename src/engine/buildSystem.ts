@@ -11,6 +11,7 @@ import { Rng } from "../core/rng";
 import { SPECIES_LIBRARY } from "../core/species";
 import { createState } from "../core/state";
 import { buildTip4p2005Slab } from "../core/tip4p2005";
+import { buildExclusions, type NonbondedExclusions } from "../core/topology";
 import type { Box, SimState, Species } from "../core/types";
 import { BOLTZMANN_KJ_PER_MOL_K } from "../core/units";
 import {
@@ -65,6 +66,11 @@ export interface BuiltSystem {
   readonly forceSpec: ForceSpec;
   /** Actual atoms simulated — for molecular levels this exceeds `config.particleCount`. */
   readonly atomCount: number;
+  /**
+   * Which nonbonded pairs the topology removes (1-2/1-3/1-4), derived from bonds + constraints.
+   * Both engines classify pairs from this one policy.
+   */
+  readonly exclusions: NonbondedExclusions;
 }
 
 // ── GPU packing ─────────────────────────────────────────────────────────────────
@@ -238,6 +244,18 @@ export function monatomicForceSpec(level: MonatomicLevel, crossScale: number): F
 }
 
 /**
+ * Attach the topology-derived nonbonded policy. Exclusions come from bonds AND constraints:
+ * rigid molecules carry no springs, so a bonds-only graph would leave their own atoms
+ * interacting through LJ/Coulomb.
+ */
+function withExclusions(built: Omit<BuiltSystem, "exclusions">): BuiltSystem {
+  return {
+    ...built,
+    exclusions: buildExclusions(built.atomCount, built.bonds, built.constraints),
+  };
+}
+
+/**
  * Build a complete simulation system from a config: state + species + Float64 topology +
  * constraints + the force description. Deterministic (seeded) and backend-neutral — this is the
  * single place the level→system mapping lives, for BOTH engines. The GPU narrows the result
@@ -269,7 +287,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
       const spacing = c.initialClump ? 0.37 : undefined;
       placeOnLattice(state, box, { jitter: 0.05, rng, spacing });
       setMaxwellBoltzmannVelocities(state, species, initT, rng);
-      return {
+      return withExclusions({
         state,
         box,
         species,
@@ -281,7 +299,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: false,
         forceSpec: monatomicForceSpec(level, c.crossScale),
         atomCount: state.count,
-      };
+      });
     }
 
     // ── Atomistic water: flexible (L4) or rigid (L5/L7 droplet) ─────────────────
@@ -295,7 +313,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
       const spacing = level === "L7" ? 0.31 : undefined;
       const sys = buildWaterSystem(c.particleCount, box, initT, rng, spacing);
       const { bonds, angles } = waterBondsAngles(sys.topology);
-      return {
+      return withExclusions({
         state: sys.state,
         box,
         species: sys.species,
@@ -311,7 +329,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: true,
         forceSpec: { kind: "water", topology: sys.topology, rigid },
         atomCount: sys.state.count,
-      };
+      });
     }
 
     // ── Oil/water mixture: rigid water + flexible alkane, layered by gravity ─────
@@ -321,7 +339,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
       const nOil = Math.round(c.particleCount * c.fractionSecond);
       const nWater = Math.max(0, c.particleCount - nOil);
       const sys = buildOilWaterSystem(nWater, nOil, box, initT, new Rng(c.seed));
-      return {
+      return withExclusions({
         state: sys.state,
         box,
         species: sys.species,
@@ -333,7 +351,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: true,
         forceSpec: MOLECULAR_FORCE,
         atomCount: sys.state.count,
-      };
+      });
     }
 
     // ── Dissolution: a NaCl crystal solvated by SPC water ───────────────────────
@@ -341,7 +359,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
       const box = createBox(c.boxLength, c.boundary);
       const crystalSide = Math.max(2, Math.round(Math.cbrt(c.particleCount)));
       const sys = buildSaltWaterSystem(box, initT, new Rng(c.seed), crystalSide);
-      return {
+      return withExclusions({
         state: sys.state,
         box,
         species: sys.species,
@@ -353,14 +371,14 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: true,
         forceSpec: MOLECULAR_FORCE,
         atomCount: sys.state.count,
-      };
+      });
     }
 
     // ── Alkane chains: bonds + angles + RB dihedrals ⇒ trans/gauche ─────────────
     case "L9": {
       const box = createBox(c.boxLength, c.boundary);
       const sys = buildAlkaneSystem(c.particleCount, ALKANE_CARBONS, box, initT, new Rng(c.seed));
-      return {
+      return withExclusions({
         state: sys.state,
         box,
         species: sys.species,
@@ -372,14 +390,14 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: true,
         forceSpec: MOLECULAR_FORCE,
         atomCount: sys.state.count,
-      };
+      });
     }
 
     // ── Morse dissociation: anharmonic bonds that break when heated ─────────────
     case "L10": {
       const box = createBox(c.boxLength, c.boundary);
       const sys = buildMorseSystem(c.particleCount, box, initT, new Rng(c.seed));
-      return {
+      return withExclusions({
         state: sys.state,
         box,
         species: sys.species,
@@ -391,7 +409,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: true,
         forceSpec: MOLECULAR_FORCE,
         atomCount: sys.state.count,
-      };
+      });
     }
 
     // ── Quantitative surface tension: TIP4P/2005 slab ───────────────────────────
@@ -411,7 +429,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
       for (let i = 0; i < sys.state.velocities.length; i++) {
         sys.state.velocities[i] *= velocityScale;
       }
-      return {
+      return withExclusions({
         state: sys.state,
         box,
         species: sys.species,
@@ -423,7 +441,7 @@ export function buildSystem(config: SimConfig): BuiltSystem {
         molecular: true,
         forceSpec: { kind: "surfaceTension" },
         atomCount: sys.state.count,
-      };
+      });
     }
   }
 }

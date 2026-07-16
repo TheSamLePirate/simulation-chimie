@@ -1,5 +1,6 @@
 import { erfc } from "../math/erf";
 import { forEachNeighborPair } from "../neighbors";
+import { isExcluded, type NonbondedExclusions } from "../topology";
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
 import { COULOMB_CONSTANT } from "../units";
 
@@ -46,9 +47,13 @@ export interface DihedralList {
 
 /**
  * General multi-molecule force field: non-bonded Lennard-Jones (Lorentz-Berthelot mixing)
- * + Coulomb (Wolf DSF) with intramolecular exclusions, plus per-bond harmonic bonds and
- * per-angle harmonic angles. Used for the atomistic oil/water mixture. Atoms that are held
- * rigid (e.g. SPC water under SHAKE) simply contribute no bonds/angles here.
+ * + Coulomb (Wolf DSF) with topology-derived exclusions, plus per-bond harmonic/Morse bonds,
+ * per-angle harmonic angles and RB torsions. Atoms held rigid (e.g. SPC water under SHAKE)
+ * contribute no bonds/angles here; their exclusions come from the constraint graph.
+ *
+ * Exclusions follow the bond graph, not molecule identity: a chain's 1-5 and further pairs
+ * interact normally (that intrachain excluded volume is what makes a real chain fold), while
+ * 1-2/1-3/1-4 are removed. See {@link buildExclusions}.
  *
  * All separations use the minimum image, so per-atom periodic wrapping never tears a
  * molecule apart.
@@ -57,6 +62,7 @@ export class MolecularForce implements ForceModel {
   readonly name = "Mélange moléculaire";
 
   private readonly dihedrals: DihedralList;
+  private readonly exclusions: NonbondedExclusions | null;
 
   constructor(
     private readonly bonds: BondList,
@@ -64,6 +70,7 @@ export class MolecularForce implements ForceModel {
     private readonly alpha = 2.5,
     private readonly coulombCutoff = 0.9,
     dihedrals?: DihedralList,
+    exclusions?: NonbondedExclusions,
   ) {
     this.dihedrals =
       dihedrals ??
@@ -74,6 +81,18 @@ export class MolecularForce implements ForceModel {
         l: new Int32Array(0),
         c: new Float64Array(0),
       } satisfies DihedralList);
+    this.exclusions = exclusions ?? null;
+  }
+
+  /**
+   * Should this intramolecular pair skip the nonbonded terms? Only consulted for same-molecule
+   * pairs, so the common inter-molecular case stays a single integer compare.
+   */
+  private excludedPair(i: number, j: number): boolean {
+    // Without an explicit policy, fall back to excluding the whole molecule. That is exactly the
+    // topology answer for every ≤4-atom molecule (water, propane, diatomics) this force is used
+    // with, and callers that build longer chains pass the real policy.
+    return this.exclusions ? isExcluded(this.exclusions, i, j) : true;
   }
 
   compute(state: SimState, box: Box, species: readonly Species[]): ForceResult {
@@ -102,9 +121,10 @@ export class MolecularForce implements ForceModel {
     for (const s of species) if (s.epsilon > 0) maxSigma = Math.max(maxSigma, s.sigma);
     const gridCutoff = Math.min(minImage, Math.max(rcC, LJ_CUTOFF_FACTOR * maxSigma));
 
-    // --- Non-bonded (LJ Lorentz-Berthelot + Coulomb DSF), intramolecular excluded (cell-list) ---
+    // --- Non-bonded (LJ Lorentz-Berthelot + Coulomb DSF), topology-excluded (cell-list) ---
     forEachNeighborPair(state, box, gridCutoff, (i, j, dx, dy, dz, r2) => {
-      if (moleculeId[j] === moleculeId[i]) return;
+      // Exclusions only ever live inside a molecule, so the cheap id compare gates the lookup.
+      if (moleculeId[j] === moleculeId[i] && this.excludedPair(i, j)) return;
       const si = species[typeIds[i]];
       const sj = species[typeIds[j]];
       let fOverR = 0;

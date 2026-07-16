@@ -34,6 +34,7 @@ import { erfc as erfcScalar } from "../../core/math/erf";
 import { pressure } from "../../core/observables";
 import { SPECIES_LIBRARY } from "../../core/species";
 import { TIP4P_2005 } from "../../core/tip4p2005";
+import { EXCLUDED_BOND_DEPTH } from "../../core/topology";
 import type { Species } from "../../core/types";
 import {
   BAR_PER_KJ_PER_MOL_NM3,
@@ -299,6 +300,16 @@ export class GpuEngine {
     const system = buildSystem(config);
     const { state, box, species } = system;
     const { bonds, angles, constraints } = toGpuTopology(system);
+    // The nonbonded kernel excludes pairs by comparing moleculeId — one integer test instead of
+    // an uploaded exclusion table. That shortcut equals the real topology policy only while no
+    // molecule holds two atoms more than EXCLUDED_BOND_DEPTH bonds apart (true for every
+    // ≤4-atom molecule: water, propane, diatomics). Assert it rather than assume it, so enabling
+    // a longer-chain level on the GPU fails loudly instead of silently deleting its 1-5+ pairs.
+    if (system.molecular && !system.exclusions.allIntramolecularExcluded) {
+      throw new Error(
+        `GPU nonbonded exclusions are molecule-wide, but ${config.level} has intramolecular pairs beyond ${EXCLUDED_BOND_DEPTH} bonds that must interact. Upload an exclusion table before enabling this level.`,
+      );
+    }
     const n = state.count; // ATOM count (molecular systems have ≥3× the molecule count)
     this.atomCount = n;
     this.molecular = system.molecular;

@@ -80,12 +80,12 @@ export const ACCURACY_LEVELS = {
   L9: {
     id: "L9",
     label: "L9 · Alcane (dièdres)",
-    description: "Chaînes d'alcane : démonstration RB ; exclusions/1–4 en cours de certification",
+    description: "Chaînes d'alcane TraPPE : dièdres RB + volume exclu intrachaîne (1-5 et au-delà)",
     forces: [
       "Liaisons + angles harmoniques",
       "Dièdres Ryckaert-Bellemans",
-      "Lennard-Jones",
-      "Coulomb (Wolf DSF)",
+      "Lennard-Jones intrachaîne (1-5+)",
+      "Exclusions 1-2/1-3/1-4 (TraPPE)",
     ],
   },
   L10: {

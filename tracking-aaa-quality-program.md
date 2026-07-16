@@ -29,7 +29,7 @@ Authoritative implementation log for the approved AAA plan (`P64`–`P92`). This
 | P64 | Scientific containment and immediate visible correctness | ✅ Done | 1 resolved | 0 |
 | P65 | Canonical strict versioned configuration | ✅ Done | 1 resolved | 0 |
 | P66 | Universal backend-neutral `BuiltSystem` | ✅ Done | 2 resolved | 0 |
-| P67 | Explicit topology exclusions and 1–4 interactions | ⬜ Pending | 0 | 0 |
+| P67 | Explicit topology exclusions and 1–4 interactions | ✅ Done | 1 resolved | 0 |
 | P68 | Exhaustive config transition planner | ⬜ Pending | 0 | 0 |
 | P69 | Transactional rebuilds and `runId` | ⬜ Pending | 0 | 0 |
 | P70 | CPU/L11 checkpoint v2 | ⬜ Pending | 0 | 0 |
@@ -199,3 +199,52 @@ None.
 
 - L11 still constructs `SurfaceTensionExperiment`, which builds its own slab internally; the shared builder defines the same L11 system and the lock-step test pins them together. P81 unifies the estimator.
 - `MolecularForce` still receives whole-molecule exclusions; explicit 1–2/1–3/1–4 pair policy is P67, which now has one place to land.
+
+---
+
+## P67 — Explicit topology exclusions and 1–4 interactions ✅
+
+**Objective:** stop using molecule identity as a nonbonded pair policy, and restore the intrachain physics that identity-based exclusion deleted.
+
+### The defect this closed
+
+`MolecularForce` skipped **every** same-molecule pair. Molecule identity is not a pair policy: in a 9-carbon chain, atoms 1–5 and further apart must interact, and that intrachain excluded volume is precisely what stops a chain passing through itself and sets its conformer populations. L9 was therefore not the TraPPE model it declares.
+
+**Reference convention (not invented).** The alkane parameters are explicitly TraPPE-UA and match the published values: C–C 0.154 nm, C–C–C 114°, kθ = 519.6 kJ·mol⁻¹·rad⁻² (≡ 62500 K/rad²), CH₃ σ=0.375/ε=98 K·k_B, CH₂ σ=0.395/ε=46 K·k_B, charges 0. TraPPE computes intramolecular LJ **only for beads separated by more than three bonds** (Martin & Siepmann 1998) — 1-2/1-3/1-4 are excluded outright, with **no** OPLS-style scaled 1-4, because the RB torsion is fitted with the 1-4 LJ already removed. Re-adding a scaled 1-4 would double-count, so none was added.
+
+### Delivered
+
+- **`src/core/topology.ts` (new)** — exclusions derived by breadth-first walk of the bond graph to `EXCLUDED_BOND_DEPTH = 3`. The graph is built from **bonds ∪ constraints**: rigid water carries no springs, so a bonds-only graph would have left a molecule's own O and H interacting through LJ/Coulomb.
+- **`MolecularForce` consults the policy**, gated behind the cheap `moleculeId` compare so the common inter-molecular case stays a single integer test and the O(N²) hot path is unaffected.
+- **`BuiltSystem.exclusions`** — one classification, produced by the canonical builder (P66) and shared by both engines.
+- **GPU shortcut is now asserted, not assumed** — the kernel excludes by `moleculeId`, which equals the topology answer only while no molecule holds two atoms more than 3 bonds apart. `GpuEngine` now throws if that ever stops holding, so enabling a longer-chain level on the GPU fails loudly instead of silently deleting its 1-5+ pairs.
+- **L10 dissociation defined explicitly** — a broken Morse pair stays bonded in the topology and therefore stays excluded, regardless of separation. That is the standard non-reactive MD convention; it is now stated and tested rather than an accident of `moleculeId`.
+
+### Verification evidence (measured)
+
+| Gate | Result |
+|---|---|
+| `bun run lint` / `typecheck` | green |
+| `bun run test` | **215/215 passed** (199 → +16) |
+| `bun run build` | green |
+| `bunx playwright test` | **8 passed, 12 skipped** |
+| Pair classes (nonane) | 1-2/1-3/1-4 excluded, 1-5…1-9 interact; **15 of 36** intrachain pairs restored |
+| L9 force change | explicit vs legacy policy on the same state: max force delta **> 0**, potential energy differs |
+| L4/L5/L6/L8/L10 | `allIntramolecularExcluded === true`, and L6/L8/L10 molecular forces **bit-identical** (energy, virial, every force component) before/after |
+| Rigid water via constraints | O–H and H–H excluded with zero spring bonds |
+| TIP4P/Ewald goldens | unchanged, green |
+| L9 headed | **467.7 K** vs 450 K target (~0.4σ for 72 atoms), PE finite, stable, **0 page errors** |
+| GPU molecular headed | L5 **288.8 K**, dissolution **364.5 K** — assertion does not fire, physics unchanged |
+
+### Issues
+
+1. **Resolved — my first L9 physics test was unsound and passed for the wrong reason.** It moved atom 1 twenty nm away to isolate the 0–4 pair, but atom 0 is *bonded* to atom 1, so a huge bond force dominated index 0 and the assertion passed while proving nothing about the 1-5 LJ. Replaced with a direct differential measurement: evaluate the same state with the explicit policy and with the legacy molecule-wide rule, and compare. That isolates exactly the 1-5+ contribution, and the same method proves the small-molecule levels are bit-identical.
+
+### Deviations
+
+None.
+
+### Carried forward (by design, not deviation)
+
+- GPU keeps the `moleculeId` shortcut (correct for every level it supports, now asserted). An uploaded exclusion table is only needed if a >4-atom-molecule level is ever GPU-enabled.
+- Independent OpenMM/GROMACS confirmation of the TraPPE pair classes and conformer populations is P83; P67 grounds the convention in the published model and pins the classes with fixtures.

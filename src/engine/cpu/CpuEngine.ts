@@ -53,6 +53,7 @@ function makeForceModel(spec: ForceSpec, built: BuiltSystem | null): ForceModel 
         spec.ljCutoffFactor,
         spec.coulombCutoff,
         built.dihedrals,
+        built.exclusions,
       );
     }
     case "surfaceTension":

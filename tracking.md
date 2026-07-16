@@ -1331,6 +1331,49 @@ physique fausse. Le sharding CI reste porté par P85.
 
 ---
 
+## P67 — Exclusions explicites issues de la topologie (TraPPE) ✅
+
+**Objectif (DoD) :** cesser d'utiliser l'identité moléculaire comme politique de paires non liées, et
+restaurer la physique intrachaîne que cette identité supprimait.
+
+**Défaut fermé :** `MolecularForce` ignorait **toutes** les paires d'une même molécule. Or l'identité
+n'est pas une politique : dans une chaîne à 9 carbones, les paires 1-5 et au-delà doivent interagir —
+c'est ce volume exclu intrachaîne qui empêche une chaîne de se traverser et fixe ses populations de
+conformères. L9 n'était donc pas le modèle TraPPE qu'il annonce.
+
+**Convention de référence (pas inventée) :** les paramètres alcane sont explicitement TraPPE-UA et
+correspondent aux valeurs publiées (C–C 0,154 nm ; C–C–C 114° ; kθ = 519,6 kJ·mol⁻¹·rad⁻² ≡
+62500 K/rad² ; CH₃ σ=0,375/ε=98 K·k_B ; CH₂ σ=0,395/ε=46 K·k_B ; charges nulles). TraPPE ne calcule
+le LJ intramoléculaire **que pour les sites séparés de plus de trois liaisons** (Martin & Siepmann
+1998) : 1-2/1-3/1-4 sont exclus, **sans** mise à l'échelle 1-4 façon OPLS, car le dièdre RB est ajusté
+avec le LJ 1-4 déjà retiré. En rajouter un compterait deux fois — aucun n'a donc été ajouté.
+
+**Livré :** nouveau `core/topology.ts` — exclusions par parcours en largeur du graphe de liaisons
+jusqu'à `EXCLUDED_BOND_DEPTH = 3`, construit à partir des **liaisons ∪ contraintes** (l'eau rigide n'a
+pas de ressorts : un graphe limité aux liaisons aurait laissé son propre O et ses H interagir).
+`MolecularForce` consulte la politique derrière le test `moleculeId` bon marché, donc le chemin chaud
+O(N²) est inchangé. `BuiltSystem.exclusions` : une seule classification, partagée par les deux
+moteurs. Le raccourci GPU (`moleculeId`) est désormais **vérifié et non supposé** : `GpuEngine` lève
+une erreur si une molécule dépasse 3 liaisons, pour qu'activer un niveau à longues chaînes échoue
+bruyamment au lieu de supprimer silencieusement ses paires 1-5+. Le comportement L10 après
+dissociation est explicité : la paire reste liée topologiquement donc exclue quelle que soit la
+distance (convention MD non réactive standard), désormais testée.
+
+**Vérifications :** lint + typecheck verts. **215 tests** (199 → +16). Build vert, **8 e2e** verts.
+Classes de paires (nonane) : 1-2/1-3/1-4 exclues, 1-5…1-9 interagissent — **15 des 36** paires
+intrachaîne restaurées. Changement L9 mesuré directement (politique explicite vs règle
+moléculaire sur le même état) : écart de force max **> 0**, énergie potentielle différente.
+L4/L5/L6/L8/L10 : `allIntramolecularExcluded` vrai, et forces L6/L8/L10 **bit-à-bit identiques**
+(énergie, viriel, chaque composante) avant/après. Goldens TIP4P/Ewald inchangés. En navigateur réel :
+L9 **467,7 K** pour une cible de 450 K (~0,4σ à 72 atomes), PE finie, stable ; GPU L5 **288,8 K**,
+dissolution **364,5 K**, l'assertion ne se déclenche pas ; **zéro erreur de page**.
+
+**Déviations au plan :** aucune. Mon premier test de physique L9 passait pour une mauvaise raison
+(l'atome 0 étant lié à l'atome 1 déplacé à 20 nm, une force de liaison énorme dominait l'indice 0) :
+remplacé par une mesure différentielle directe qui isole exactement la contribution 1-5+.
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
