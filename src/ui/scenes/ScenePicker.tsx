@@ -3,7 +3,7 @@ import { useAppStore } from "../../state/store";
 
 /** Gallery of ready-made scenes; selecting one loads its full config and plays. */
 export function ScenePicker() {
-  const patchConfig = useAppStore((s) => s.patchConfig);
+  const replaceConfig = useAppStore((s) => s.replaceConfig);
   const setPlaying = useAppStore((s) => s.setPlaying);
   const setColorMode = useAppStore((s) => s.setColorMode);
   const setSubsteps = useAppStore((s) => s.setSubsteps);
@@ -25,7 +25,8 @@ export function ScenePicker() {
               data-active={active ? "true" : undefined}
               title={scene.description}
               onClick={() => {
-                patchConfig(scene.config);
+                // A scene is a complete config: replace, so nothing leaks from the previous one.
+                replaceConfig(scene.config);
                 setColorMode(scene.colorMode ?? "species");
                 if (scene.substeps) setSubsteps(scene.substeps);
                 setPlaying(true);

@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import { getActiveDriver } from "../../render/activeDriver";
-import { parseConfig } from "../../state/schema";
+import {
+  describeConfigError,
+  exportConfigEnvelope,
+  parseConfigEnvelope,
+} from "../../state/canonicalConfig";
 import { useAppStore } from "../../state/store";
 import { downloadJSON, downloadText, rdfToCsv } from "./download";
 
@@ -12,11 +16,11 @@ import { downloadJSON, downloadText, rdfToCsv } from "./download";
 export function Exporter() {
   const config = useAppStore((s) => s.config);
   const rdf = useAppStore((s) => s.rdf);
-  const patchConfig = useAppStore((s) => s.patchConfig);
+  const replaceConfig = useAppStore((s) => s.replaceConfig);
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>("");
 
-  const exportConfig = () => downloadJSON("scene-config.json", config);
+  const exportConfig = () => downloadJSON("scene-config.json", exportConfigEnvelope(config));
 
   const exportSnapshot = () => {
     const snapshot = getActiveDriver()?.snapshot();
@@ -39,11 +43,13 @@ export function Exporter() {
 
   const onImportFile = async (file: File) => {
     try {
-      const parsed = parseConfig(JSON.parse(await file.text()));
-      patchConfig(parsed);
+      // Replace, never merge: a merged import would inherit optional fields (electric field,
+      // clump start…) from whatever scene happened to be loaded.
+      const parsed = parseConfigEnvelope(JSON.parse(await file.text()));
+      replaceConfig(parsed);
       setMessage("Config importée.");
     } catch (error) {
-      setMessage(`Import invalide : ${error instanceof Error ? error.message : String(error)}`);
+      setMessage(`Import refusé : ${describeConfigError(error)}`);
     }
   };
 

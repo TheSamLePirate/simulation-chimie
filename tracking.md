@@ -1265,6 +1265,35 @@ Restent portés par les phases dédiées : métrique « Particules » (P73), tem
 
 ---
 
+## P65 — Configuration canonique, stricte et versionnée ✅
+
+**Objectif (DoD) :** qu'une configuration ait un sens unique : scènes, imports (et plus tard
+restaurations d'instantané) installent exactement ce qu'ils énoncent.
+
+**Livré :** nouveau `state/canonicalConfig.ts` — enveloppe versionnée (`CONFIG_VERSION = 1`) où les
+champs optionnels sont sérialisés explicitement (`null`) au lieu d'être supprimés par
+`JSON.stringify` : c'est ce qui permettait à un import d'hériter des valeurs de la scène précédente.
+Les configs héritées (nues) restent acceptées et normalisées. Schéma `strictObject` : les clés
+inconnues sont refusées, et les espèces sont validées contre `SPECIES_LIBRARY` au lieu de retomber
+silencieusement sur l'argon. Validation croisée : L9/L10 ne peuvent pas demander le GPU, L11 exige un
+nombre pair de molécules, et une boîte périodique L1/L2 doit contenir son propre cutoff non borné.
+Le store distingue désormais `replaceConfig` (config complète : scènes, imports) de `patchConfig`
+(édition d'un champ). `LJ_CUTOFF_FACTOR`/`WCA_CUTOFF_FACTOR` sont exportés pour que la validation
+dérive sa limite de la même source que la physique.
+
+**Vérifications :** lint + typecheck verts. **189 tests** (176 → +13). Build vert, **8 e2e** verts.
+Les **15 scènes** round-trippent à l'identique via JSON. En navigateur réel : champ électrique actif
+(électrophorèse) puis **absent** après import d'une config NaCl sans champ — l'ancien merge le
+gardait à 150 ; espèce inconnue **refusée** (`Import refusé : speciesName : Espèce inconnue…`) ;
+enveloppe exportée `configVersion: 1`, `initialClump: null` explicite ; **zéro erreur de page**.
+
+**Déviations au plan :** aucune. Ma première règle d'image minimale était fausse (elle rejetait les
+scènes L5 1,7 nm et L11 1,8 nm) : la lecture du code montre que `molecular.ts`/`ionic.ts` **bornent**
+le cutoff à 0,49·L (perte de précision documentée, valide), seuls `wca.ts`/`lennardJonesCell.ts`
+appliquent un cutoff non borné. La règle ne vise donc que L1/L2, avec tests dans les deux sens.
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).

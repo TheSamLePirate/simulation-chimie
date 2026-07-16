@@ -49,7 +49,13 @@ export interface AppState {
   stepNonce: number;
   resetNonce: number;
 
+  /** Live edit of individual fields (UI controls). Merges onto the active config. */
   patchConfig: (patch: Partial<SimConfig>) => void;
+  /**
+   * Install a complete, already-validated config (scene load, import, snapshot restore).
+   * Replaces rather than merges, so optional fields cannot leak from the previous run.
+   */
+  replaceConfig: (config: SimConfig) => void;
   setLevel: (level: AccuracyLevel) => void;
   setEngineKind: (engineKind: EngineKind) => void;
   togglePlay: () => void;
@@ -87,6 +93,7 @@ export const appStore = createStore<AppState>((set, get) => ({
     set({
       config: containUnsafeScientificConfig({ ...get().config, ...patch }),
     }),
+  replaceConfig: (config) => set({ config: containUnsafeScientificConfig(config) }),
   setLevel: (level) => set({ config: containUnsafeScientificConfig({ ...get().config, level }) }),
   setEngineKind: (engineKind) => set({ config: { ...get().config, engineKind } }),
   togglePlay: () => set({ playing: !get().playing }),

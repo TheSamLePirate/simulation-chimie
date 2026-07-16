@@ -52,13 +52,29 @@ test("simulation advances when WebGPU is available", async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
-test("config export downloads a JSON scene file", async ({ page }) => {
+test("config export downloads a versioned envelope with explicit optional fields", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByTestId("engine-status")).toBeVisible();
+
+  // Load a scene that sets an optional field the default scene leaves unset.
+  await page.getByRole("button", { name: /Électrophorèse/ }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Config/ }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("scene-config.json");
+
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const envelope = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+
+  expect(envelope.configVersion).toBe(1);
+  expect(envelope.config.electricField).toBe(150);
+  // Optional fields the scene clears are serialised explicitly, not omitted, so an import
+  // cannot inherit them from whatever scene is loaded at the time.
+  expect(envelope.config).toHaveProperty("initialClump", null);
 });
 
 test("fluid render mode runs the screen-space passes without errors", async ({ page }) => {

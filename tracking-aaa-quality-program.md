@@ -27,7 +27,7 @@ Authoritative implementation log for the approved AAA plan (`P64`–`P92`). This
 | Phase | Title | Status | Issues | Deviations |
 |---|---|---|---:|---:|
 | P64 | Scientific containment and immediate visible correctness | ✅ Done | 1 resolved | 0 |
-| P65 | Canonical strict versioned configuration | ⬜ Pending | 0 | 0 |
+| P65 | Canonical strict versioned configuration | ✅ Done | 1 resolved | 0 |
 | P66 | Universal backend-neutral `BuiltSystem` | ⬜ Pending | 0 | 0 |
 | P67 | Explicit topology exclusions and 1–4 interactions | ⬜ Pending | 0 | 0 |
 | P68 | Exhaustive config transition planner | ⬜ Pending | 0 | 0 |
@@ -103,3 +103,44 @@ None.
 - `metric-count` still displays the configured entity count (molecules), which is the known mislabeling P73 addresses with separate molecule/atom metrics.
 - GPU temperature currently rebuilds rather than updating live; P68/P76 own the real fix.
 - The 12 quantitative GPU e2e tests remain skipped until P88 provides a hardware runner.
+
+---
+
+## P65 — Canonical strict versioned configuration ✅
+
+**Objective:** make a configuration mean exactly one thing, so scenes, imports, and (later) snapshot restores install exactly what they state.
+
+### Delivered
+
+- **`src/state/canonicalConfig.ts` (new)** — versioned envelope (`CONFIG_VERSION = 1`). Optional fields serialise explicitly as `null` instead of being dropped by `JSON.stringify`, which is what allowed an import to inherit the previous scene's values. Legacy bare configs are still accepted and normalised. `describeConfigError` turns Zod's JSON dump into readable text.
+- **Strict schema** — `z.strictObject` rejects unknown keys rather than silently stripping them; species are validated against `SPECIES_LIBRARY` instead of silently falling back to argon.
+- **Cross-field validation** — L9/L10 cannot request the GPU (no dihedral/Morse kernels); L11 requires an even molecule count; L1/L2 periodic boxes must fit their own uncapped cutoff. P64's containment rules are preserved.
+- **`replaceConfig` vs `patchConfig`** — the store now separates "install a complete config" from "edit one field". Scene loads and imports replace; UI controls still patch.
+- **Cutoff constants exported** — `LJ_CUTOFF_FACTOR` / `WCA_CUTOFF_FACTOR` are exported from the force modules so validation derives its limit from the same source the physics uses, instead of duplicating magic numbers.
+
+### Verification evidence (measured)
+
+| Gate | Result |
+|---|---|
+| `bun run lint` / `typecheck` | green |
+| `bun run test` | **189/189 passed** (176 → +13) |
+| `bun run build` | green |
+| `bunx playwright test` | **8 passed, 12 skipped** |
+| Every registry scene round-trips through JSON | asserted for all 15 scenes, identity |
+| Import clears a stale optional field, headed | E-field active before import → **absent after** importing a config without it |
+| Unknown species import, headed | refused: `Import refusé : speciesName : Espèce inconnue (attendu : ARGON, NEON, …)` |
+| Export envelope, e2e | `configVersion: 1`, `electricField: 150`, `initialClump: null` (explicit, not omitted) |
+| Page errors during headed run | **0** |
+
+### Issues
+
+1. **Resolved — my first minimum-image rule was wrong, not the scenes.** I initially rejected any periodic molecular box below ~1.84 nm, which failed the shipped L5 (1.7 nm) and L11 (1.8 nm) scenes. Reading the force code showed `molecular.ts`/`ionic.ts` **clamp** the cutoff to 0.49·L (a documented accuracy reduction, valid), while only `wca.ts`/`lennardJonesCell.ts` apply an unclamped cutoff and can genuinely double-count across the image. The rule now targets exactly those levels and derives its threshold from the exported cutoff constants. Tests pin both directions: L2 @1.6 nm rejected, L2 @1.75 nm and L5 @1.7 nm accepted.
+
+### Deviations
+
+None.
+
+### Carried forward (by design, not deviation)
+
+- The snapshot schema still embeds a bare config and remains v1; P70 introduces checkpoint v2 with the RNG/analysis state and its own migration.
+- `make()` in the scene registry still lists optional fields explicitly. This is now a completeness guarantee (a scene is a full config), not a merge workaround; the comment was corrected to say so.

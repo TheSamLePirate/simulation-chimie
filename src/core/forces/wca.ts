@@ -1,7 +1,9 @@
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
 
 /** 2^(1/6): the LJ minimum, where the WCA potential is truncated. */
-const TWO_POW_1_6 = 1.122462048309373;
+/** WCA truncation radius in units of σ (the LJ minimum). Exported for config validation. */
+export const WCA_CUTOFF_FACTOR = 1.122462048309373;
+const TWO_POW_1_6 = WCA_CUTOFF_FACTOR;
 
 /**
  * L1 — Weeks-Chandler-Andersen soft spheres: the purely repulsive part of the

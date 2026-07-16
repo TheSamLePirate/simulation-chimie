@@ -1,6 +1,8 @@
 import type { Box, ForceModel, ForceResult, SimState, Species } from "../types";
 
-const CUTOFF_FACTOR = 2.5;
+/** LJ truncation radius in units of σ. Exported so config validation derives the same limit. */
+export const LJ_CUTOFF_FACTOR = 2.5;
+const CUTOFF_FACTOR = LJ_CUTOFF_FACTOR;
 
 /**
  * L2 Lennard-Jones with **linked-cell (cell-list) O(N) neighbour search** — the
