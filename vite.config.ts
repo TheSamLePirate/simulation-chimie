@@ -4,6 +4,9 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  // GitHub Pages serves the site under /<repo>/ — the deploy workflow sets
+  // VITE_BASE accordingly; dev/preview/e2e keep the root base.
+  base: process.env.VITE_BASE ?? "/",
   build: {
     // Three.js (webgpu + tsl) is the bulk of the bundle and is needed eagerly,
     // so code-splitting it wins little today. Revisit when scenes are lazy-loaded.

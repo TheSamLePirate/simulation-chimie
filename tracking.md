@@ -1374,6 +1374,26 @@ remplacé par une mesure différentielle directe qui isole exactement la contrib
 
 ---
 
+## P68 — Déploiement GitHub Pages ✅
+
+**Objectif (DoD) :** servir l'application en statique sur GitHub Pages
+(`https://thesamlepirate.github.io/simulation-chimie/`).
+
+**Livré :** `vite.config.ts` prend `base: process.env.VITE_BASE ?? "/"` — dev/preview/e2e restent sur
+`/`, seul le build de déploiement fixe la base. Nouveau workflow `.github/workflows/deploy.yml`
+(push sur `main` + `workflow_dispatch`) : build Bun avec `VITE_BASE=/simulation-chimie/`, puis
+`actions/upload-pages-artifact` → `actions/deploy-pages` (permissions `pages`/`id-token`, concurrence
+`pages`). Aucun routeur côté client, aucun `fetch`/Worker/chemin absolu dans `src/` — rien d'autre à
+adapter pour un sous-chemin.
+
+**Vérifications :** lint + typecheck verts. `VITE_BASE=/simulation-chimie/ bunx vite build` vert ;
+`dist/index.html` référence bien `/simulation-chimie/assets/…`. Déploiement effectif vérifié sur
+l'URL Pages (HTTP 200 + assets servis).
+
+**Déviations au plan :** aucune — hors roadmap physique, demande utilisateur directe.
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
