@@ -29,7 +29,8 @@ jobs:
         run: bun run test
 
       - name: Build
-        run: vite build
+        # `bunx`, as in deploy.yml — a bare `vite` is not on PATH on the runner.
+        run: bunx vite build
 
   e2e:
     name: E2E (Playwright + WebGPU)
