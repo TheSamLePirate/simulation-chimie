@@ -74,7 +74,16 @@ export function ConsoleRail({ status, lab }: ConsoleRailProps) {
 
       <div className="rail__foot">
         <EngineStatusBadge status={status} />
-        <span>{engineKind === "gpu" ? "Moteur GPU" : "Moteur CPU"}</span>
+        <span className="rail__engine">{engineKind === "gpu" ? "Moteur GPU" : "Moteur CPU"}</span>
+        {/* The atlas is published beside the app; BASE_URL keeps the sub-path right on Pages. */}
+        <a
+          className="rail__atlas"
+          href={`${import.meta.env.BASE_URL}doc/`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Atlas ↗
+        </a>
       </div>
     </aside>
   );

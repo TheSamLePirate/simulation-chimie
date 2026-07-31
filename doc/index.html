@@ -2038,7 +2038,7 @@
                 <p>La translation de +ε remonte le puits pour que l'énergie atteigne zéro au cutoff ; la force étant nulle au minimum du LJ, les deux s'annulent ensemble en \(r_c\). Sans puits attractif, ce fluide ne condense jamais : ni goutte, ni tension de surface, ni transition de phase liquide–gaz.</p>
               </div>
               <div class="formula-box">
-                <div class="formula">\(V_{WCA}(r)=\begin{cases}4\varepsilon[(\sigma/r)^{12}-(\sigma/r)^{6}]+\varepsilon & r<2^{1/6}\sigma\\ 0 & \text{sinon}\end{cases}\)</div>
+                <div class="formula">\(V_{WCA}(r)=\begin{cases}4\varepsilon[(\sigma/r)^{12}-(\sigma/r)^{6}]+\varepsilon & r&lt;2^{1/6}\sigma\\ 0 & \text{sinon}\end{cases}\)</div>
                 <div class="formula-note">r_c = 1.122462048309373 σ (constante exacte du code). Force identique au LJ sur la branche répulsive.</div>
               </div>
               <section class="deep-section" style="grid-column: 1 / -1">
@@ -2739,7 +2739,7 @@
           vulgar: "Les particules deviennent des balles avec un coussin invisible. Elles peuvent s'approcher, mais le coussin se raidit brutalement et les repousse avant qu'elles se superposent.",
           calc: "Pour chaque paire plus proche que 2^(1/6)σ, on évalue la branche répulsive de Lennard–Jones. σ est la moyenne arithmétique des diamètres ; ε la moyenne géométrique des énergies (Lorentz–Berthelot).",
           precision: "Force vérifiée contre −dV/dr et nulle au cutoff. Bonne représentation générique d'un fluide répulsif ; aucune attraction, donc ni condensation ni tension de surface.",
-          formula: "V_{WCA}(r)=\\begin{cases}4\\varepsilon[(\\sigma/r)^{12}-(\\sigma/r)^6]+\\varepsilon & r<2^{1/6}\\sigma\\\\0 & sinon\\end{cases}", note: "La translation de +ε place le minimum exactement à zéro.", tags: ["répulsion", "cutoff continu", "Lorentz–Berthelot"]
+          formula: "V_{WCA}(r)=\\begin{cases}4\\varepsilon[(\\sigma/r)^{12}-(\\sigma/r)^6]+\\varepsilon & r&lt;2^{1/6}\\sigma\\\\0 & sinon\\end{cases}", note: "La translation de +ε place le minimum exactement à zéro.", tags: ["répulsion", "cutoff continu", "Lorentz–Berthelot"]
         },
         {
           id: "L2", title: "Lennard–Jones 12–6", subtitle: "La cohésion de van der Waals", backend: "CPU + GPU",

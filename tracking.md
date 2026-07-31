@@ -1445,6 +1445,34 @@ e2e cliquent désormais l'onglet « Réglages » / « Fichier » avant les contr
 
 ---
 
+## P70 — L'atlas physique publié à côté de l'application ✅
+
+**Objectif (DoD) :** `doc/index.html` servi sur GitHub Pages, à `<base>doc/`, et accessible depuis
+l'application.
+
+**Livré :** plugin Vite local `dynamique-chimie:publish-doc` (`vite.config.ts`) — `closeBundle` copie
+`doc/` dans `dist/doc/`, `configureServer` sert la page en dev. Le choix de le faire dans la config
+plutôt que dans le workflow de déploiement est délibéré : **tout** build la produit, donc
+`bun run preview` sert exactement ce que Pages servira, et les deux ne peuvent pas diverger.
+`doc/` reste à la racine (et non dans `public/`) : c'est de la documentation rédigée, et `tracking.md`
+enregistre déjà ce chemin. Lien « Atlas ↗ » dans le pied de la régie, construit sur
+`import.meta.env.BASE_URL` pour rester correct sous le sous-chemin Pages.
+
+**Corrigé au passage :** `doc/index.html` contenait deux `r<2^{1/6}\sigma` non échappés dans des
+formules KaTeX — HTML invalide, et le seul échec restant de `bun run lint` sur tout le dépôt.
+Échappés en `r&lt;2^{1/6}`, ce que KaTeX reçoit à l'identique. `bun run lint` est désormais vert.
+
+**Vérifications :** lint + typecheck verts. `bun run build` → `dist/doc/index.html` ;
+`VITE_BASE=/simulation-chimie/ vite build` → le lien pointe bien sur `/simulation-chimie/doc/`.
+En preview : `/` et `/doc/` répondent 200 ; clic sur « Atlas ↗ » vérifié en navigateur réel, la page
+s'ouvre et se rend correctement, zéro erreur console.
+
+**Déviations au plan :** l'atlas garde sa propre identité visuelle (Manrope/DM Mono, dégradé
+turquoise-violet), distincte du laiton de l'application depuis P69. Harmoniser 180 ko de page rédigée
+à la main est un chantier à part, non demandé ici.
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).

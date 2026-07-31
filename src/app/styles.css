@@ -778,13 +778,31 @@ body {
   color: var(--soft);
 }
 
-.rail__foot span:last-child {
-  margin-left: auto;
+/* Positional selector replaced by names: the foot gained a third item. */
+.rail__engine,
+.rail__atlas {
   font-family: var(--roman);
   font-size: 0.5rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--gold);
+}
+
+.rail__engine {
+  margin-left: auto;
+}
+
+.rail__atlas {
+  padding-left: 10px;
+  border-left: 1px solid var(--line-2);
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.25s var(--ease);
+}
+
+.rail__atlas:hover {
+  color: var(--gold-bright);
 }
 
 .panel {
