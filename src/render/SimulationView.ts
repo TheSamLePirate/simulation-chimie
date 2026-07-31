@@ -64,13 +64,14 @@ export class SimulationView {
     };
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
-    // Sky/ground hemisphere ambient gives volume; key + cool fill shape the spheres.
-    this.scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x202830, 0.7));
+    // Sky/ground hemisphere ambient gives volume; key + a brass fill shape the spheres
+    // and tie the specimen to the instrument around it.
+    this.scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x231c10, 0.7));
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.25));
     const key = new THREE.DirectionalLight(0xffffff, 1.7);
     key.position.set(1, 1.2, 0.8);
     this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0x88aaff, 0.45);
+    const fill = new THREE.DirectionalLight(0xd6ac55, 0.42);
     fill.position.set(-1, -0.5, -1);
     this.scene.add(fill);
   }
@@ -78,7 +79,7 @@ export class SimulationView {
   async init(): Promise<void> {
     const renderer = new THREE.WebGPURenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x0a0e14, 1);
+    renderer.setClearColor(0x050811, 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     this.renderer = renderer;
@@ -203,7 +204,7 @@ export class SimulationView {
     this.controls?.update();
     // Screen-space fluid surface (CPU instanced particles only); else direct render.
     if (state.renderStyle === "fluid" && state.config.engineKind === "cpu" && this.fluid) {
-      this.fluid.render(renderer, this.scene, this.camera, 0x0a0e14);
+      this.fluid.render(renderer, this.scene, this.camera, 0x050811);
     } else {
       renderer.setRenderTarget(null);
       renderer.render(this.scene, this.camera);

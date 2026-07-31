@@ -45,6 +45,12 @@ export interface AppState {
   fps: number;
   colorMode: ColorMode;
   renderStyle: RenderStyle;
+  /**
+   * Id of the scene currently installed verbatim, or null once the user edits a control.
+   * Identity, not inference: matching on (species, seed) aliased half the catalogue onto
+   * the same highlight.
+   */
+  activeSceneId: string | null;
   /** Bumped to request a single manual step / a reset (consumed by the renderer). */
   stepNonce: number;
   resetNonce: number;
@@ -54,8 +60,9 @@ export interface AppState {
   /**
    * Install a complete, already-validated config (scene load, import, snapshot restore).
    * Replaces rather than merges, so optional fields cannot leak from the previous run.
+   * `sceneId` marks the config as an untouched scene; omit it for imports.
    */
-  replaceConfig: (config: SimConfig) => void;
+  replaceConfig: (config: SimConfig, sceneId?: string) => void;
   setLevel: (level: AccuracyLevel) => void;
   setEngineKind: (engineKind: EngineKind) => void;
   togglePlay: () => void;
@@ -86,15 +93,25 @@ export const appStore = createStore<AppState>((set, get) => ({
   fps: 0,
   colorMode: "species",
   renderStyle: "spheres",
+  activeSceneId: null,
   stepNonce: 0,
   resetNonce: 0,
 
   patchConfig: (patch) =>
     set({
       config: containUnsafeScientificConfig({ ...get().config, ...patch }),
+      activeSceneId: null,
     }),
-  replaceConfig: (config) => set({ config: containUnsafeScientificConfig(config) }),
-  setLevel: (level) => set({ config: containUnsafeScientificConfig({ ...get().config, level }) }),
+  replaceConfig: (config, sceneId) =>
+    set({
+      config: containUnsafeScientificConfig(config),
+      activeSceneId: sceneId ?? null,
+    }),
+  setLevel: (level) =>
+    set({
+      config: containUnsafeScientificConfig({ ...get().config, level }),
+      activeSceneId: null,
+    }),
   setEngineKind: (engineKind) => set({ config: { ...get().config, engineKind } }),
   togglePlay: () => set({ playing: !get().playing }),
   setPlaying: (playing) => set({ playing }),

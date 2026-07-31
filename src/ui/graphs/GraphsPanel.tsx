@@ -50,27 +50,27 @@ export function GraphsPanel() {
       <h2 className="panel__title">Mesures en temps réel</h2>
       <TimeSeriesChart
         title="Température (K)"
-        series={[{ color: "#f59e0b", values: h.temperature }]}
+        series={[{ color: "#f3d98a", values: h.temperature }]}
         includeZero
         format={(v) => `${v.toFixed(1)} K`}
       />
       <TimeSeriesChart
         title="Énergies (kJ/mol)"
         series={[
-          { color: "#22c55e", values: h.total },
-          { color: "#3b82f6", values: h.kinetic },
-          { color: "#ef4444", values: h.potential },
+          { color: "#e7dcc1", values: h.total },
+          { color: "#d6ac55", values: h.kinetic },
+          { color: "#6fc7bb", values: h.potential },
         ]}
         format={(v) => v.toFixed(1)}
       />
       <p className="chart__legend">
-        <span style={{ color: "#22c55e" }}>● Totale</span>{" "}
-        <span style={{ color: "#3b82f6" }}>● Cinétique</span>{" "}
-        <span style={{ color: "#ef4444" }}>● Potentielle</span>
+        <span style={{ color: "#e7dcc1" }}>● Totale</span>{" "}
+        <span style={{ color: "#d6ac55" }}>● Cinétique</span>{" "}
+        <span style={{ color: "#6fc7bb" }}>● Potentielle</span>
       </p>
       <TimeSeriesChart
         title="Pression (bar)"
-        series={[{ color: "#a78bfa", values: h.pressure }]}
+        series={[{ color: "#e08a5f", values: h.pressure }]}
         includeZero
         format={(v) => `${v.toFixed(0)} bar`}
       />
@@ -84,15 +84,15 @@ export function GraphsPanel() {
             readout={`⟨|v|⟩ ${speeds.meanSpeed.toFixed(2)} nm/ps`}
           />
           <p className="chart__legend">
-            <span style={{ color: "#38bdf8" }}>■ Mesurée</span>{" "}
-            <span style={{ color: "#f59e0b" }}>— Maxwell-Boltzmann (T courante)</span>
+            <span style={{ color: "#d6ac55" }}>■ Mesurée</span>{" "}
+            <span style={{ color: "#6fc7bb" }}>— Maxwell-Boltzmann (T courante)</span>
           </p>
         </>
       )}
       {rdf && rdf.g.length > 0 && (
         <TimeSeriesChart
           title="g(r) — structure (× r croissant)"
-          series={[{ color: "#e879f9", values: rdf.g }]}
+          series={[{ color: "#e7dcc1", values: rdf.g }]}
           includeZero
           format={(v) => v.toFixed(2)}
         />

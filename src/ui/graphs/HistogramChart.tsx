@@ -26,8 +26,8 @@ export function HistogramChart({
   theory,
   readout,
   height = 96,
-  barColor = "#38bdf8",
-  lineColor = "#f59e0b",
+  barColor = "#d6ac55",
+  lineColor = "#6fc7bb",
 }: HistogramChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 

@@ -27,6 +27,8 @@ test("GPU backend dispatches compute and advances without errors", async ({ page
   page.on("pageerror", (e) => pageErrors.push(e.message));
   test.skip(!(await gpuAvailable(page)), "WebGPU unavailable");
 
+  // The engine, level and thermostat switches live in the console's "Réglages" tab.
+  await page.getByRole("tab", { name: "Réglages" }).click();
   // Switch the compute backend to GPU (rebuilds the driver + GPU-resident mesh).
   await page.getByRole("button", { name: "GPU", exact: true }).click();
   // Exercise the LJ cell-list kernel (atomic spatial-hash bins) + the GPU thermostat kernel.

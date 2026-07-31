@@ -60,6 +60,8 @@ test("config export downloads a versioned envelope with explicit optional fields
 
   // Load a scene that sets an optional field the default scene leaves unset.
   await page.getByRole("button", { name: /Électrophorèse/ }).click();
+  // Saving lives in the console's "Fichier" tab.
+  await page.getByRole("tab", { name: "Fichier" }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Config/ }).click();
   const download = await downloadPromise;
@@ -84,6 +86,7 @@ test("fluid render mode runs the screen-space passes without errors", async ({ p
   await page.goto("/");
   await expect(page.getByTestId("engine-status")).toBeVisible();
 
+  await page.getByRole("tab", { name: "Réglages" }).click();
   await page.getByRole("button", { name: "Fluide", exact: true }).click();
   await page.getByRole("button", { name: /Lecture/ }).click();
   const fluidStep = page.getByTestId("metric-step");

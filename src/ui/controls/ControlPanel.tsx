@@ -13,7 +13,6 @@ const LEVEL_OPTIONS = (Object.keys(ACCURACY_LEVELS) as AccuracyLevel[]).map((id)
 
 export function ControlPanel() {
   const config = useAppStore((s) => s.config);
-  const playing = useAppStore((s) => s.playing);
   const substeps = useAppStore((s) => s.substeps);
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
@@ -23,8 +22,6 @@ export function ControlPanel() {
   const patchConfig = useAppStore((s) => s.patchConfig);
   const setLevel = useAppStore((s) => s.setLevel);
   const setEngineKind = useAppStore((s) => s.setEngineKind);
-  const togglePlay = useAppStore((s) => s.togglePlay);
-  const requestStep = useAppStore((s) => s.requestStep);
   const requestReset = useAppStore((s) => s.requestReset);
   const setSubsteps = useAppStore((s) => s.setSubsteps);
 
@@ -39,19 +36,10 @@ export function ControlPanel() {
 
   return (
     <section className="panel">
-      <h2 className="panel__title">Simulation</h2>
-
-      <div className="playback">
-        <button type="button" className="btn btn--primary" onClick={togglePlay}>
-          {playing ? "⏸ Pause" : "▶ Lecture"}
-        </button>
-        <button type="button" className="btn" onClick={requestStep} disabled={playing}>
-          ⏭ Pas
-        </button>
-        <button type="button" className="btn" onClick={requestReset}>
-          ↺ Réinitialiser
-        </button>
-      </div>
+      <h2 className="panel__title">Réglages</h2>
+      <p className="panel__note">
+        Modifier un réglage détache la configuration de sa scène : elle devient la vôtre.
+      </p>
 
       <Field>
         <Segmented

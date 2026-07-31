@@ -235,12 +235,12 @@ export function SurfaceTensionLabPanel() {
       <div className="lab-chart-grid">
         <TimeSeriesChart
           title="Température (K)"
-          series={[{ color: "#38bdf8", values: temperatures.current }]}
+          series={[{ color: "#f3d98a", values: temperatures.current }]}
           format={(value) => `${value.toFixed(1)} K`}
         />
         <TimeSeriesChart
           title="Convergence γ (mN/m)"
-          series={[{ color: "#22c55e", values: gammaHistory.current }]}
+          series={[{ color: "#6fc7bb", values: gammaHistory.current }]}
           format={(value) => value.toFixed(2)}
         />
       </div>

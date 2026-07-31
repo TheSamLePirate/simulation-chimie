@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { appStore, useAppStore } from "../state/store";
 import { CanvasHost } from "../ui/CanvasHost";
-import { ControlPanel } from "../ui/controls/ControlPanel";
-import { EngineStatusBadge } from "../ui/EngineStatusBadge";
 import type { EngineStatus } from "../ui/engineStatus";
-import { SurfaceTensionLabPanel } from "../ui/experiments/SurfaceTensionLabPanel";
-import { Exporter } from "../ui/export/Exporter";
-import { GraphsPanel } from "../ui/graphs/GraphsPanel";
 import { ObservablesPanel } from "../ui/panels/ObservablesPanel";
-import { ScenePicker } from "../ui/scenes/ScenePicker";
+import { Masthead } from "../ui/plate/Masthead";
+import { TemperatureScale } from "../ui/plate/TemperatureScale";
+import { TransportDock } from "../ui/plate/TransportDock";
+import { ConsoleRail } from "../ui/rail/ConsoleRail";
 
 export function App() {
   const [status, setStatus] = useState<EngineStatus>("initializing");
@@ -36,34 +34,25 @@ export function App() {
   return (
     <div className={`app${isSurfaceTensionLab ? " app--lab" : ""}`}>
       <CanvasHost onStatus={setStatus} />
+      <div className="atmos" aria-hidden="true" />
 
-      <header className="app__header">
-        <h1 className="app__title">Dynamique-Chimie</h1>
-        <p className="app__subtitle">
-          {isSurfaceTensionLab
-            ? "Laboratoire moléculaire quantitatif"
-            : "Simulateur de dynamique moléculaire — temps réel"}
-        </p>
-      </header>
+      <TemperatureScale />
+      <Masthead />
+      <ObservablesPanel />
+      <TransportDock />
 
-      <aside className="sidebar">
-        {isSurfaceTensionLab ? (
-          <>
-            <SurfaceTensionLabPanel />
-            <ScenePicker />
-          </>
-        ) : (
-          <>
-            <ScenePicker />
-            <ControlPanel />
-            <ObservablesPanel />
-            <GraphsPanel />
-          </>
-        )}
-        <Exporter />
-      </aside>
+      <ConsoleRail
+        key={isSurfaceTensionLab ? "lab" : "standard"}
+        status={status}
+        lab={isSurfaceTensionLab}
+      />
 
-      <EngineStatusBadge status={status} />
+      <div className="frame" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+        <i />
+      </div>
     </div>
   );
 }

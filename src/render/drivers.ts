@@ -31,9 +31,9 @@ function buildCell(lengths: Vec3): THREE.LineSegments {
   const cell = new THREE.LineSegments(
     new THREE.EdgesGeometry(box),
     new THREE.LineBasicMaterial({
-      color: 0x3b82f6,
+      color: 0xd6ac55,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.42,
     }),
   );
   box.dispose();

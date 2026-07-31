@@ -51,10 +51,13 @@ export function Segmented<T extends string>({
   options,
   onChange,
 }: SegmentedProps<T>) {
+  // Past six choices the row cannot stay one line; a fixed grid wraps it into even
+  // rows instead of letting the last item stretch across the full width.
+  const dense = options.length > 6;
   return (
     <div className="control control--segmented">
       <span className="control__label">{label}</span>
-      <div className="segmented">
+      <div className={dense ? "segmented segmented--dense" : "segmented"}>
         {options.map((option) => (
           <button
             key={option.value}

@@ -22,9 +22,9 @@ export function DensityProfileChart({ profile, liquidThickness }: Props) {
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, width, height);
     const styles = getComputedStyle(document.documentElement);
-    const muted = styles.getPropertyValue("--muted").trim() || "#9aa7b4";
-    const accent = styles.getPropertyValue("--accent").trim() || "#3b82f6";
-    context.font = "10px ui-sans-serif, system-ui";
+    const muted = styles.getPropertyValue("--muted").trim() || "#c0b59a";
+    const accent = styles.getPropertyValue("--accent").trim() || "#d6ac55";
+    context.font = '10px "IBM Plex Mono", ui-monospace, monospace';
     context.fillStyle = muted;
     if (!profile || profile.z.length < 2) {
       context.fillText("Profil disponible après initialisation", 12, 78);
@@ -50,7 +50,7 @@ export function DensityProfileChart({ profile, liquidThickness }: Props) {
     const maxDensity = Math.max(1100, ...smoothed) * 1.05;
     const x = (z: number) => pad.left + ((z - minZ) / (maxZ - minZ)) * plotW;
     const y = (density: number) => pad.top + plotH - (density / maxDensity) * plotH;
-    context.strokeStyle = "rgba(154,167,180,.18)";
+    context.strokeStyle = "rgba(244,236,216,.12)";
     context.lineWidth = 1;
     for (const density of [0, 500, 1000]) {
       context.beginPath();
@@ -61,7 +61,7 @@ export function DensityProfileChart({ profile, liquidThickness }: Props) {
       context.fillText(String(density), 4, y(density) + 3);
     }
     if (liquidThickness) {
-      context.fillStyle = "rgba(59,130,246,.08)";
+      context.fillStyle = "rgba(214,172,85,.09)";
       context.fillRect(
         x(-liquidThickness / 2),
         pad.top,

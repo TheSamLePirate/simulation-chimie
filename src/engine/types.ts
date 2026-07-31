@@ -16,7 +16,7 @@ export const ACCURACY_LEVELS = {
     id: "L1",
     label: "L1 · Sphères molles",
     description: "Répulsion WCA à courte portée",
-    forces: ["WCA (répulsion 2^{1/6}σ)"],
+    forces: ["WCA (répulsion 2^(1/6)σ)"],
   },
   L2: {
     id: "L2",
