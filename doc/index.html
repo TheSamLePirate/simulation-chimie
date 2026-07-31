@@ -1356,6 +1356,183 @@
         color: var(--text);
       }
 
+      .family-stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .physics-note {
+        grid-column: 1 / -1;
+        padding: 18px;
+        border: 1px solid color-mix(in srgb, var(--violet) 26%, var(--line));
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, var(--violet-soft), transparent);
+      }
+
+      .physics-note p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .physics-note .box-label {
+        color: var(--violet);
+      }
+
+      .const-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+
+      .const-card {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--panel);
+      }
+
+      .const-card span {
+        color: var(--muted);
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .const-card strong {
+        display: block;
+        margin: 8px 0 6px;
+        font-family: "DM Mono", monospace;
+        font-size: 15px;
+        font-weight: 500;
+        word-break: break-all;
+      }
+
+      .const-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .exp-group {
+        margin-top: 52px;
+        scroll-margin-top: 88px;
+      }
+
+      .exp-group:first-of-type {
+        margin-top: 0;
+      }
+
+      .exp-group-title {
+        display: flex;
+        margin-bottom: 18px;
+        align-items: baseline;
+        gap: 14px;
+      }
+
+      .exp-group-title h3 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .exp-group-title span {
+        color: var(--muted);
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+      }
+
+      .exp-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .exp-card {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--panel);
+        transition: border-color 160ms ease, transform 160ms ease;
+      }
+
+      .exp-card:hover {
+        border-color: var(--line-strong);
+        transform: translateY(-2px);
+      }
+
+      .exp-head {
+        display: flex;
+        padding: 18px 20px 14px;
+        align-items: flex-start;
+        gap: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .exp-badge {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        background: linear-gradient(145deg, var(--cyan-soft), var(--violet-soft));
+        color: var(--cyan);
+        font-family: "DM Mono", monospace;
+        font-size: 12px;
+      }
+
+      .exp-head h4 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        letter-spacing: -0.015em;
+      }
+
+      .exp-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .exp-head .tag-row {
+        margin-left: auto;
+      }
+
+      .exp-body {
+        display: grid;
+        padding: 16px 20px 20px;
+        gap: 14px;
+      }
+
+      .exp-line p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .exp-watch {
+        margin: 0;
+        padding: 10px 12px;
+        border-left: 2px solid var(--cyan);
+        border-radius: 0 9px 9px 0;
+        background: var(--cyan-soft);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .exp-watch strong {
+        color: var(--text);
+      }
+
+      .force-refs {
+        grid-column: 1 / -1;
+        margin: 0;
+        color: var(--muted);
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+      }
+
       .reveal {
         opacity: 0;
         transform: translateY(18px);
@@ -1402,6 +1579,14 @@
         .truth-grid,
         .precision-grid {
           grid-template-columns: repeat(2, 1fr);
+        }
+
+        .const-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .exp-grid {
+          grid-template-columns: 1fr;
         }
 
         .pipeline {
@@ -1488,7 +1673,8 @@
         .precision-grid,
         .observable-grid,
         .thermostat-grid,
-        .pipeline {
+        .pipeline,
+        .const-grid {
           grid-template-columns: 1fr;
         }
 
@@ -1563,7 +1749,9 @@
       </a>
       <nav class="nav-links" aria-label="Navigation principale">
         <a href="#methode">Méthode</a>
+        <a href="#forces">Forces</a>
         <a href="#modeles">L0 → L11</a>
+        <a href="#experiences">Expériences</a>
         <a href="#laboratoire">Laboratoire</a>
         <a href="#precision">Précision</a>
         <a href="#observables">Observables</a>
@@ -1585,18 +1773,21 @@
           <span class="eyebrow"><span class="pulse"></span> Documentation scientifique vivante</span>
           <h1>Voir les forces.<br /><span class="gradient">Comprendre la matière.</span></h1>
           <p>
-            Douze niveaux de fidélité, du gaz parfait à la mesure d'une interface. Chaque modèle est
-            expliqué avec son intuition, ses équations, son algorithme réel et ses limites — sans
-            cacher la différence entre une simulation convaincante et une expérience de laboratoire.
+            Douze niveaux de fidélité, seize expériences prêtes à l'emploi, du gaz parfait à la
+            mesure d'une interface. Chaque force est écrite avec son équation exacte, ses
+            paramètres issus du code, son algorithme réel et ses limites — sans cacher la
+            différence entre une simulation convaincante et une expérience de laboratoire.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="#modeles">Explorer les modèles <span aria-hidden="true">↓</span></a>
+            <a class="button primary" href="#forces">Anatomie des forces <span aria-hidden="true">↓</span></a>
+            <a class="button" href="#experiences">Les 16 expériences</a>
             <a class="button" href="#laboratoire">Manipuler les potentiels</a>
           </div>
           <div class="hero-meta">
             <div><strong>12</strong> niveaux physiques</div>
+            <div><strong>16</strong> expériences</div>
             <div><strong>Float64</strong> oracle CPU</div>
-            <div><strong>WebGPU</strong> L0 à L8</div>
+            <div><strong>WebGPU</strong> L0 à L8 + L11</div>
             <div><strong>nm · ps</strong> unités GROMACS</div>
           </div>
         </div>
@@ -1659,6 +1850,31 @@
             <h3>GPU sous contrôle</h3>
             <p>WebGPU accélère L0–L8 et L11 seulement lorsqu'il reproduit l'oracle CPU à la précision Float32.</p>
           </article>
+        </div>
+
+        <div class="deep-dive global-deep reveal" open style="margin-top: 16px">
+          <div class="deep-content" style="padding-top: 20px">
+            <section class="deep-section" style="grid-column: 1 / -1">
+              <h4>Constantes physiques implémentées (<span class="mono">core/units.ts</span>)</h4>
+              <p style="max-width: 980px">
+                Le système d'unités interne (nm, ps, u, kJ·mol⁻¹, K, e) est celui de GROMACS. Il a
+                une propriété remarquable : \(1\,\mathrm{u}\cdot(\mathrm{nm}\cdot\mathrm{ps}^{-1})^2
+                = 1\,\mathrm{kJ}\cdot\mathrm{mol}^{-1}\) exactement, donc l'énergie cinétique
+                \(\tfrac12 m v^2\) et l'accélération \(F/m\) ne demandent <em>aucun</em> facteur de
+                conversion dans les équations du mouvement.
+              </p>
+              <div class="const-grid" style="margin-top: 16px">
+                <div class="const-card"><span>Boltzmann k_B</span><strong>0.00831446261815324</strong><p>kJ·mol⁻¹·K⁻¹. Fixe l'échelle entre température et énergie.</p></div>
+                <div class="const-card"><span>Coulomb k_e = 1/4πε₀</span><strong>138.935458</strong><p>kJ·mol⁻¹·nm·e⁻². Un Na⁺–Cl⁻ à 0.29 nm vaut −479 kJ·mol⁻¹ (brut, non écranté).</p></div>
+                <div class="const-card"><span>Avogadro N_A</span><strong>6.02214076×10²³</strong><p>mol⁻¹. Relie l'atome individuel simulé aux grandeurs molaires.</p></div>
+                <div class="const-card"><span>Pression</span><strong>×16.6053906717</strong><p>1 kJ·mol⁻¹·nm⁻³ = 16.605 bar. Le viriel interne devient des bars lisibles.</p></div>
+                <div class="const-card"><span>Tension de surface</span><strong>×1.6605390672</strong><p>1 kJ·mol⁻¹·nm⁻² = 1.661 mN·m⁻¹. Pour γ en L11.</p></div>
+                <div class="const-card"><span>Densité</span><strong>×1.6605390666</strong><p>1 u·nm⁻³ = 1.661 kg·m⁻³. Utilisé pour packer le slab L11 à 997 kg·m⁻³.</p></div>
+                <div class="const-card"><span>Champ électrique</span><strong>1 u. ≈ 10.36 MV·m⁻¹</strong><p>1 kJ·mol⁻¹·nm⁻¹·e⁻¹ = 1/96.485 V·nm⁻¹. Le E=150 des scènes ≈ 1.55 GV·m⁻¹ (démo).</p></div>
+                <div class="const-card"><span>Accélération</span><strong>1 nm·ps⁻² = 10¹⁵ m·s⁻²</strong><p>Le g=0.2 des scènes ≈ 2×10¹³ × g terrestre : sédimentation visible en quelques ps.</p></div>
+              </div>
+            </section>
+          </div>
         </div>
 
         <div class="pipeline reveal">
@@ -1740,10 +1956,416 @@
         </details>
       </section>
 
+      <section class="section" id="forces">
+        <div class="section-head reveal">
+          <div>
+            <span class="section-kicker">02 · Anatomie des forces</span>
+            <h2>Chaque terme du champ<br />de force, ouvert.</h2>
+          </div>
+          <p class="section-intro">
+            Un simulateur de dynamique moléculaire n'est qu'une somme :
+            \(V = V_{\text{non lié}} + V_{\text{liaisons}} + V_{\text{angles}} + V_{\text{dièdres}} +
+            V_{\text{contraintes}} + V_{\text{champs}}\). Voici chaque brique avec son origine
+            physique, son équation exacte telle qu'implémentée, et ses paramètres numériques
+            vérifiables dans <span class="mono">src/core</span>.
+          </p>
+        </div>
+
+        <div class="family-stack">
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F1</span>
+              <div class="model-title">
+                <h3>Lennard-Jones 12–6</h3>
+                <p>Répulsion de Pauli + dispersion de London — la cohésion des corps simples</p>
+              </div>
+              <div class="tag-row"><span class="tag">non lié</span><span class="tag">L2 → L11</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>Deux effets quantiques réunis en une courbe classique. À courte distance, le chevauchement des couches électroniques fermées coûte de l'énergie très vite (répulsion de Pauli/Born), mimée par \(r^{-12}\) — un choix pratique, carré de \(r^{-6}\). À longue distance, les dipôles instantanés se corrèlent : c'est la dispersion de London, dont le premier terme exact est \(-C_6/r^6\).</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>La force change de signe au minimum \(r^* = 2^{1/6}\sigma \approx 1.12246\,\sigma\) : répulsive en dessous, attractive au-dessus, nulle au fond du puits de profondeur \(\varepsilon\). En dessous de \(\sigma\), \(V\) redevient positif : \(\sigma\) est le « diamètre » effectif de l'atome.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V(r)=4\varepsilon\Big[\big(\tfrac{\sigma}{r}\big)^{12}-\big(\tfrac{\sigma}{r}\big)^{6}\Big]\qquad f(r)=\frac{24\varepsilon}{r}\Big[2\big(\tfrac{\sigma}{r}\big)^{12}-\big(\tfrac{\sigma}{r}\big)^{6}\Big]\)</div>
+                <div class="formula-note">f &gt; 0 = répulsion. Minimum : V(r*) = −ε à r* = 2<sup>1/6</sup>σ.</div>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V_{sf}=V(r)-V(r_c)+(r-r_c)\,f(r_c),\qquad f_{sf}=f(r)-f(r_c),\quad r_c=2.5\sigma\)</div>
+                <div class="formula-note">Troncature « shifted-force » : énergie <em>et</em> force s'annulent continûment à r_c. La correction vaut f(r_c) ≈ −0.0390 ε/σ ; sans elle, chaque paire franchissant le cutoff injecterait de l'énergie dans le thermostat.</div>
+              </div>
+              <section class="deep-section">
+                <h4>Règles de mélange (multi-espèces)</h4>
+                <p>Pour une paire d'espèces différentes, le code applique Lorentz–Berthelot : \(\sigma_{ij}=\tfrac12(\sigma_i+\sigma_j)\) (arithmétique sur les tailles), \(\varepsilon_{ij}=\sqrt{\varepsilon_i\varepsilon_j}\) (géométrique sur les énergies). Un facteur <span class="mono">crossScale</span> &lt; 1 peut réduire l'attraction croisée pour simuler l'immiscibilité. Une espèce à ε = 0 (hydrogène SPC) ne participe pas au LJ.</p>
+              </section>
+              <section class="deep-section">
+                <h4>Paramètres implémentés (σ nm · ε kJ·mol⁻¹)</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>Ar</span><strong>0.3405 · 0.9977 (ε/k_B ≈ 120 K)</strong></div>
+                  <div class="parameter-row"><span>Ne</span><strong>0.2782 · 0.2964 (≈ 35.6 K)</strong></div>
+                  <div class="parameter-row"><span>O (SPC/Fw)</span><strong>0.316557 · 0.650194</strong></div>
+                  <div class="parameter-row"><span>O (TIP4P/2005)</span><strong>0.31589 · 0.7749</strong></div>
+                  <div class="parameter-row"><span>CH₃ (TraPPE UA)</span><strong>0.375 · 0.8148 (98 K·k_B)</strong></div>
+                  <div class="parameter-row"><span>CH₂ (TraPPE UA)</span><strong>0.395 · 0.3825 (46 K·k_B)</strong></div>
+                  <div class="parameter-row"><span>Na⁺ / Cl⁻</span><strong>0.251 · 0.544 / 0.448 · 0.42</strong></div>
+                </div>
+              </section>
+              <p class="force-refs">src/core/forces/lennardJones.ts · lennardJonesCell.ts (cell-list O(N) CPU) · noyau GPU tri cellulaire (comptage → préfixe → scatter → 27 cellules)</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F2</span>
+              <div class="model-title">
+                <h3>WCA — sphères molles répulsives</h3>
+                <p>Le volume exclu pur, sans aucune attraction</p>
+              </div>
+              <div class="tag-row"><span class="tag">non lié</span><span class="tag">L1</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>Weeks, Chandler &amp; Andersen (1971) ont montré que la <em>structure</em> d'un liquide dense — les couches de voisins visibles dans g(r) — est d'abord une conséquence du volume exclu : l'attraction ne fait que condenser un échafaudage déjà organisé par la répulsion. WCA isole cette répulsion en tronquant le LJ exactement à son minimum.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>La translation de +ε remonte le puits pour que l'énergie atteigne zéro au cutoff ; la force étant nulle au minimum du LJ, les deux s'annulent ensemble en \(r_c\). Sans puits attractif, ce fluide ne condense jamais : ni goutte, ni tension de surface, ni transition de phase liquide–gaz.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V_{WCA}(r)=\begin{cases}4\varepsilon[(\sigma/r)^{12}-(\sigma/r)^{6}]+\varepsilon & r<2^{1/6}\sigma\\ 0 & \text{sinon}\end{cases}\)</div>
+                <div class="formula-note">r_c = 1.122462048309373 σ (constante exacte du code). Force identique au LJ sur la branche répulsive.</div>
+              </div>
+              <section class="deep-section" style="grid-column: 1 / -1">
+                <h4>Rôle dans l'échelle</h4>
+                <p>C'est le fluide de référence de la théorie des perturbations des liquides : comparez mentalement g(r) d'un fluide WCA et d'un fluide LJ de même densité — les pics sont déjà là sans attraction. Sur GPU, WCA/LJ partagent le même noyau de force (le WCA est un LJ tronqué au minimum).</p>
+              </section>
+              <p class="force-refs">src/core/forces/wca.ts · Weeks, Chandler, Andersen, J. Chem. Phys. 54, 5237 (1971)</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F3</span>
+              <div class="model-title">
+                <h3>Coulomb écranté — Wolf DSF</h3>
+                <p>Les charges à portée infinie, rendues calculables en temps réel</p>
+              </div>
+              <div class="tag-row"><span class="tag">non lié</span><span class="tag">L3 → L8</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>L'interaction électrostatique décroît en \(1/r\) : sa somme sur un cristal périodique infini ne converge que conditionnellement — l'ordre de sommation change le résultat. La réponse exacte est la somme d'Ewald (voir F8). Wolf <em>et al.</em> (1999) ont montré qu'avec un écran en \(\mathrm{erfc}(\alpha r)\) et un décalage en force, une somme locale tronquée reproduit Ewald à ~1 % dans les systèmes denses et quasi-neutres — parfait pour le temps réel.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>Trois ingrédients : l'amortissement \(\mathrm{erfc}(\alpha r)\) (un écran gaussien de longueur \(1/\alpha\)), la soustraction de la valeur au cutoff (énergie → 0), et le terme \(S\) qui soustrait la pente au cutoff (force → 0). Le cutoff est de plus plafonné à \(0.49\,L_{\min}\) : au-delà, une particule verrait à la fois un voisin et son image périodique — double comptage fatal.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V_{DSF}=k_e q_iq_j\Big[\frac{\mathrm{erfc}(\alpha r)}{r}-\frac{\mathrm{erfc}(\alpha r_c)}{r_c}+S\,(r-r_c)\Big]\)</div>
+                <div class="formula-note">k_e = 138.935458 kJ·mol⁻¹·nm·e⁻². L'énergie et sa dérivée s'annulent en r_c.</div>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(F_{DSF}=k_e q_iq_j\Big[\frac{\mathrm{erfc}(\alpha r)}{r^2}+\frac{2\alpha}{\sqrt\pi}\frac{e^{-\alpha^2 r^2}}{r}-S\Big],\quad S=\frac{\mathrm{erfc}(\alpha r_c)}{r_c^2}+\frac{2\alpha}{\sqrt\pi}\frac{e^{-\alpha^2 r_c^2}}{r_c}\)</div>
+                <div class="formula-note">Le terme gaussien est la dérivée de l'écran : c'est lui qui rend l'écrantage « doux » plutôt qu'une brutale multiplication par un créneau.</div>
+              </div>
+              <section class="deep-section">
+                <h4>Constantes implémentées</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>Amortissement α</span><strong>2.5 nm⁻¹ (écran 0.4 nm)</strong></div>
+                  <div class="parameter-row"><span>Cutoff L3 (ions)</span><strong>1.0 nm</strong></div>
+                  <div class="parameter-row"><span>Cutoff L4+ (moléculaire)</span><strong>0.9 nm</strong></div>
+                  <div class="parameter-row"><span>Plafond image minimale</span><strong>0.49 × min(Lx, Ly, Lz)</strong></div>
+                  <div class="parameter-row"><span>erfc temps réel</span><strong>approx. rationnelle ≈ 1.2×10⁻⁷</strong></div>
+                  <div class="parameter-row"><span>erfc oracle Ewald/PME</span><strong>série + fraction continue (précision machine)</strong></div>
+                </div>
+              </section>
+              <section class="deep-section">
+                <h4>Hypothèse de neutralité</h4>
+                <p>La méthode de Wolf suppose un système globalement neutre : le constructeur de dissolution (L8) retire explicitement les ions majoritaires de bord du cristal rock-salt jusqu'à charge totale nulle. Un excès de charge créerait une interaction non physique avec ses propres images.</p>
+              </section>
+              <p class="force-refs">src/core/forces/ionic.ts · water.ts · molecular.ts · math/erf.ts · Wolf et al., J. Chem. Phys. 110, 8254 (1999)</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F4</span>
+              <div class="model-title">
+                <h3>Liaisons : harmonique &amp; Morse</h3>
+                <p>Le ressort incassable, et celui qui sait rompre</p>
+              </div>
+              <div class="tag-row"><span class="tag">lié</span><span class="tag">L4 · L6 · L9 · L10</span><span class="tag cpu">Morse CPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>Au fond d'un puits de potentiel, <em>toute</em> liaison ressemble à un ressort : un développement de Taylor donne \(V \approx \tfrac12 k(r-r_0)^2\). Mais l'harmonique a un défaut rédhibitoire : sa force croît sans borne avec l'étirement — une liaison harmonique ne casse jamais. Le potentiel de Morse (1929) corrige cela avec un puits qui s'aplatit vers l'asymptote de dissociation \(D_e\).</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>Le code paramètre le Morse par sa courbure au minimum : il impose \(D_e = k/(2a^2)\) pour que le Morse et l'harmonique de même \(k\) soient indiscernables près de \(r_0\). Près du minimum les deux courbes se confondent ; au loin, l'une diverge, l'autre meurt.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V_h=\tfrac12 k(r-r_0)^2\qquad V_M=D_e\big[1-e^{-a(r-r_0)}\big]^2\qquad F_M=-2D_e a\,e^{-a\Delta r}\big(1-e^{-a\Delta r}\big)\)</div>
+                <div class="formula-note">À grande distance : V_M → D_e et F_M → 0 — la liaison est rompue. Curvatures au minimum : V″ = k = 2D_e a².</div>
+              </div>
+              <section class="deep-section">
+                <h4>Paramètres implémentés</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>O–H (SPC/Fw)</span><strong>r₀ 0.1012 nm · k 443 153 kJ·mol⁻¹·nm⁻²</strong></div>
+                  <div class="parameter-row"><span>C–C (alcane)</span><strong>r₀ 0.154 nm · k 200 000</strong></div>
+                  <div class="parameter-row"><span>Morse démo (L10)</span><strong>r₀ 0.14 nm · a 18 nm⁻¹ · D_e 25 kJ·mol⁻¹ · k 16 200</strong></div>
+                </div>
+              </section>
+              <section class="deep-section">
+                <h4>Pourquoi le pas de temps en dépend</h4>
+                <p>La raideur O–H (k = 443 153, μ_OH ≈ 0.948 u) vibre à ν̃ ≈ 3 630 cm⁻¹, soit une période de ≈ 9.2 fs : l'eau flexible exige Δt = 0.5 fs (~18 pas par oscillation). La liaison C–C plus lourde et plus molle autorise 1 fs, et le dimère de Morse (période ≈ 130 fs) reste confortable à 2 fs. Rigidifier la liaison (F9) supprime purement ce mouvement rapide.</p>
+              </section>
+              <p class="force-refs">src/core/forces/molecular.ts (BondList.morseA &gt; 0 ⇒ Morse) · forces/water.ts · core/morseDiatomic.ts</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F5</span>
+              <div class="model-title">
+                <h3>Angles harmoniques</h3>
+                <p>La géométrie moléculaire maintenue par la flexion</p>
+              </div>
+              <div class="tag-row"><span class="tag">lié</span><span class="tag">L4 · L6 · L9</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>L'angle entre deux liaisons d'un même atome central résiste à la flexion, beaucoup plus mollement que la liaison à l'étirement (facteur ~100 en raideur). C'est ce terme qui fixe la géométrie : le V de l'eau à 113.24°, le zigzag des chaînes carbonées à 114°.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>La force se déduit du gradient analytique de θ par rapport aux trois positions. Elle est distribuée de façon à conserver l'impulsion : \(F_j = -(F_i + F_k)\) — le centre de masse de la molécule n'est pas accéléré par sa propre flexion.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V_\theta=\tfrac12 k_\theta(\theta-\theta_0)^2,\qquad F_i=\frac{k_\theta(\theta-\theta_0)}{\sin\theta}\Big[\frac{\vec r_{kj}}{l_{ij}l_{kj}}-\frac{\cos\theta\;\vec r_{ij}}{l_{ij}^2}\Big]\)</div>
+                <div class="formula-note">θ = acos(r_ij·r_kj / l_ij l_kj), j = sommet. F_k symétrique, F_j = −(F_i+F_k).</div>
+              </div>
+              <section class="deep-section" style="grid-column: 1 / -1">
+                <h4>Paramètres implémentés</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>H–O–H (SPC/Fw)</span><strong>θ₀ 113.24° · k_θ 317.5656 kJ·mol⁻¹·rad⁻²</strong></div>
+                  <div class="parameter-row"><span>C–C–C (alcane)</span><strong>θ₀ 114° · k_θ 519.6 kJ·mol⁻¹·rad⁻²</strong></div>
+                </div>
+              </section>
+              <p class="force-refs">src/core/forces/water.ts · forces/molecular.ts (boucle angles, gradient analytique validé vs −∂V/∂x numérique)</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F6</span>
+              <div class="model-title">
+                <h3>Dièdres Ryckaert–Bellemans</h3>
+                <p>La torsion des chaînes : trans, gauche et la rotation des alcanes</p>
+              </div>
+              <div class="tag-row"><span class="tag">lié</span><span class="tag">L9</span><span class="tag cpu">CPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>Tourner autour d'une liaison simple C–C n'est pas libre : l'hyperconjugaison et l'encombrement stérique des groupes voisins dessinent trois puits — un <em>trans</em> (φ = 180°, minimum global) et deux <em>gauche</em> (±60°). Ce paysage à trois bosses est la raison pour laquelle une chaîne carbonée préfère le zigzag étendu mais peut se replier.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>φ est l'angle entre les plans (i,j,k) et (j,k,l), obtenu des normales \(\vec m=\vec r_{ij}\times\vec r_{kj}\) et \(\vec n=\vec r_{kj}\times\vec r_{kl}\), avec un sinφ signé par \((\vec m\times\vec n)\cdot\vec r_{kj}\). Les forces suivent le gradient standard GROMACS, réparties sur les quatre atomes avec une somme exactement nulle.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(V_{RB}(\phi)=\sum_{n=0}^{5} c_n\cos^n\phi,\qquad \frac{dV}{d\phi}=-\sin\phi\sum_{n=1}^{5} n\,c_n\cos^{n-1}\phi\)</div>
+                <div class="formula-note">Base cos : c_n = (−1)ⁿ·C_n des tables OPLS/TraPPE — le trans (cos φ = −1) tombe exactement à V = 0.</div>
+              </div>
+              <section class="deep-section">
+                <h4>Coefficients &amp; paysage énergétique</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>c₀ … c₅ (kJ·mol⁻¹)</span><strong>9.279 · −12.156 · −13.12 · 3.06 · 26.24 · 31.495</strong></div>
+                  <div class="parameter-row"><span>trans (φ = 180°)</span><strong>V = 0 — minimum global</strong></div>
+                  <div class="parameter-row"><span>gauche (φ = ±60°)</span><strong>V ≈ +2.93 kJ·mol⁻¹</strong></div>
+                  <div class="parameter-row"><span>cis (φ = 0°)</span><strong>V ≈ +44.8 kJ·mol⁻¹ — sommet de barrière</strong></div>
+                </div>
+              </section>
+              <section class="deep-section">
+                <h4>Exclusions intrachaîne</h4>
+                <p>Les paires 1-2, 1-3 et 1-4 d'une même chaîne sont exclues du non-lié (leur interaction est déjà portée par liaisons, angles et dièdres). En revanche 1-5 et au-delà interagissent normalement : ce volume exclu intrachaîne est précisément ce qui empêche une chaîne de se traverser elle-même et la fait replier de façon réaliste.</p>
+              </section>
+              <p class="force-refs">src/core/forces/molecular.ts (boucle dièdres) · core/alkane.ts · topology.ts (buildExclusions)</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F7</span>
+              <div class="model-title">
+                <h3>Site virtuel — TIP4P/2005</h3>
+                <p>Quatre sites pour trois atomes : la charge négative déplacée hors de l'oxygène</p>
+              </div>
+              <div class="tag-row"><span class="tag">modèle d'eau</span><span class="tag">L11</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>Dans l'eau réelle, les doublets libres de l'oxygène portent la charge négative <em>à côté</em> du noyau, pas dessus. TIP4P place cette charge sur un site M sans masse, sur la bissectrice de l'angle, à 0.01546 nm de l'oxygène. Le moment quadrupolaire qui en résulte améliore nettement la structure (g(r)) et les propriétés de l'eau liquide par rapport aux modèles à trois sites.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>M n'a pas de masse : il n'est jamais intégré. À chaque évaluation on calcule sa position comme combinaison affine des trois atomes rigides, on évalue la force électrostatique en M, puis on la redistribue par le jacobien transposé — une redistribution exacte qui conserve force totale <em>et</em> couple.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(M=(1-\gamma)\,O+\tfrac{\gamma}{2}(H_1+H_2),\quad \gamma=\frac{r_{OM}}{r_{OH}\cos(\theta/2)}\approx 0.26397\)</div>
+                <div class="formula-note">\(F_O \mathrel{+}= (1-\gamma)F_M,\; F_{H_1} \mathrel{+}= \tfrac{\gamma}{2}F_M,\; F_{H_2} \mathrel{+}= \tfrac{\gamma}{2}F_M\) — valable tant que la molécule reste rigide (SHAKE/RATTLE).</div>
+              </div>
+              <section class="deep-section">
+                <h4>Paramètres TIP4P/2005 (Abascal &amp; Vega)</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>Géométrie</span><strong>r_OH 0.09572 nm · θ 104.52° · r_OM 0.01546 nm</strong></div>
+                  <div class="parameter-row"><span>Charges</span><strong>q_H +0.5564 e · q_M −1.1128 e</strong></div>
+                  <div class="parameter-row"><span>LJ oxygène</span><strong>σ 0.31589 nm · ε 0.7749 kJ·mol⁻¹</strong></div>
+                  <div class="parameter-row"><span>Moment dipolaire</span><strong>≈ 2.30 D (vs 2.19 D pour SPC/Fw)</strong></div>
+                  <div class="parameter-row"><span>Contrainte H–H</span><strong>2·r_OH·sin(θ/2) ≈ 0.1514 nm</strong></div>
+                </div>
+              </section>
+              <section class="deep-section">
+                <h4>Pourquoi pas SPC/Fw ici ?</h4>
+                <p>Pour une mesure <em>quantitative</em> de tension de surface, le modèle d'eau doit reproduire la cohésion à quelques pourcents. TIP4P/2005 est calibré sur les propriétés de phase condensée (densité, chaleur de vaporisation, γ ≈ 69–70 mN·m⁻¹ dans la littérature) là où les modèles 3 sites dévient davantage.</p>
+              </section>
+              <p class="force-refs">src/core/tip4p2005.ts · Abascal &amp; Vega, J. Chem. Phys. 123, 234505 (2005), DOI 10.1063/1.2121687 (cité dans le code)</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F8</span>
+              <div class="model-title">
+                <h3>Électrostatique exacte — Ewald, PME &amp; corrections de slab</h3>
+                <p>Ce que Wolf DSF approxime : la somme périodique complète</p>
+              </div>
+              <div class="tag-row"><span class="tag">non lié</span><span class="tag">L11</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>La somme d'Ewald (1921) résout la convergence conditionnelle de \(1/r\) en la scindant en deux séries rapidement convergentes : une courte portée dans l'espace réel (écrantée par erfc), une longue portée lisse dans l'espace réciproque. Smooth PME (Essmann <em>et al.</em>, 1995) accélère la partie réciproque en interpolant les charges sur une grille et en utilisant une FFT 3D.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>L'oracle du projet évalue la somme directement (toutes les images réelles ±n et tous les vecteurs k explicites) — lent mais exact, il sert de référence. PME doit le reproduire ; c'est mesuré : erreur RMS relative de force ≈ 1.6×10⁻⁶, viriel ≈ 4.5×10⁻⁷.</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(U=\underbrace{k_e\!\sum_{i&lt;j}\!\frac{q_iq_j\,\mathrm{erfc}(\alpha r)}{r}}_{\text{réel}}+\underbrace{\frac{2\pi k_e}{V}\sum_{\vec k\neq 0}\frac{e^{-k^2/4\alpha^2}}{k^2}|S(\vec k)|^2}_{\text{réciproque}}-\underbrace{\frac{k_e\alpha}{\sqrt\pi}\sum_i q_i^2}_{\text{self}}\)</div>
+                <div class="formula-note">S(k) = Σ q_j e^{ik·r_j}. Le terme self retire l'interaction de chaque charge avec son propre écran gaussien.</div>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(U_{slab}=\frac{2\pi k_e}{V}M_z^2,\qquad F_{z,i}=-\frac{4\pi k_e M_z}{V}\,q_i\)</div>
+                <div class="formula-note">Correction de Yeh–Berkowitz : un slab eau–vide répété périodiquement porte un dipôle macroscopique M_z = Σ q_i z_i qui polariserait artificiellement le système ; ce terme l'annule.</div>
+              </div>
+              <section class="deep-section">
+                <h4>PME tel qu'implémenté</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>Splines</span><strong>B-splines cardinales d'ordre 6 (poids + dérivées analytiques)</strong></div>
+                  <div class="parameter-row"><span>Grille référence</span><strong>64 × 64 × 256 (1 024 molécules, boîte 3.2×3.2×10 nm)</strong></div>
+                  <div class="parameter-row"><span>Grille aperçu scène</span><strong>32 × 32 × 128 (256 molécules, boîte 1.8×1.8×8 nm)</strong></div>
+                  <div class="parameter-row"><span>α</span><strong>3.5 nm⁻¹</strong></div>
+                  <div class="parameter-row"><span>FFT</span><strong>FFT 3D maison (src/core/math/fft.ts)</strong></div>
+                </div>
+              </section>
+              <section class="deep-section">
+                <h4>Queue de dispersion de Janeček</h4>
+                <p>Près d'une interface, la correction moyenne du LJ au-delà du cutoff ne peut pas utiliser la densité bulk : le profil \(\rho(z)\) réel (100 bins, répété sur 8 couches d'images périodiques) est intégré pour obtenir énergie et force normale de queue. Le LJ O–O est alors brut (non décalé) jusqu'à 5σ ≈ 1.58 nm, la queue prenant le relais au-delà — contre 2.5σ + shifted-force dans l'oracle historique.</p>
+              </section>
+              <p class="force-refs">src/core/forces/ewald.ts · pme.ts · planarDispersionTail.ts · tip4p2005Ewald.ts</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F9</span>
+              <div class="model-title">
+                <h3>Contraintes — SHAKE &amp; RATTLE</h3>
+                <p>Remplacer les ressorts les plus raides par une géométrie exacte</p>
+              </div>
+              <div class="tag-row"><span class="tag">lié</span><span class="tag">L5 → L8 · L11</span><span class="tag gpu">CPU + GPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Origine physique</span>
+                <p>Les vibrations O–H (~9 fs de période) sont les mouvements les plus rapides du système : elles imposent le petit pas de temps, sans influencer la physique statique (structure, diffusion, tension de surface). SHAKE (Ryckaert, Ciccotti &amp; Berendsen 1977) et RATTLE (Andersen 1983) les éliminent en projetant positions et vitesses sur la variété contrainte — la molécule devient un corps rigide.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Lecture</span>
+                <p>SHAKE corrige chaque paire le long de sa direction de référence, pondérée par les masses inverses, jusqu'à \(|r_i-r_j|^2=d^2\) à 10⁻¹⁰ près, et replie les corrections dans les vitesses (Δr/Δt). RATTLE annule ensuite la composante de vitesse relative le long de chaque contrainte : \((r_i-r_j)\cdot(v_i-v_j)=0\).</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(g=\frac{d_0^2-s^2}{2\,(1/m_i+1/m_j)\;(\vec r_{ref}\cdot\vec s)},\qquad \vec r_i \mathrel{+}= \frac{g}{m_i}\vec r_{ref},\;\; \vec r_j \mathrel{-}= \frac{g}{m_j}\vec r_{ref}\)</div>
+                <div class="formula-note">Une itération SHAKE : s = séparation courante, r_ref = direction avant déplacement. Itéré sur toutes les contraintes jusqu'à convergence.</div>
+              </div>
+              <section class="deep-section">
+                <h4>Constantes &amp; budgets</h4>
+                <div class="parameter-table">
+                  <div class="parameter-row"><span>CPU</span><strong>tolérance 10⁻¹⁰ · ≤ 100 itérations</strong></div>
+                  <div class="parameter-row"><span>GPU</span><strong>50 itérations SHAKE · 30 RATTLE, par molécule</strong></div>
+                  <div class="parameter-row"><span>Contraintes / eau</span><strong>2 × O–H + 1 × H–H</strong></div>
+                  <div class="parameter-row"><span>d(O–H) / d(H–H) SPC</span><strong>0.1012 nm / ≈ 0.1691 nm</strong></div>
+                  <div class="parameter-row"><span>d(O–H) / d(H–H) TIP4P</span><strong>0.09572 nm / ≈ 0.1514 nm</strong></div>
+                  <div class="parameter-row"><span>Degrés de liberté</span><strong>6N − 3 (N molécules rigides, COM retiré)</strong></div>
+                </div>
+              </section>
+              <section class="deep-section">
+                <h4>Leçon mesurée</h4>
+                <p>Les trois contraintes d'une molécule d'eau sont couplées (H–H dépend des deux O–H) : la convergence est lente. Un budget de 6/4 itérations sur GPU laissait des forces de contrainte faire un travail net — chauffage artificiel visible à l'écran. Porté à 50/30, la température GPU suit l'oracle CPU. C'est le genre de bug qu'aucun test de compilation ne voit et qu'une courbe de température révèle immédiatement.</p>
+              </section>
+              <p class="force-refs">src/core/constraints.ts · engine/cpu/CpuEngine.ts (stepRigidConstrained) · noyaux GPU SHAKE/RATTLE par molécule</p>
+            </div>
+          </article>
+
+          <article class="model-card reveal">
+            <header class="model-header">
+              <span class="model-badge">F10</span>
+              <div class="model-title">
+                <h3>Champs externes, frontières &amp; barostat</h3>
+                <p>Ce qui agit sur le système sans faire partie du champ de force</p>
+              </div>
+              <div class="tag-row"><span class="tag">transverse</span><span class="tag gpu">champs CPU + GPU</span><span class="tag cpu">NPT CPU</span></div>
+            </header>
+            <div class="model-body">
+              <div class="explain-box vulgar">
+                <span class="box-label">Gravité &amp; champ électrique</span>
+                <p>La gravité entre dans les deux demi-kicks comme accélération uniforme \(a_y=-g\) — indépendante de la masse (chute libre universelle). Le champ E uniforme applique \(F_x=qE\), donc \(a_x=qE/m\) : les ions de signes opposés dérivent en sens inverse, et la friction de Langevin leur donne une vitesse limite \(v=qE\tau/m\) — exactement la mobilité électrophorétique.</p>
+              </div>
+              <div class="explain-box">
+                <span class="box-label">Frontières</span>
+                <p>En périodique, tout vecteur est ramené à l'image minimale \(\Delta x \leftarrow \Delta x - L\,\mathrm{round}(\Delta x/L)\) : le système n'a pas de bord. En réfléchissant, la particule est mise en miroir, sa vitesse normale s'inverse, et l'impulsion transférée \(\sum 2m|v_n|\) alimente la mesure de pression cinétique (PV = Nk_BT vérifié à ~10 % sur le gaz parfait).</p>
+              </div>
+              <div class="formula-box">
+                <div class="formula">\(\mu=\Big[1+\frac{\Delta t}{\tau_P}\,\beta\,(P-P_0)\Big]^{1/3},\qquad L\leftarrow \mu L,\quad \vec r_i\leftarrow \mu\,\vec r_i\)</div>
+                <div class="formula-note">Barostat de Berendsen (CPU) : β = 5×10⁻⁴ nm³·mol·kJ⁻¹, τ_P = 1 ps, μ borné à [0.9995, 1.0005] par pas. Robuste pour relaxer la densité ; ne produit pas les fluctuations NPT exactes.</div>
+              </div>
+              <section class="deep-section" style="grid-column: 1 / -1">
+                <h4>Ordres de grandeur assumés (démonstration)</h4>
+                <p>Les champs des scènes sont volontairement démesurés pour rendre l'effet visible en quelques picosecondes : g = 0.12–0.2 nm·ps⁻² ≈ 10¹³ × la gravité terrestre ; E = 150 kJ·mol⁻¹·nm⁻¹·e⁻¹ ≈ 1.55 GV·m⁻¹ (une unité de champ ≈ 10.36 MV·m⁻¹, soit 1/96.485 V·nm⁻¹). Les paramètres restent physiquement homogènes — seule l'échelle de l'expérience est compressée.</p>
+              </section>
+              <p class="force-refs">src/core/integrators/velocityVerlet.ts · core/boundary.ts · engine/cpu/CpuEngine.ts (applyBarostat)</p>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
       <section class="section" id="modeles">
         <div class="section-head reveal">
           <div>
-            <span class="section-kicker">02 · Échelle de fidélité</span>
+            <span class="section-kicker">03 · Échelle de fidélité</span>
             <h2>Douze façons de<br />regarder la matière.</h2>
           </div>
           <p class="section-intro">
@@ -1768,10 +2390,26 @@
         </div>
       </section>
 
+      <section class="section" id="experiences">
+        <div class="section-head reveal">
+          <div>
+            <span class="section-kicker">04 · Les expériences</span>
+            <h2>Seize systèmes prêts,<br />chacun prouve quelque chose.</h2>
+          </div>
+          <p class="section-intro">
+            Chaque scène du simulateur est une configuration complète et reproductible (graine,
+            géométrie, thermostat, champ). Voici les seize, classées par question physique, avec la
+            composition exacte du système et ce qu'il faut regarder pour vérifier que la physique
+            fonctionne. Toutes les valeurs proviennent de <span class="mono">src/scenes/registry.ts</span>.
+          </p>
+        </div>
+        <div id="experimentsRoot"></div>
+      </section>
+
       <section class="section" id="laboratoire">
         <div class="section-head reveal">
           <div>
-            <span class="section-kicker">03 · Laboratoire interactif</span>
+            <span class="section-kicker">05 · Laboratoire interactif</span>
             <h2>Toucher une équation<br />du bout du doigt.</h2>
           </div>
           <p class="section-intro">
@@ -1854,7 +2492,7 @@
       <section class="section" id="precision">
         <div class="section-head reveal">
           <div>
-            <span class="section-kicker">04 · Précision & honnêteté</span>
+            <span class="section-kicker">06 · Précision & honnêteté</span>
             <h2>Ce que le simulateur sait.<br />Et ce qu'il simplifie.</h2>
           </div>
           <p class="section-intro">
@@ -1964,7 +2602,7 @@
 
       <section class="section" id="ensembles">
         <div class="section-head reveal">
-          <div><span class="section-kicker">05 · Thermostats & ensemble</span><h2>Échanger de la chaleur<br />sans tricher sur le sens.</h2></div>
+          <div><span class="section-kicker">07 · Thermostats & ensemble</span><h2>Échanger de la chaleur<br />sans tricher sur le sens.</h2></div>
           <p class="section-intro">Un thermostat ne « met pas toutes les particules à la même vitesse ». Il couple le système à un bain dont la température cible est \(T_0\).</p>
         </div>
         <div class="thermostat-grid reveal">
@@ -1989,12 +2627,47 @@
             <p>Friction + choc aléatoire par atome : \(v' = c_1v+c_2\eta\). Produit mouvement brownien et dérive électrophorétique amortie.</p>
           </article>
         </div>
+
+        <details class="deep-dive global-deep reveal">
+          <summary>
+            <span class="deep-summary-copy">
+              <span>Les quatre algorithmes, tels qu'implémentés</span>
+              <small>Équations exactes · degrés de liberté · reproductibilité</small>
+            </span>
+          </summary>
+          <div class="deep-content">
+            <section class="deep-section">
+              <h4>Berendsen (équilibrage)</h4>
+              <p>\(\lambda=\sqrt{\mathrm{clamp}\big(1+\frac{\Delta t}{\tau}\big(\frac{T_0}{T}-1\big),\;0.5,\;1.5\big)}\)</p>
+              <p>Le facteur λ² est borné à [0.5, 1.5] par pas — robuste même loin de la cible, mais la distribution des fluctuations n'est pas canonique. Le code l'applique sur \(N_f = 3N-3\) degrés de liberté.</p>
+            </section>
+            <section class="deep-section">
+              <h4>CSVR / Bussi (canonique exact)</h4>
+              <p>\(\frac{K'}{K}=1+(1-c)\Big[\big(R_1^2+{\textstyle\sum_{i=2}^{N_f}}R_i^2\big)\frac{\bar K}{N_f K}-1\Big]+2R_1\sqrt{\frac{c(1-c)\bar K}{N_f K}}\)</p>
+              <p>avec \(c=e^{-\Delta t/\tau}\), \(R_i\sim\mathcal N(0,1)\) et \(\bar K=\tfrac12 N_f k_BT_0\). Échantillonne l'ensemble canonique exact ; la graine du RNG est sauvegardée, donc la trajectoire reste reproductible.</p>
+            </section>
+            <section class="deep-section">
+              <h4>Langevin (local, par atome)</h4>
+              <p>\(v\leftarrow c_1 v + c_2\,\eta,\qquad c_1=e^{-\Delta t/\tau},\quad c_2=\sqrt{\frac{(1-c_1^2)\,k_BT_0}{m}}\)</p>
+              <p>Friction et bruit dépendent de la masse de chaque atome — c'est ce qui produit le mouvement brownien et la vitesse limite \(qE\tau/m\) sous champ. Sur GPU, le bruit est un hachage PCG entier de (atome, pas, composante) : le <span class="mono">hash</span> TSL natif est un bruit de valeur lisse qui donnerait des coups cohérents — faux.</p>
+            </section>
+            <section class="deep-section">
+              <h4>Ordre d'application & NPT</h4>
+              <ul class="deep-list">
+                <li>Le thermostat s'applique une fois par pas, après l'intégrateur (et après RATTLE pour les systèmes contraints).</li>
+                <li>CSVR/Langevin tirent leurs nombres aléatoires d'un RNG à graine dérivée de la graine de la scène : rejouer une scène rejoue le même bruit.</li>
+                <li>L11 emploie CSVR avec \(N_f = 6N-3\) (contraintes de l'eau rigide comptées), y compris pour la mise à l'échelle initiale exacte de l'énergie cinétique.</li>
+                <li>Le barostat de Berendsen (NPT, CPU seulement) est documenté en F10 : il requiert une réduction virielle que le GPU ne fait pas encore côté device.</li>
+              </ul>
+            </section>
+          </div>
+        </details>
       </section>
 
       <section class="section" id="forces-externes">
         <div class="section-head reveal">
           <div>
-            <span class="section-kicker">06 · Modèles transversaux</span>
+            <span class="section-kicker">08 · Modèles transversaux</span>
             <h2>La boîte, les champs<br />et la pression.</h2>
           </div>
           <p class="section-intro">
@@ -2028,24 +2701,25 @@
 
       <section class="section" id="observables">
         <div class="section-head reveal">
-          <div><span class="section-kicker">07 · Mesurer l'invisible</span><h2>Les graphes sont des<br />instruments de physique.</h2></div>
+          <div><span class="section-kicker">09 · Mesurer l'invisible</span><h2>Les graphes sont des<br />instruments de physique.</h2></div>
           <p class="section-intro">Une image suggère un phénomène. Une observable le mesure. Ces grandeurs sont calculées directement depuis l'état microscopique.</p>
         </div>
         <div class="observable-grid reveal">
           <article class="observable"><span class="tag">Température</span><div class="formula">\(T=\frac{2E_k}{N_{dof}k_B}\)</div><p>Mesure l'agitation cinétique après retrait des trois degrés de liberté du centre de masse.</p></article>
-          <article class="observable"><span class="tag">Pression</span><div class="formula">\(P=\frac{2E_k+W}{3V}\)</div><p>Le viriel \(W=\sum r_{ij}\cdot F_{ij}\) ajoute l'effet des interactions à la pression cinétique.</p></article>
+          <article class="observable"><span class="tag">Pression</span><div class="formula">\(P=\frac{2E_k+W}{3V}\)</div><p>Le viriel \(W=\sum r_{ij}\cdot F_{ij}\) ajoute l'effet des interactions à la pression cinétique (route périodique). Avec parois réfléchissantes, P vient de l'impulsion murale Σ2m|v_n| — les deux routes coïncident pour le gaz parfait.</p></article>
           <article class="observable"><span class="tag">Structure radiale</span><div class="formula">\(g(r)=\rho_{obs}(r)/\rho_{ideal}(r)\)</div><p>Plat vers 1 : gaz. Pics : couches de voisins d'un liquide ou réseau régulier d'un solide.</p></article>
           <article class="observable"><span class="tag">Vitesses</span><div class="formula">\(f(v)=4\pi v^2(\frac{m}{2\pi kT})^{3/2}e^{-mv^2/2kT}\)</div><p>Compare l'histogramme simulé à la loi exacte de Maxwell–Boltzmann.</p></article>
           <article class="observable"><span class="tag">Démixtion</span><div class="formula">\(S=\langle N_{même}/N_{voisins}\rangle\)</div><p>Pour un mélange 50/50 aléatoire, \(S\approx0.5\). Deux phases séparées font tendre \(S\) vers 1.</p></article>
           <article class="observable"><span class="tag">Énergie</span><div class="formula">\(E_{tot}=E_k+E_p\)</div><p>En NVE, ses oscillations doivent rester bornées. Une dérive persistante signale souvent un pas trop grand.</p></article>
           <article class="observable"><span class="tag">Tension de surface</span><div class="formula">\(\gamma=\frac{\Delta F_+-\Delta F_-}{4\delta A}\)</div><p>Deux déformations virtuelles à volume constant donnent la dérivée d'énergie libre des deux interfaces du slab.</p></article>
           <article class="observable"><span class="tag">Profil du slab</span><div class="formula">\(\rho(z)=\frac{m(z)}{L_xL_y\,\Delta z}\)</div><p>Le plateau liquide, les deux zones interfaciales et le vide vérifient que la géométrie mesurée est bien celle prévue.</p></article>
+          <article class="observable"><span class="tag">Référence IAPWS</span><div class="formula">\(\gamma_{ref}=235.8\,\tau^{1.256}(1-0.625\tau)\)</div><p>Équation R1-76(2014) de l'eau, τ = 1 − T/647.096 K : ≈ 71.7 mN·m⁻¹ à 300 K. C'est la cible que la campagne L11 (5 graines, 2–5 ns) doit approcher avec son erreur standard.</p></article>
         </div>
       </section>
     </main>
 
     <footer>
-      <div><strong class="footer-brand">Dynamique—Chimie</strong><br />Atlas des modèles physiques · Documentation générée depuis l'implémentation.</div>
+      <div><strong class="footer-brand">Dynamique—Chimie</strong><br />Atlas des modèles physiques · 12 niveaux, 10 familles de forces, 16 expériences — documentés depuis l'implémentation (src/core, src/scenes).</div>
       <div class="mono">CPU Float64 · WebGPU Float32 · Seeded · SI-derived MD units</div>
     </footer>
 
@@ -2141,6 +2815,7 @@
 
       const deepDetails = {
         L0: {
+          physics: "La théorie cinétique des gaz (Maxwell, Boltzmann, ~1860) : la pression née des chocs sur les parois, la température est l'énergie cinétique moyenne des particules. C'est l'unique niveau où chaque observable possède une réponse analytique exacte (PV = Nk_BT, distribution de Maxwell–Boltzmann) — le banc d'essai absolu du moteur.",
           algorithm: [
             "Placer N particules sur un réseau cubique simple afin d'éviter tout recouvrement initial.",
             "Tirer chaque composante de vitesse dans une gaussienne de variance kBT/m, retirer la vitesse du centre de masse, puis ajuster toutes les vitesses pour obtenir exactement la température demandée.",
@@ -2161,6 +2836,7 @@
           limits: "Il n'existe ni collision, ni volume propre, ni transition de phase. Le modèle est exact uniquement dans la limite classique, diluée et non-interagissante du gaz idéal.",
         },
         L1: {
+          physics: "Weeks, Chandler & Andersen (1971) ont établi que la structure d'un liquide dense — les couches de voisins de g(r) — est d'abord une affaire de volume exclu : l'attraction ne fait que condenser un échafaudage déjà organisé par la répulsion. WCA isole cette répulsion pure : c'est le fluide de référence de toute la théorie des liquides.",
           algorithm: [
             "Énumérer chaque paire i < j ; sur GPU, utiliser la liste de cellules triée pour ne visiter que les 27 cellules voisines.",
             "Calculer la séparation par image minimale si la boîte est périodique.",
@@ -2181,6 +2857,7 @@
           limits: "WCA représente le cœur répulsif et l'encombrement stérique, pas la dispersion attractive. Un fluide WCA ne peut donc pas condenser spontanément en une goutte cohésive.",
         },
         L2: {
+          physics: "Le terme r⁻¹² mime la répulsion de Pauli au chevauchement des couches électroniques ; le −r⁻⁶ est le premier terme exact de la dispersion de London. Avec ε/k_B ≈ 120 K pour l'argon, la température réduite T* = k_BT/ε donne 0.29 (solide, 35 K), 0.75 (liquide, 90 K) et 2.1 (supercritique, 250 K) : les trois états de la matière avec un seul potentiel à deux paramètres.",
           algorithm: [
             "Construire une linked-cell list CPU si chaque axe contient au moins trois cellules ; sinon reprendre l'énumération exhaustive O(N²).",
             "Pour chaque paire candidate, calculer le potentiel 12–6 et sa dérivée radiale.",
@@ -2202,6 +2879,7 @@
           limits: "Le 12–6 est un potentiel effectif isotrope. Il décrit bien l'argon et les mécanismes génériques de cohésion, mais ignore directionnalité chimique, polarisabilité et interactions à plusieurs corps.",
         },
         L3: {
+          physics: "L'interaction ionique en 1/r porte à des distances macroscopiques : c'est elle qui stabilise les édifices cristallins (énergie de réseau de NaCl ≈ −786 kJ·mol⁻¹ expérimental) et qui rend les sommes périodiques conditionnellement convergentes — d'où un traitement spécial. Ici, l'amortissement de Wolf (α = 2.5 nm⁻¹) avec des ions de type Joung–Cheatham ; le traitement exact (Ewald/PME) arrive en L11.",
           algorithm: [
             "Calculer d'abord le cœur Lennard–Jones avec force décalée pour empêcher la superposition des ions.",
             "Évaluer erfc(αr)/r pour chaque paire chargée située dans le cutoff Coulomb.",
@@ -2223,6 +2901,7 @@
           limits: "Wolf DSF remplace la somme électrostatique périodique complète par une approximation locale amortie. Très efficace dans le navigateur, elle n'offre pas les garanties de PME/Ewald pour toutes les interfaces ou tous les systèmes fortement polaires.",
         },
         L4: {
+          physics: "SPC/Fw (Wu, Tepper & Voth, 2006 ; famille SPC de Berendsen et al., 1981) : trois sites, charges fixes ±0.82/0.41e donnant un dipôle μ ≈ 2.19 D — volontairement renforcé par rapport au gaz (1.86 D) pour compenser l'absence de polarisabilité en phase condensée. La liaison hydrogène y est purement électrostatique : des pointes de charge qui s'orientent, sans terme spécial « H-bond ».",
           algorithm: [
             "Construire chaque H₂O avec un site O et deux sites H, une orientation aléatoire rigide initiale et des vitesses Maxwell–Boltzmann.",
             "Exclure toutes les paires appartenant à la même molécule du calcul non lié.",
@@ -2245,6 +2924,7 @@
           limits: "SPC/Fw est flexible mais non polarisable : ses charges ne répondent pas au champ local. Il reproduit un modèle d'eau classique paramétré, pas la densité électronique ni la création/rupture de liaisons covalentes O–H.",
         },
         L5: {
+          physics: "Contraindre plutôt que raidir : SHAKE (Ryckaert, Ciccotti & Berendsen, 1977) et RATTLE (Andersen, 1983) projettent positions et vitesses sur la variété définie par les distances imposées. La distribution statique des configurations est préservée pour les degrés de liberté restants ; seules les vibrations intramoléculaires — qui ne changent ni la structure ni la diffusion — sont sacrifiées, contre un pas de temps ×4.",
           algorithm: [
             "Supprimer les ressorts O–H et H–O–H : seules les forces intermoléculaires LJ + DSF restent dans le champ de force.",
             "Après la dérive, appliquer SHAKE sur O–H₁, O–H₂ puis H₁–H₂ en redistribuant chaque correction selon les masses inverses.",
@@ -2267,6 +2947,7 @@
           limits: "La rigidification autorise un pas quatre fois plus grand mais élimine volontairement les vibrations O–H et la flexion H–O–H. Le modèle ne convient donc pas à l'étude du spectre vibrationnel intramoléculaire.",
         },
         L6: {
+          physics: "L'effet hydrophobe n'est pas une « répulsion » de l'huile par l'eau : l'eau préfère simplement l'eau (liaisons H énergétiquement fortes), et l'huile neutre est exclue du réseau. Le modèle est explicite — eau SPC chargée + propane TraPPE united-atom sans charges ; la démixtion émerge des mêmes règles Lorentz–Berthelot + Coulomb que partout ailleurs, sans aucun paramètre d'immiscibilité.",
           algorithm: [
             "Répartir de façon déterministe les molécules d'eau et d'huile sur une grille adaptée à une boîte verticale de dimensions L × 2.5L × L.",
             "Représenter l'eau par SPC rigide et l'huile par une molécule propane-like CH₃–CH₂–CH₃ flexible à trois sites united-atom.",
@@ -2289,6 +2970,7 @@
           limits: "L'huile L6 est du propane united-atom : elle ne possède ni hydrogènes explicites ni dièdre, puisqu'elle n'a que trois sites. Elle illustre l'effet hydrophobe et la stratification, pas la rhéologie quantitative d'une huile réelle complexe.",
         },
         L7: {
+          physics: "La tension de surface est le coût des voisins manquants : une molécule en surface perd une partie de ses contacts cohésifs, donc créer de l'aire coûte de l'énergie. La sphère minimise l'aire à volume donné — d'où la loi de Laplace ΔP = γ(1/R₁ + 1/R₂). Avec 170 molécules, une fraction majeure est en surface : la démonstration est visible molécule par molécule.",
           algorithm: [
             "Construire l'eau rigide comme en L5, mais placer les oxygènes sur un cube compact centré avec un espacement de 0.31 nm.",
             "Laisser du vide entre l'agrégat et les bords de la boîte afin de créer une véritable interface liquide–vide.",
@@ -2310,6 +2992,7 @@
           limits: "La sphérification valide qualitativement la tension de surface, mais γ n'est pas calculé. Une mesure quantitative nécessiterait le tenseur de pression ou le profil de pression normal/tangent et une moyenne statistique longue.",
         },
         L8: {
+          physics: "La dissolution est une compétition énergétique : l'énergie de réseau retient l'ion dans le cristal, l'énergie de solvatation le gagne si les dipôles d'eau l'entourent assez fortement. Pour NaCl dans l'eau, la solvatation l'emporte : les oxygènes pointent vers Na⁺, les hydrogènes vers Cl⁻, formant les cages d'hydratation que l'on voit se constituer en direct.",
           algorithm: [
             "Créer un cube rock-salt d'ions espacés de 0.29 nm et retirer les ions majoritaires de bord jusqu'à obtenir une charge totale nulle.",
             "Remplir le reste de la boîte avec de l'eau rigide espacée d'environ 0.34 nm, en conservant une zone sans recouvrement autour du cristal.",
@@ -2332,6 +3015,7 @@
           limits: "La trajectoire montre le mécanisme de solvatation, mais ni une énergie libre de dissolution ni une solubilité d'équilibre. Le petit cristal, la température élevée et le cutoff DSF accélèrent et simplifient fortement le phénomène.",
         },
         L9: {
+          physics: "Le potentiel de torsion encode la stéréochimie de la liaison simple : hyperconjugaison et encombrement stérique donnent au trans un avantage de ~3 kJ·mol⁻¹ sur le gauche. À 450 K, k_BT ≈ 3.7 kJ·mol⁻¹ : les deux puits gauche sont significativement peuplés et la chaîne saute de conformère en conformère — la physique des polymères et des membranes lipidiques commence ici.",
           algorithm: [
             "Construire chaque chaîne en zigzag all-trans de neuf sites carbone united-atom, puis lui appliquer une rotation et une position déterministes par la graine.",
             "Calculer les huit liaisons C–C, les sept angles C–C–C et les six quadruplets dièdres par chaîne.",
@@ -2354,6 +3038,7 @@
           limits: "United-atom fusionne chaque groupe CH₂/CH₃ en un site. Le modèle capture les conformations de chaîne mais pas les vibrations C–H, la polarisation ou la chimie de réaction. Aucun kernel GPU dièdre n'existe encore.",
         },
         L10: {
+          physics: "Le potentiel de Morse (1929) est le plus simple qui sache mourir : il reproduit l'anharmonicité réelle des liaisons (élargissement du puits, rapprochement des niveaux vibrationnels vers le continuum) et une force qui s'éteint à grande distance. Ici D_e = 25 kJ·mol⁻¹ ≈ 3 k_BT à 1000 K : la rupture thermique devient observable en quelques picosecondes.",
           algorithm: [
             "Placer des molécules diatomiques d'orientation aléatoire avec une distance initiale r₀.",
             "Évaluer e = exp[−a(r−r₀)], l'énergie De(1−e)² et la dérivée radiale −2Deae(1−e).",
@@ -2376,6 +3061,7 @@
           limits: "La topologie conserve l'identité de la paire après rupture et aucune nouvelle liaison ne peut se former avec un autre atome. C'est un potentiel dissociable classique de démonstration, pas un moteur réactif ni quantique.",
         },
         L11: {
+          physics: "TIP4P/2005 (Abascal & Vega, 2005) place la charge négative sur un site virtuel M hors de l'oxygène : le quadrupôle et la structure de l'eau liquide s'en trouvent nettement améliorés. La mesure de γ croise deux routes indépendantes — thermodynamique (test-area : énergie libre de création d'aire) et mécanique (Kirkwood–Buff : anisotropie du tenseur de pression) — contre la référence IAPWS, ≈ 71.7 mN·m⁻¹ à 300 K. C'est le niveau « publication » du projet.",
           algorithm: [
             "Construire 1 024 eaux TIP4P/2005 dans un slab centré à la densité cible ; choisir BCC/FCC pour éviter les recouvrements, puis fondre et équilibrer au moins 200 ps.",
             "À chaque pas de 2 fs, placer le site virtuel M, calculer LJ O–O par cell-list et sa correction Janeček issue de ρ(z), puis la partie réelle erfc, la grille B-spline d'ordre 6, la FFT 3D, l'influence réciproque et Yeh–Berkowitz.",
@@ -2407,6 +3093,166 @@
         },
       };
 
+      const experimentGroups = [
+        {
+          title: "États & transitions de phase",
+          note: "Un seul potentiel (LJ), trois états de la matière — tout se joue dans T* = k_BT/ε",
+          items: [
+            {
+              badge: "E1", title: "Gaz parfait", level: "L0", engine: "CPU + GPU",
+              observe: "Des billes fantômes en ligne droite, colorées par vitesse : elles ne se voient jamais. Seule l'agitation thermique est visible.",
+              physics: "Le laboratoire zéro de la théorie cinétique des gaz : la pression attendue est PV = Nk_BT ≈ 76.7 bar (400 Ne, 6 nm, 300 K), la distribution des vitesses est exactement Maxwell–Boltzmann, et l'énergie totale est conservée à la précision machine en NVE.",
+              watch: "l'histogramme des vitesses épouse la courbe théorique ; la température ne dérive pas.",
+              params: [["Système", "400 Ne"], ["Boîte", "6 nm cube · périodique"], ["Température", "300 K · NVE (aucun thermostat)"], ["Pas", "5 fs · graine 1234"]],
+            },
+            {
+              badge: "E2", title: "Liquide — cohésion van der Waals", level: "L2", engine: "CPU + GPU",
+              observe: "Un paquet d'argon qui reste soudé en gouttelette au lieu de se disperser : la cohésion de Lennard-Jones visible à l'œil nu.",
+              physics: "L'attraction de London crée une phase liquide avec surface libre : à 90 K, T* ≈ 0.75, sous la température critique du fluide LJ (T*_c ≈ 1.32). Le cœur liquide compte ~8–12 voisins par atome, la vapeur quasiment aucun — d'où le coloriage par coordination.",
+              watch: "g(r) montre les pics de couches de voisins ; la goutte frémit mais ne s'évapore presque pas.",
+              params: [["Système", "700 Ar"], ["Boîte", "6 nm cube · périodique · vide autour"], ["Température", "130 → 90 K · Berendsen τ 0.4 ps"], ["Pas", "5 fs · départ agrégat compact"]],
+            },
+            {
+              badge: "E3", title: "Cristallisation", level: "L2", engine: "CPU + GPU",
+              observe: "Le liquide tiède fige en un cristal ordonné quand on le refroidit lentement : les atomes se rangent en plans réguliers.",
+              physics: "Transition liquide → solide : à T* ≈ 0.29, l'agitation ne compense plus la cohésion et le système minimise son énergie en s'ordonnant (le LJ cristallise en FCC). Le recuit lent (τ = 1.2 ps) laisse aux défauts le temps de s'éliminer ; une trempe brutale donnerait un verre.",
+              watch: "g(r) : les pics larges du liquide se transforment en pics fins du réseau cristallin.",
+              params: [["Système", "500 Ar"], ["Boîte", "2.9 nm cube · périodique"], ["Température", "110 → 35 K · Berendsen τ 1.2 ps"], ["Pas", "4 fs · départ liquide"]],
+            },
+            {
+              badge: "E4", title: "Ébullition", level: "L2", engine: "CPU + GPU",
+              observe: "La gouttelette froide chauffée fortement s'évapore : les atomes quittent la surface un à un et le gaz remplit la boîte.",
+              physics: "À 250 K, T* ≈ 2.1 — au-dessus de T*_c : aucune phase liquide n'est stable, la goutte s'évapore intégralement. Même potentiel, mêmes atomes que E2/E3 ; seule la température a changé, et l'état de la matière avec.",
+              watch: "la coordination s'effondre vers 0 ; la pression monte quand le gaz emplit la boîte.",
+              params: [["Système", "500 Ar"], ["Boîte", "6 nm cube · périodique"], ["Température", "55 → 250 K · Berendsen τ 0.5 ps"], ["Pas", "5 fs · départ goutte compacte"]],
+            },
+            {
+              badge: "E5", title: "Sédimentation", level: "L2", engine: "CPU + GPU",
+              observe: "Les atomes tombent et s'empilent au fond en un sédiment dense, sous un « ciel » de gaz de plus en plus raréfié.",
+              physics: "Équilibre sédimentation–diffusion : la densité décroît exponentiellement avec l'altitude (loi barométrique ρ(y) ∝ e^(−mgy/k_BT)). Le thermostat dissipe le travail fourni par la gravité. Ici g = 0.12 nm·ps⁻² ≈ 10¹³ × g terrestre, pour voir en quelques ps ce qui prendrait des heures.",
+              watch: "le gradient vertical de densité ; la température reste à 120 K malgré la chute.",
+              params: [["Système", "400 Ar"], ["Boîte", "5 nm cube · réfléchissant"], ["Température", "120 K · Berendsen τ 0.5 ps"], ["Champ", "g = 0.12 nm·ps⁻² · pas 5 fs"]],
+            },
+          ],
+        },
+        {
+          title: "Eau & interfaces",
+          note: "De la molécule flexible à la mesure quantitative de la tension de surface",
+          items: [
+            {
+              badge: "E6", title: "Eau atomistique SPC/Fw", level: "L4", engine: "CPU + GPU",
+              observe: "De vraies molécules en V (oxygène rouge, hydrogènes blancs) qui s'orientent les unes par rapport aux autres en se déplaçant.",
+              physics: "Les charges partielles (−0.82e sur O, +0.41e sur H) créent la cohésion de l'eau : la liaison hydrogène est ici purement électrostatique et directionnelle. La molécule est flexible — les O–H vibrent à ~3 630 cm⁻¹ (période ≈ 9.2 fs), ce qui impose le pas de 0.5 fs.",
+              watch: "les molécules voisines pointent leurs H vers les O ; g(r) O–O montre la première couche de solvatation.",
+              params: [["Système", "125 H₂O (375 atomes)"], ["Boîte", "1.6 nm cube · périodique"], ["Température", "300 K · CSVR τ 0.1 ps"], ["Pas", "0.5 fs · molécule flexible"]],
+            },
+            {
+              badge: "E7", title: "Eau rigide SHAKE/RATTLE", level: "L5", engine: "CPU + GPU",
+              observe: "La même eau, mais chaque molécule est un triangle indéformable : plus aucune vibration interne, juste translation et rotation.",
+              physics: "Les contraintes remplacent les ressorts les plus raides : physique statique inchangée (même distribution des positions), mais le mouvement le plus rapide du système disparaît — le pas passe de 0.5 à 2 fs, soit 4× plus de temps simulé à calcul égal.",
+              watch: "les distances O–H et H–H restent strictement constantes ; la dynamique globale reste celle de l'eau.",
+              params: [["Système", "150 H₂O (450 atomes)"], ["Boîte", "1.7 nm cube · périodique"], ["Température", "300 K · Berendsen τ 0.2 ps"], ["Pas", "2 fs · 3 contraintes/molécule"]],
+            },
+            {
+              badge: "E8", title: "Tension de surface (goutte)", level: "L7", engine: "CPU + GPU",
+              observe: "Un petit cube d'eau glacé posé dans le vide qui fond, frémit, puis s'arrondit en une sphère.",
+              physics: "Les molécules de surface, privées de la moitié de leurs voisines, sont tirées vers l'intérieur : le système minimise son aire à volume donné, et la sphère gagne. C'est la tension de surface vue de molécule en molécule — la loi de Laplace ΔP = 2γ/R la quantifie. Avec 170 molécules, la majorité est en surface : l'effet est démesurément visible.",
+              watch: "la forme : cube → amibe → sphère. γ n'est pas mesuré ici (c'est le rôle de E9/L11).",
+              params: [["Système", "170 H₂O (510 atomes)"], ["Boîte", "3.2 nm cube · périodique + vide"], ["Température", "80 → 235 K · Berendsen τ 0.3 ps"], ["Départ", "cube compact, pas 0.31 nm"]],
+            },
+            {
+              badge: "E9", title: "Laboratoire γ(T) · TIP4P/2005", level: "L11", engine: "CPU défaut + GPU",
+              observe: "Une tranche d'eau (slab) prise entre deux zones de vide : deux interfaces liquide–vapeur nettes et un profil de densité mesurable.",
+              physics: "La mesure quantitative : γ est obtenu par création d'aire virtuelle (test-area, route énergie libre) croisé avec l'anisotropie du tenseur de pression (route mécanique Kirkwood–Buff). Référence IAPWS à 300 K : ≈ 71.7 mN·m⁻¹. L'aperçu à 256 molécules illustre la méthode ; la valeur publiable exige 1 024 molécules, ≥ 200 ps d'équilibration, 2–5 ns de production et 5 graines.",
+              watch: "γ test-area ± erreur standard, γ mécanique, et le plateau de ρ(z) à ~997 kg·m⁻³.",
+              params: [["Système", "256 H₂O TIP4P/2005 (768 atomes)"], ["Boîte", "1.8 × 1.8 × 8 nm · périodique"], ["Température", "300 K · CSVR τ 1 ps · 6N−3 ddl"], ["Force", "PME 32×32×128 · LJ 5σ + Janeček · pas 2 fs"]],
+            },
+          ],
+        },
+        {
+          title: "Ions & champs",
+          note: "L'électrostatique en 1/r, de l'édifice cristallin à la dérive en champ",
+          items: [
+            {
+              badge: "E10", title: "NaCl — cristal ionique", level: "L3", engine: "CPU + GPU",
+              observe: "Des ions violets (Na⁺) et verts (Cl⁻) qui s'attirent et s'ordonnent en un réseau cristallin alterné.",
+              physics: "L'électrostatique domine tout à cette densité : une paire Na⁺–Cl⁻ à 0.29 nm vaut −479 kJ·mol⁻¹ brut (≈ −147 kJ·mol⁻¹ après écrantage Wolf α = 2.5 nm⁻¹). L'alternance de charges minimise l'énergie — c'est la structure rock-salt, maintenue cohésive par le réseau de Coulomb.",
+              watch: "g(r) : le premier pic Na–Cl est suivi d'un creux Na–Na — les plus proches voisins sont toujours de signe opposé.",
+              params: [["Système", "108 Na⁺ + 108 Cl⁻"], ["Boîte", "1.75 nm cube · périodique"], ["Température", "300 K · Berendsen τ 0.2 ps"], ["Départ", "réseau rock-salt 6×6×6 · pas 1 fs"]],
+            },
+            {
+              badge: "E11", title: "Électrophorèse", level: "L3", engine: "CPU + GPU",
+              observe: "Sous l'effet du champ, les ions positifs glissent vers +x, les négatifs vers −x, jusqu'à s'empiler contre les parois-électrodes.",
+              physics: "Chaque ion atteint sa vitesse terminale quand la friction de Langevin équilibre qE : v = qEτ/m, soit ≈ 0.65 nm·ps⁻¹ pour Na⁺ et ≈ 0.42 nm·ps⁻¹ pour Cl⁻ — c'est la mobilité électrophorétique. Le champ (E = 150, échelle démo ≈ 1.55 GV·m⁻¹) sépare les charges ; le thermostat dissipe le travail électrique aux parois.",
+              watch: "la ségrégation spatiale des deux couleurs ; la température reste stable malgré le champ.",
+              params: [["Système", "108 Na⁺ + 108 Cl⁻"], ["Boîte", "4 nm cube · réfléchissant"], ["Température", "320 K · Langevin τ 0.1 ps"], ["Champ", "E = 150 kJ·mol⁻¹·nm⁻¹·e⁻¹ (+x) · pas 1 fs"]],
+            },
+            {
+              badge: "E12", title: "Dissolution d'un cristal de sel", level: "L8", engine: "CPU + GPU",
+              observe: "Le cristal de NaCl plongé dans l'eau perd ses ions un à un : chaque ion arraché est aussitôt entouré de molécules d'eau orientées.",
+              physics: "La dissolution est une compétition entre l'énergie de réseau (rester dans le cristal) et l'énergie de solvatation (être entouré de dipôles) : ici l'eau gagne, en pointant ses O vers Na⁺ et ses H vers Cl⁻. Le cristal 3×3×3 perd un ion de bord majoritaire pour atteindre la neutralité exacte exigée par l'électrostatique de Wolf.",
+              watch: "les cages de solvatation autour de chaque ion libre ; la dissolution s'accélère à 370 K.",
+              params: [["Système", "26 ions + 98 H₂O (320 atomes)"], ["Boîte", "2.0 nm cube · périodique"], ["Température", "370 K · Berendsen τ 0.3 ps"], ["Départ", "cristal rock-salt 3×3×3 neutralisé · pas 2 fs"]],
+            },
+          ],
+        },
+        {
+          title: "Matière molle & molécules",
+          note: "Démixtion hydrophobe, marche aléatoire, conformations et rupture de liaison",
+          items: [
+            {
+              badge: "E13", title: "Huile + eau — démixtion", level: "L6", engine: "CPU + GPU",
+              observe: "Le mélange initial homogène se sépare sous les yeux : l'eau bleue coule, l'huile dorée flotte — deux phases nettes se forment.",
+              physics: "Effet hydrophobe explicite : l'huile (propane TraPPE united-atom, sans charges) ne peut pas participer au réseau de liaisons H ; l'eau préfère l'eau, l'huile est exclue. La gravité (g = 0.2, échelle démo) trie ensuite par densité : l'huile, plus légère, coiffe la colonne d'eau.",
+              watch: "le paramètre de démixtion S : ~0.5 au départ (mélangé) → tend vers 1 (séparé).",
+              params: [["Système", "192 H₂O + 128 huile (960 atomes)"], ["Boîte", "2.8 × 7.0 × 2.8 nm · réfléchissant"], ["Température", "300 K · CSVR τ 0.1 ps"], ["Champ", "g = 0.2 nm·ps⁻² · pas 1 fs"]],
+            },
+            {
+              badge: "E14", title: "Mouvement brownien", level: "L1", engine: "CPU + GPU",
+              observe: "Des particules diluées qui zigzaguent sans cesse, colorées par vitesse instantanée — le scintillement de l'agitation thermique.",
+              physics: "Le thermostat de Langevin = friction + coups aléatoires calibrés (fluctuation–dissipation) : chaque trajectoire est une marche aléatoire ⟨x²⟩ = 6Dt, tandis que la distribution des vitesses reste exactement Maxwell–Boltzmann. C'est le grain de pollen de Brown (1827), expliqué par Einstein (1905) — avec les atomes visibles.",
+              watch: "une seule particule : sa trajectoire n'a nulle part où aller, et pourtant elle explore tout.",
+              params: [["Système", "250 Ar"], ["Boîte", "7 nm cube · périodique (dilué)"], ["Température", "300 K · Langevin τ 0.4 ps"], ["Pas", "5 fs"]],
+            },
+            {
+              badge: "E15", title: "Alcane — conformations", level: "L9", engine: "CPU",
+              observe: "Des zigzags carbonés (9 sites) qui ondulent, se replient, et passent de formes étendues à des formes coudées.",
+              physics: "Le paysage de torsion de Ryckaert–Bellemans : trans = 0, gauche ≈ +2.9 kJ·mol⁻¹. À 450 K, k_BT ≈ 3.7 kJ·mol⁻¹ : les puits gauche sont peuplés à ~45 % du trans et la chaîne saute de conformère en conformère. La barrière cis (~45 kJ·mol⁻¹) reste, elle, infranchie.",
+              watch: "comptez les coudes : une chaîne étendue (tout-trans) se replie en quelques dizaines de ps.",
+              params: [["Système", "8 chaînes × 9 C (72 sites UA)"], ["Boîte", "6 nm cube · périodique"], ["Température", "450 K · CSVR τ 0.1 ps"], ["Pas", "1 fs · 8 liaisons + 7 angles + 6 dièdres / chaîne"]],
+            },
+            {
+              badge: "E16", title: "Dissociation — Morse", level: "L10", engine: "CPU",
+              observe: "Des paires d'atomes soudées qui, chauffées violemment, éclatent : les atomes libérés filent à toute vitesse et s'illuminent.",
+              physics: "À 1000 K, k_BT ≈ 8.3 kJ·mol⁻¹ contre un puits D_e = 25 kJ·mol⁻¹ : quelques collisions par millier franchissent la barrière, et la force de Morse s'éteignant à grande distance, la rupture est définitive. Avec un ressort harmonique (F croissante sans borne), la même chauffe ne casserait jamais rien.",
+              watch: "les liaisons disparaissent une à une ; l'histogramme des vitesses gagne une queue très rapide.",
+              params: [["Système", "64 dimères (128 atomes)"], ["Boîte", "4.5 nm cube · réfléchissant"], ["Température", "60 → 1000 K · Berendsen τ 0.4 ps"], ["Puits", "D_e 25 kJ·mol⁻¹ · a 18 nm⁻¹ · pas 2 fs"]],
+            },
+          ],
+        },
+      ];
+
+      const experimentsRoot = document.getElementById("experimentsRoot");
+      experimentsRoot.innerHTML = experimentGroups.map((group) => `
+        <div class="exp-group reveal">
+          <div class="exp-group-title"><h3>${group.title}</h3><span>${group.note}</span></div>
+          <div class="exp-grid">${group.items.map((e) => `
+            <article class="exp-card">
+              <header class="exp-head">
+                <span class="exp-badge">${e.badge}</span>
+                <div><h4>${e.title}</h4><p>${e.level} · ${e.engine}</p></div>
+                <div class="tag-row"><span class="tag">${e.level}</span><span class="tag ${e.engine === "CPU" ? "cpu" : "gpu"}">${e.engine}</span></div>
+              </header>
+              <div class="exp-body">
+                <div class="exp-line"><span class="box-label">À l'écran</span><p>${e.observe}</p></div>
+                <div class="exp-line"><span class="box-label">Physique démontrée</span><p>${e.physics}</p></div>
+                <div class="parameter-table">${e.params.map(([k, v]) => `<div class="parameter-row"><span>${k}</span><strong>${v}</strong></div>`).join("")}</div>
+                <p class="exp-watch"><strong>À surveiller :</strong> ${e.watch}</p>
+              </div>
+            </article>`).join("")}
+          </div>
+        </div>`).join("");
+
       const modelRail = document.getElementById("modelRail");
       const modelStack = document.getElementById("modelStack");
       const search = document.getElementById("modelSearch");
@@ -2428,6 +3274,7 @@
               <details class="deep-dive">
                 <summary><span class="deep-summary-copy"><span>Approfondir ${m.id}</span><small>Algorithme · constantes · validation · limites</small></span></summary>
                 <div class="deep-content">
+                  ${deep.physics ? `<div class="physics-note"><span class="box-label">Origine & lecture physique</span><p>${deep.physics}</p></div>` : ""}
                   <section class="deep-section"><h4>Déroulé exact d'un calcul</h4><ol class="deep-list">${deep.algorithm.map((step) => `<li>${step}</li>`).join("")}</ol></section>
                   <section class="deep-section"><h4>Constantes utilisées</h4><div class="parameter-table">${deep.parameters.map(([label, value]) => `<div class="parameter-row"><span>${label}</span><strong>${value}</strong></div>`).join("")}</div></section>
                   <section class="deep-section"><h4>Preuves dans la suite de tests</h4><ul class="evidence-list">${deep.evidence.map((item) => `<li>${item}</li>`).join("")}</ul></section>
