@@ -36,4 +36,5 @@ yarn-error.log*
 # vscode (keep shared recommendations only)
 .vscode/*
 !.vscode/extensions.json
-_shoot.mjs
+# headed screenshot / diagnostic scratch scripts
+_*.mjs

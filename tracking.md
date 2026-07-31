@@ -1394,6 +1394,57 @@ l'URL Pages (HTTP 200 + assets servis).
 
 ---
 
+## P69 — Refonte UI/UX : « l'instrument » ✅
+
+**Objectif (DoD) :** donner à l'application une identité visuelle propre, reprise du style de
+`empire-contre-intox` (laiton / parchemin sur fond de nuit, Cinzel + Fraunces), et corriger l'UX du
+tableau de bord générique (une seule colonne de 5 panneaux empilés, 16 scènes en liste plate).
+
+**Livré :**
+- **Direction** : la chrome est un *instrument* en laiton ; la simulation est le *spécimen* tenu à
+  l'intérieur. Comme c'est le spécimen qui bouge, la chrome ne s'anime pas (entrée + survol seulement).
+  Tokens : void/abysse, encre parchemin, laiton `--gold*`, vert-de-gris = « validé », braise = « non
+  certifié ». Trois familles : **Cinzel** (titres/étiquettes), **Fraunces** (texte), **IBM Plex Mono**
+  (tous les chiffres).
+- **Logo** : nouveau sceau — molécule triatomique coudée (104,5°) inscrite dans la cellule périodique,
+  sur un cadran gradué (`ui/brand/Seal.tsx` + `public/favicon.svg`).
+- **Signature — l'échelle** : le sélecteur de scènes devient une **échelle d'échelons L0→L11**, un
+  échelon par niveau de modèle, les scènes suspendues à leur échelon. La structure encode la physique.
+- **Plaque** : le canvas est une planche gravée (coins, grain, vignette) portant le **cartouche**
+  (niveau + forces actives + statut scientifique), le **relevé** (9 mesures, tiroir « Instruments »
+  pour les graphes) et le **pupitre** de lecture — visibles quel que soit l'onglet ouvert.
+- **Régie** : les 5 panneaux empilés deviennent 3 onglets (Scènes · Réglages · Fichier ; Laboratoire en
+  tête sous L11). Les mesures restent sur la plaque pour rester lisibles pendant qu'on tourne un bouton.
+- **Échelle maîtresse** : filet doré en haut = T mesurée rapportée à la consigne, cran à mi-échelle,
+  couleur selon la dérive (froid/consigne/chaud).
+- **Correctif UX réel** : la scène active était devinée via `(espèce, graine)` et surlignait la moitié
+  du catalogue ; le store porte désormais `activeSceneId`, posé par `replaceConfig(config, sceneId)` et
+  effacé dès qu'un réglage est modifié.
+- **Chambre** : fond `0x050811`, filaire de cellule en laiton, lumière d'appoint chaude.
+
+**Vérifications :** lint + typecheck verts ; 215 tests unitaires ; **8/8 e2e** (`--workers=1`). Vérifié
+en **navigateur réel** (headed, 1600×1000 et 760×900) sur les cinq états : plaque au repos, tiroir
+Instruments, onglet Réglages, gouttelette L7, laboratoire L11, et mobile.
+
+**Trois régressions trouvées à l'écran / en e2e, corrigées :**
+1. La feuille de styles Google Fonts en `<head>` bloquait l'événement `load` — sans route vers
+   `fonts.googleapis.com` c'est un blocage, pas un ralentissement. Les polices sont maintenant
+   injectées **après** `load` (`ui/brand/webfonts.ts`) ; la pile de repli s'affiche immédiatement.
+2. Les graphes restaient montés derrière le tiroir « Instruments » fermé et repeignaient cinq canvas
+   par image : le fil principal était saturé (une requête DOM prenait des secondes). Ils ne sont
+   montés que si le tiroir est ouvert.
+3. `.rail .btn` écrasait le dégradé de `.btn--primary` (spécificité) : le bouton « Lancer » du
+   laboratoire s'affichait vide, texte sombre sur fond sombre. La règle rétablit le dégradé.
+   Dans la foulée, les `backdrop-filter` empilés au-dessus d'un canvas qui repeint à chaque image
+   ont été supprimés partout sauf sur la régie (une grande surface, quasi statique).
+
+**Déviations au plan :** hors roadmap physique — demande utilisateur directe. Aucun changement dans
+`core/` ; les seules modifications hors UI sont des couleurs de rendu, `activeSceneId` dans le store,
+et l'étiquette WCA (`2^{1/6}σ` → `2^(1/6)σ`, les accolades LaTeX s'affichaient telles quelles). Les
+e2e cliquent désormais l'onglet « Réglages » / « Fichier » avant les contrôles qui y ont déménagé.
+
+---
+
 ## Bilan
 
 **Phases P0–P63 livrées** (**168 tests unitaires/golden + 8 e2e**, lint/typecheck verts).
